@@ -1,4 +1,4 @@
-import { db, foodsTable, mealEntriesTable, preferencesTable, type Food, type MealEntry, type Preferences } from "@workspace/db";
+import { db, foodsTable, mealEntriesTable, type Food, type MealEntry, type Preferences } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
 
 export const activityMultipliers = {
@@ -73,9 +73,13 @@ export function sumNutrition(items: Nutrition[]): Nutrition {
 }
 
 export function toMealEntry(entry: MealEntry, food: Food) {
+  if (entry.personId === null) {
+    throw new Error("A legacy meal entry has not been assigned to a person.");
+  }
   return {
     id: entry.id,
     date: entry.plannedDate,
+    personId: entry.personId,
     meal: entry.meal,
     grams: entry.grams,
     food: toFood(food),
@@ -83,7 +87,7 @@ export function toMealEntry(entry: MealEntry, food: Food) {
   };
 }
 
-export function toPreferences(preferences?: Preferences) {
+export function toPreferences(preferences?: Pick<Preferences, "activityLevel" | "baselineCalories">) {
   const activityLevel = (preferences?.activityLevel ?? "sedentary") as ActivityLevel;
   const activityMultiplier = activityMultipliers[activityLevel];
   if (activityMultiplier === undefined) {
@@ -98,16 +102,7 @@ export function toPreferences(preferences?: Preferences) {
   };
 }
 
-export async function loadPreferences(userId: string) {
-  const [preferences] = await db
-    .select()
-    .from(preferencesTable)
-    .where(eq(preferencesTable.userId, userId))
-    .limit(1);
-  return toPreferences(preferences);
-}
-
-export async function loadEntriesForDate(userId: string, date: string) {
+export async function loadEntriesForDate(userId: string, date: string, personId: number) {
   return db
     .select({ entry: mealEntriesTable, food: foodsTable })
     .from(mealEntriesTable)
@@ -115,6 +110,7 @@ export async function loadEntriesForDate(userId: string, date: string) {
     .where(
       and(
         eq(mealEntriesTable.ownerId, userId),
+        eq(mealEntriesTable.personId, personId),
         eq(mealEntriesTable.plannedDate, date),
       ),
     )

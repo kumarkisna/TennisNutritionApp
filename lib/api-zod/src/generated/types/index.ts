@@ -26,5 +26,8 @@ export * from './mealEntryInput';
 export * from './mealEntryUpdate';
 export * from './mealSummary';
 export * from './nutrition';
+export * from './person';
+export * from './personInput';
+export * from './personUpdate';
 export * from './preferences';
 export * from './preferencesInput';

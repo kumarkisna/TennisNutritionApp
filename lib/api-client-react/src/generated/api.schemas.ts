@@ -41,6 +41,44 @@ export const ActivityLevel = {
   very_active: 'very_active',
 } as const;
 
+export interface Person {
+  id: number;
+  name: string;
+  isDefault: boolean;
+  activityLevel: ActivityLevel;
+  baselineCalories: number;
+  activityMultiplier: number;
+  targetCalories: number;
+}
+
+export interface PersonInput {
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  name: string;
+  activityLevel: ActivityLevel;
+  /**
+     * @minimum 1000
+     * @maximum 5000
+     */
+  baselineCalories: number;
+}
+
+export interface PersonUpdate {
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  name?: string;
+  activityLevel?: ActivityLevel;
+  /**
+     * @minimum 1000
+     * @maximum 5000
+     */
+  baselineCalories?: number;
+}
+
 export interface Nutrition {
   calories: number;
   protein: number;
@@ -163,6 +201,7 @@ export interface MealEntry {
   id: number;
   /** @pattern ^\d{4}-\d{2}-\d{2}$ */
   date: string;
+  personId: number;
   meal: Meal;
   grams: number;
   food: Food;
@@ -172,6 +211,8 @@ export interface MealEntry {
 export interface MealEntryInput {
   /** @pattern ^\d{4}-\d{2}-\d{2}$ */
   date: string;
+  /** @minimum 1 */
+  personId: number;
   meal: Meal;
   /** @minimum 1 */
   foodId: number;
@@ -216,6 +257,7 @@ export interface MealSummary {
 export interface DailySummary {
   /** @pattern ^\d{4}-\d{2}-\d{2}$ */
   date: string;
+  personId: number;
   targetCalories: number;
   totals: Nutrition;
   entryCount: number;
@@ -239,6 +281,10 @@ export type ListMealEntriesParams = {
  * @pattern ^\d{4}-\d{2}-\d{2}$
  */
 date: string;
+/**
+ * @minimum 1
+ */
+personId: number;
 };
 
 export type GetDailySummaryParams = {
@@ -246,5 +292,9 @@ export type GetDailySummaryParams = {
  * @pattern ^\d{4}-\d{2}-\d{2}$
  */
 date: string;
+/**
+ * @minimum 1
+ */
+personId: number;
 };
 

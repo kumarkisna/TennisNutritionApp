@@ -1,1 +1,2 @@
 - [Calendar dates in generated API validators](calendar-date-validation.md) — avoid OpenAPI format: date for date-only strings with the current Orval/Zod generator.
+- [Open Food Facts text search](open-food-facts-search.md) — its v2 search endpoint ignores free-text search_terms; use the classic search API with deliberate, rate-limited requests.

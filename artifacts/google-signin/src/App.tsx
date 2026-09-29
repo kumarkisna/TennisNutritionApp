@@ -135,7 +135,7 @@ function Home() {
             Food planning, without the guesswork.
           </h1>
           <p className="rise-in rise-in-delay-2 mt-8 max-w-[560px] text-[1.05rem] leading-8 text-[#5d6d71] sm:text-[1.18rem]" data-testid="text-home-description">
-            Build a daily food plan using nutrition per 100 grams. Adjust portions, see your totals, and set a target based on your activity level. Google keeps sign-in secure.
+            Plan meals for the people you care for, with separate portions and activity-based targets. Search foods by their nutrition per 100 grams. Google keeps sign-in secure.
           </p>
           <div className="rise-in rise-in-delay-3 mt-9 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
             <Link
@@ -199,12 +199,12 @@ function Home() {
           <div className="border-b border-[#e3ddd2] py-8 md:border-b-0 md:border-r md:px-10" data-testid="feature-brand">
             <p className="mono-face mb-3 text-[10px] uppercase text-[#176d61]">02 / daily targets</p>
             <h2 className="text-lg font-extrabold text-[#183542]">A target you can adjust.</h2>
-            <p className="mt-2 text-sm leading-6 text-[#6d7a79]">Choose an activity level and an editable baseline for your daily planning estimate.</p>
+             <p className="mt-2 text-sm leading-6 text-[#6d7a79]">Give each person a separate plan, activity level, and editable daily target.</p>
           </div>
           <div className="py-8 md:pl-10" data-testid="feature-portal">
             <p className="mono-face mb-3 text-[10px] uppercase text-[#176d61]">03 / private by design</p>
             <h2 className="text-lg font-extrabold text-[#183542]">Your plan, your account.</h2>
-            <p className="mt-2 text-sm leading-6 text-[#6d7a79]">Sign in with Google to keep your meals and custom foods together.</p>
+             <p className="mt-2 text-sm leading-6 text-[#6d7a79]">Sign in with Google to keep everyone's plans and your shared foods together.</p>
           </div>
         </div>
       </section>
@@ -368,10 +368,10 @@ function PortalLoading() {
 }
 
 function ProtectedWorkspace({ children }: { children: ReactNode }) {
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn, userId } = useAuth();
   if (!isLoaded) return <PortalLoading />;
   if (!isSignedIn) return <Redirect to="/" />;
-  return <WorkspaceLayout>{children}</WorkspaceLayout>;
+  return <WorkspaceLayout key={userId ?? 'loading'}>{children}</WorkspaceLayout>;
 }
 
 function HomeRedirect() {

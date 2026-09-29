@@ -13,6 +13,7 @@ export interface MealEntry {
   id: number;
   /** @pattern ^\d{4}-\d{2}-\d{2}$ */
   date: string;
+  personId: number;
   meal: Meal;
   grams: number;
   food: Food;

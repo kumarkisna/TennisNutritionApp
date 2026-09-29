@@ -11,4 +11,8 @@ export type ListMealEntriesParams = {
  * @pattern ^\d{4}-\d{2}-\d{2}$
  */
 date: string;
+/**
+ * @minimum 1
+ */
+personId: number;
 };

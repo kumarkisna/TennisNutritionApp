@@ -1,19 +1,21 @@
 import { Router, type IRouter } from "express";
-import { db, preferencesTable } from "@workspace/db";
+import { db, peopleTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import {
   GetPreferencesResponse,
   SavePreferencesBody,
   SavePreferencesResponse,
 } from "@workspace/api-zod";
-import { loadPreferences, toPreferences } from "../lib/planner-data";
+import { ensureDefaultPerson } from "../lib/people";
+import { toPreferences } from "../lib/planner-data";
 import { requireUser } from "../middlewares/requireUser";
 
 const router: IRouter = Router();
 router.use("/preferences", requireUser);
 
 router.get("/preferences", async (_req, res): Promise<void> => {
-  const preferences = await loadPreferences(res.locals.userId);
-  res.json(GetPreferencesResponse.parse(preferences));
+  const person = await ensureDefaultPerson(res.locals.userId);
+  res.json(GetPreferencesResponse.parse(toPreferences(person)));
 });
 
 router.put("/preferences", async (req, res): Promise<void> => {
@@ -23,13 +25,11 @@ router.put("/preferences", async (req, res): Promise<void> => {
     return;
   }
 
+  const defaultPerson = await ensureDefaultPerson(res.locals.userId);
   const [preferences] = await db
-    .insert(preferencesTable)
-    .values({ userId: res.locals.userId, ...body.data })
-    .onConflictDoUpdate({
-      target: preferencesTable.userId,
-      set: body.data,
-    })
+    .update(peopleTable)
+    .set(body.data)
+    .where(eq(peopleTable.id, defaultPerson.id))
     .returning();
   res.json(SavePreferencesResponse.parse(toPreferences(preferences)));
 });

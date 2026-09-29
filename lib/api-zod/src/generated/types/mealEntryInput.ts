@@ -10,6 +10,8 @@ import type { Meal } from './meal';
 export interface MealEntryInput {
   /** @pattern ^\d{4}-\d{2}-\d{2}$ */
   date: string;
+  /** @minimum 1 */
+  personId: number;
   meal: Meal;
   /** @minimum 1 */
   foodId: number;

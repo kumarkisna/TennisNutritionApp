@@ -3,6 +3,7 @@ import healthRouter from "./health";
 import foodsRouter from "./foods";
 import plannerRouter from "./planner";
 import preferencesRouter from "./preferences";
+import peopleRouter from "./people";
 
 const router: IRouter = Router();
 
@@ -10,5 +11,6 @@ router.use(healthRouter);
 router.use(foodsRouter);
 router.use(plannerRouter);
 router.use(preferencesRouter);
+router.use(peopleRouter);
 
 export default router;

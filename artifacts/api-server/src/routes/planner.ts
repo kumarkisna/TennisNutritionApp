@@ -16,11 +16,12 @@ import {
 import {
   isValidCalendarDate,
   loadEntriesForDate,
-  loadPreferences,
   meals,
   sumNutrition,
   toMealEntry,
+  toPreferences,
 } from "../lib/planner-data";
+import { ensureDefaultPerson, getOwnedPerson } from "../lib/people";
 import { requireUser } from "../middlewares/requireUser";
 
 const router: IRouter = Router();
@@ -33,7 +34,12 @@ router.get("/meal-entries", async (req, res): Promise<void> => {
     return;
   }
 
-  const rows = await loadEntriesForDate(res.locals.userId, query.data.date);
+  const person = await getOwnedPerson(res.locals.userId, query.data.personId);
+  if (!person) {
+    res.status(404).json({ error: "Person not found in your planner." });
+    return;
+  }
+  const rows = await loadEntriesForDate(res.locals.userId, query.data.date, person.id);
   res.json(
     ListMealEntriesResponse.parse(
       rows.map(({ entry, food }) => toMealEntry(entry, food)),
@@ -49,6 +55,11 @@ router.post("/meal-entries", async (req, res): Promise<void> => {
   }
 
   const userId: string = res.locals.userId;
+  const person = await getOwnedPerson(userId, body.data.personId);
+  if (!person) {
+    res.status(404).json({ error: "Person not found in your planner." });
+    return;
+  }
   const [food] = await db
     .select()
     .from(foodsTable)
@@ -68,6 +79,7 @@ router.post("/meal-entries", async (req, res): Promise<void> => {
     .insert(mealEntriesTable)
     .values({
       ownerId: userId,
+      personId: person.id,
       plannedDate: body.data.date,
       meal: body.data.meal,
       foodId: food.id,
@@ -88,6 +100,7 @@ router.patch("/meal-entries/:id", async (req, res): Promise<void> => {
   }
 
   const userId: string = res.locals.userId;
+  await ensureDefaultPerson(userId);
   const [updated] = await db
     .update(mealEntriesTable)
     .set(body.data)
@@ -120,6 +133,7 @@ router.delete("/meal-entries/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Invalid planned food id." });
     return;
   }
+  await ensureDefaultPerson(res.locals.userId);
 
   const [deleted] = await db
     .delete(mealEntriesTable)
@@ -145,10 +159,13 @@ router.get("/daily-summary", async (req, res): Promise<void> => {
   }
 
   const userId: string = res.locals.userId;
-  const [rows, preferences] = await Promise.all([
-    loadEntriesForDate(userId, query.data.date),
-    loadPreferences(userId),
-  ]);
+  const person = await getOwnedPerson(userId, query.data.personId);
+  if (!person) {
+    res.status(404).json({ error: "Person not found in your planner." });
+    return;
+  }
+  const rows = await loadEntriesForDate(userId, query.data.date, person.id);
+  const preferences = toPreferences(person);
   const entries = rows.map(({ entry, food }) => toMealEntry(entry, food));
   const groupedMeals = meals.map((meal) => {
     const matching = entries.filter((entry) => entry.meal === meal);
@@ -162,6 +179,7 @@ router.get("/daily-summary", async (req, res): Promise<void> => {
   res.json(
     GetDailySummaryResponse.parse({
       date: query.data.date,
+      personId: person.id,
       targetCalories: preferences.targetCalories,
       totals: sumNutrition(entries.map((entry) => entry.nutrition)),
       entryCount: entries.length,

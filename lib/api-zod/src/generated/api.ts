@@ -204,13 +204,98 @@ export const DeleteFoodResponse = zod.void()
 
 
 /**
+ * @summary List named people and their individual planning targets
+ */
+export const ListPeopleResponseItem = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "isDefault": zod.boolean(),
+  "activityLevel": zod.enum(['sedentary', 'light', 'moderate', 'very_active']),
+  "baselineCalories": zod.number().int(),
+  "activityMultiplier": zod.number(),
+  "targetCalories": zod.number().int()
+})
+export const ListPeopleResponse = zod.array(ListPeopleResponseItem)
+
+
+/**
+ * @summary Add a person with a separate daily plan and activity target
+ */
+export const createPersonBodyNameMax = 80;
+
+export const createPersonBodyBaselineCaloriesMin = 1000;
+export const createPersonBodyBaselineCaloriesMax = 5000;
+
+
+
+export const CreatePersonBody = zod.object({
+  "name": zod.string().min(1).max(createPersonBodyNameMax),
+  "activityLevel": zod.enum(['sedentary', 'light', 'moderate', 'very_active']),
+  "baselineCalories": zod.number().int().min(createPersonBodyBaselineCaloriesMin).max(createPersonBodyBaselineCaloriesMax)
+})
+
+export const CreatePersonResponse = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "isDefault": zod.boolean(),
+  "activityLevel": zod.enum(['sedentary', 'light', 'moderate', 'very_active']),
+  "baselineCalories": zod.number().int(),
+  "activityMultiplier": zod.number(),
+  "targetCalories": zod.number().int()
+})
+
+
+/**
+ * @summary Update a person's name or planning target
+ */
+export const UpdatePersonParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const updatePersonBodyNameMax = 80;
+
+export const updatePersonBodyBaselineCaloriesMin = 1000;
+export const updatePersonBodyBaselineCaloriesMax = 5000;
+
+
+
+export const UpdatePersonBody = zod.object({
+  "name": zod.string().min(1).max(updatePersonBodyNameMax).optional(),
+  "activityLevel": zod.enum(['sedentary', 'light', 'moderate', 'very_active']).optional(),
+  "baselineCalories": zod.number().int().min(updatePersonBodyBaselineCaloriesMin).max(updatePersonBodyBaselineCaloriesMax).optional()
+})
+
+export const UpdatePersonResponse = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "isDefault": zod.boolean(),
+  "activityLevel": zod.enum(['sedentary', 'light', 'moderate', 'very_active']),
+  "baselineCalories": zod.number().int(),
+  "activityMultiplier": zod.number(),
+  "targetCalories": zod.number().int()
+})
+
+
+/**
+ * @summary Delete a non-default person and all their planned meals
+ */
+export const DeletePersonParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const DeletePersonResponse = zod.void()
+
+
+/**
  * @summary List all meal entries for a date
  */
 export const listMealEntriesQueryDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 
 
+
 export const ListMealEntriesQueryParams = zod.object({
-  "date": zod.coerce.string().regex(listMealEntriesQueryDateRegExp)
+  "date": zod.coerce.string().regex(listMealEntriesQueryDateRegExp),
+  "personId": zod.coerce.number().int().min(1)
 })
 
 export const listMealEntriesResponseDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
@@ -219,6 +304,7 @@ export const listMealEntriesResponseDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{
 export const ListMealEntriesResponseItem = zod.object({
   "id": zod.number().int(),
   "date": zod.string().regex(listMealEntriesResponseDateRegExp),
+  "personId": zod.number().int(),
   "meal": zod.enum(['breakfast', 'lunch', 'dinner', 'snack']),
   "grams": zod.number(),
   "food": zod.object({
@@ -251,12 +337,14 @@ export const ListMealEntriesResponse = zod.array(ListMealEntriesResponseItem)
  */
 export const createMealEntryBodyDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 
+
 export const createMealEntryBodyGramsMax = 3000;
 
 
 
 export const CreateMealEntryBody = zod.object({
   "date": zod.string().regex(createMealEntryBodyDateRegExp),
+  "personId": zod.number().int().min(1),
   "meal": zod.enum(['breakfast', 'lunch', 'dinner', 'snack']),
   "foodId": zod.number().int().min(1),
   "grams": zod.number().min(1).max(createMealEntryBodyGramsMax)
@@ -268,6 +356,7 @@ export const createMealEntryResponseDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{
 export const CreateMealEntryResponse = zod.object({
   "id": zod.number().int(),
   "date": zod.string().regex(createMealEntryResponseDateRegExp),
+  "personId": zod.number().int(),
   "meal": zod.enum(['breakfast', 'lunch', 'dinner', 'snack']),
   "grams": zod.number(),
   "food": zod.object({
@@ -316,6 +405,7 @@ export const updateMealEntryResponseDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{
 export const UpdateMealEntryResponse = zod.object({
   "id": zod.number().int(),
   "date": zod.string().regex(updateMealEntryResponseDateRegExp),
+  "personId": zod.number().int(),
   "meal": zod.enum(['breakfast', 'lunch', 'dinner', 'snack']),
   "grams": zod.number(),
   "food": zod.object({
@@ -390,8 +480,10 @@ export const SavePreferencesResponse = zod.object({
 export const getDailySummaryQueryDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 
 
+
 export const GetDailySummaryQueryParams = zod.object({
-  "date": zod.coerce.string().regex(getDailySummaryQueryDateRegExp)
+  "date": zod.coerce.string().regex(getDailySummaryQueryDateRegExp),
+  "personId": zod.coerce.number().int().min(1)
 })
 
 export const getDailySummaryResponseDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
@@ -399,6 +491,7 @@ export const getDailySummaryResponseDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{
 
 export const GetDailySummaryResponse = zod.object({
   "date": zod.string().regex(getDailySummaryResponseDateRegExp),
+  "personId": zod.number().int(),
   "targetCalories": zod.number().int(),
   "totals": zod.object({
   "calories": zod.number(),

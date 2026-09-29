@@ -2,12 +2,14 @@ import { date, index, integer, pgTable, real, serial, text } from "drizzle-orm/p
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { foodsTable } from "./foods";
+import { peopleTable } from "./people";
 
 export const mealEntriesTable = pgTable(
   "meal_entries",
   {
     id: serial("id").primaryKey(),
     ownerId: text("owner_id").notNull(),
+    personId: integer("person_id").references(() => peopleTable.id, { onDelete: "cascade" }),
     plannedDate: date("planned_date", { mode: "string" }).notNull(),
     meal: text("meal").notNull(),
     foodId: integer("food_id")
@@ -17,6 +19,7 @@ export const mealEntriesTable = pgTable(
   },
   (table) => [
     index("meal_entries_owner_date_idx").on(table.ownerId, table.plannedDate),
+    index("meal_entries_owner_person_date_idx").on(table.ownerId, table.personId, table.plannedDate),
     index("meal_entries_food_id_idx").on(table.foodId),
   ],
 );

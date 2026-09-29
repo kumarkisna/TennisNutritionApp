@@ -10,6 +10,7 @@ servers:
 tags:
   - name: health
   - name: foods
+  - name: people
   - name: planner
   - name: preferences
 paths:
@@ -136,6 +137,68 @@ paths:
           description: Deleted
         "409":
           description: Food is still used in a plan
+  /people:
+    get:
+      operationId: listPeople
+      tags: [people]
+      summary: List named people and their individual planning targets
+      responses:
+        "200":
+          description: People in the signed-in account
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Person"
+    post:
+      operationId: createPerson
+      tags: [people]
+      summary: Add a person with a separate daily plan and activity target
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PersonInput"
+      responses:
+        "201":
+          description: Created person
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Person"
+  /people/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    patch:
+      operationId: updatePerson
+      tags: [people]
+      summary: Update a person's name or planning target
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PersonUpdate"
+      responses:
+        "200":
+          description: Updated person
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Person"
+    delete:
+      operationId: deletePerson
+      tags: [people]
+      summary: Delete a non-default person and all their planned meals
+      responses:
+        "204":
+          description: Deleted
   /meal-entries:
     get:
       operationId: listMealEntries
@@ -148,6 +211,12 @@ paths:
           schema:
             type: string
             pattern: '^\d{4}-\d{2}-\d{2}$'
+        - name: personId
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
       responses:
         "200":
           description: Meal entries for the day
@@ -246,6 +315,12 @@ paths:
           schema:
             type: string
             pattern: '^\d{4}-\d{2}-\d{2}$'
+        - name: personId
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 1
       responses:
         "200":
           description: Daily nutrition summary
@@ -270,6 +345,33 @@ components:
     ActivityLevel:
       type: string
       enum: [sedentary, light, moderate, very_active]
+    Person:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        isDefault: { type: boolean }
+        activityLevel:
+          $ref: "#/components/schemas/ActivityLevel"
+        baselineCalories: { type: integer }
+        activityMultiplier: { type: number }
+        targetCalories: { type: integer }
+      required: [id, name, isDefault, activityLevel, baselineCalories, activityMultiplier, targetCalories]
+    PersonInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        activityLevel:
+          $ref: "#/components/schemas/ActivityLevel"
+        baselineCalories: { type: integer, minimum: 1000, maximum: 5000 }
+      required: [name, activityLevel, baselineCalories]
+    PersonUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        activityLevel:
+          $ref: "#/components/schemas/ActivityLevel"
+        baselineCalories: { type: integer, minimum: 1000, maximum: 5000 }
     Nutrition:
       type: object
       properties:
@@ -345,6 +447,7 @@ components:
       properties:
         id: { type: integer }
         date: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        personId: { type: integer }
         meal:
           $ref: "#/components/schemas/Meal"
         grams: { type: number }
@@ -352,16 +455,17 @@ components:
           $ref: "#/components/schemas/Food"
         nutrition:
           $ref: "#/components/schemas/Nutrition"
-      required: [id, date, meal, grams, food, nutrition]
+      required: [id, date, personId, meal, grams, food, nutrition]
     MealEntryInput:
       type: object
       properties:
         date: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        personId: { type: integer, minimum: 1 }
         meal:
           $ref: "#/components/schemas/Meal"
         foodId: { type: integer, minimum: 1 }
         grams: { type: number, minimum: 1, maximum: 3000 }
-      required: [date, meal, foodId, grams]
+      required: [date, personId, meal, foodId, grams]
     MealEntryUpdate:
       type: object
       properties:
@@ -397,6 +501,7 @@ components:
       type: object
       properties:
         date: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        personId: { type: integer }
         targetCalories: { type: integer }
         totals:
           $ref: "#/components/schemas/Nutrition"
@@ -405,4 +510,4 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/MealSummary"
-      required: [date, targetCalories, totals, entryCount, meals]
+      required: [date, personId, targetCalories, totals, entryCount, meals]
