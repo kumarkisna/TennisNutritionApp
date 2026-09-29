@@ -16,7 +16,11 @@ export function toPerson(person: PersonRow) {
     weightKg: person.weightKg,
     ageYears: person.ageYears,
     ironGoalMg: person.ironGoalMg,
+    ironGoalSource: person.ironGoalSource,
+    ironGoalReviewedOn: person.ironGoalReviewedOn,
     fatGoalG: person.fatGoalG,
+    fatGoalSource: person.fatGoalSource,
+    fatGoalReviewedOn: person.fatGoalReviewedOn,
     ...toPreferences(person),
   };
 }

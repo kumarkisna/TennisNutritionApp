@@ -411,13 +411,17 @@ components:
         weightKg: { type: [number, "null"], minimum: 1, maximum: 500 }
         ageYears: { type: [integer, "null"], minimum: 1, maximum: 120 }
         ironGoalMg: { type: [number, "null"], exclusiveMinimum: 0, maximum: 100 }
+        ironGoalSource: { type: [string, "null"], maxLength: 300, description: "User-provided source note; not verified by the app." }
+        ironGoalReviewedOn: { type: [string, "null"], pattern: '^\d{4}-\d{2}-\d{2}$', description: "User-provided date the goal was reviewed with a qualified professional; not verified by the app." }
         fatGoalG: { type: [number, "null"], exclusiveMinimum: 0, maximum: 500 }
+        fatGoalSource: { type: [string, "null"], maxLength: 300, description: "User-provided source note; not verified by the app." }
+        fatGoalReviewedOn: { type: [string, "null"], pattern: '^\d{4}-\d{2}-\d{2}$', description: "User-provided date the goal was reviewed with a qualified professional; not verified by the app." }
         activityLevel:
           $ref: "#/components/schemas/ActivityLevel"
         baselineCalories: { type: integer }
         activityMultiplier: { type: number }
         targetCalories: { type: integer }
-      required: [id, name, isDefault, weightKg, ageYears, ironGoalMg, fatGoalG, activityLevel, baselineCalories, activityMultiplier, targetCalories]
+      required: [id, name, isDefault, weightKg, ageYears, ironGoalMg, ironGoalSource, ironGoalReviewedOn, fatGoalG, fatGoalSource, fatGoalReviewedOn, activityLevel, baselineCalories, activityMultiplier, targetCalories]
     PersonInput:
       type: object
       properties:
@@ -425,7 +429,11 @@ components:
         weightKg: { type: [number, "null"], minimum: 1, maximum: 500 }
         ageYears: { type: [integer, "null"], minimum: 1, maximum: 120 }
         ironGoalMg: { type: [number, "null"], exclusiveMinimum: 0, maximum: 100 }
+        ironGoalSource: { type: [string, "null"], maxLength: 300 }
+        ironGoalReviewedOn: { type: [string, "null"], pattern: '^\d{4}-\d{2}-\d{2}$' }
         fatGoalG: { type: [number, "null"], exclusiveMinimum: 0, maximum: 500 }
+        fatGoalSource: { type: [string, "null"], maxLength: 300 }
+        fatGoalReviewedOn: { type: [string, "null"], pattern: '^\d{4}-\d{2}-\d{2}$' }
         activityLevel:
           $ref: "#/components/schemas/ActivityLevel"
         baselineCalories: { type: integer, minimum: 1000, maximum: 5000 }
@@ -437,7 +445,11 @@ components:
         weightKg: { type: [number, "null"], minimum: 1, maximum: 500 }
         ageYears: { type: [integer, "null"], minimum: 1, maximum: 120 }
         ironGoalMg: { type: [number, "null"], exclusiveMinimum: 0, maximum: 100 }
+        ironGoalSource: { type: [string, "null"], maxLength: 300 }
+        ironGoalReviewedOn: { type: [string, "null"], pattern: '^\d{4}-\d{2}-\d{2}$' }
         fatGoalG: { type: [number, "null"], exclusiveMinimum: 0, maximum: 500 }
+        fatGoalSource: { type: [string, "null"], maxLength: 300 }
+        fatGoalReviewedOn: { type: [string, "null"], pattern: '^\d{4}-\d{2}-\d{2}$' }
         activityLevel:
           $ref: "#/components/schemas/ActivityLevel"
         baselineCalories: { type: integer, minimum: 1000, maximum: 5000 }

@@ -30,11 +30,35 @@ export interface Person {
      */
   ironGoalMg: number | null;
   /**
+     * User-provided source note; not verified by the app.
+     * @maxLength 300
+     * @nullable
+     */
+  ironGoalSource: string | null;
+  /**
+     * User-provided date the goal was reviewed with a qualified professional; not verified by the app.
+     * @nullable
+     * @pattern ^\d{4}-\d{2}-\d{2}$
+     */
+  ironGoalReviewedOn: string | null;
+  /**
      * @maximum 500
      * @exclusiveMinimum 0
      * @nullable
      */
   fatGoalG: number | null;
+  /**
+     * User-provided source note; not verified by the app.
+     * @maxLength 300
+     * @nullable
+     */
+  fatGoalSource: string | null;
+  /**
+     * User-provided date the goal was reviewed with a qualified professional; not verified by the app.
+     * @nullable
+     * @pattern ^\d{4}-\d{2}-\d{2}$
+     */
+  fatGoalReviewedOn: string | null;
   activityLevel: ActivityLevel;
   baselineCalories: number;
   activityMultiplier: number;

@@ -32,11 +32,31 @@ export interface PersonInput {
      */
   ironGoalMg?: number | null;
   /**
+     * @maxLength 300
+     * @nullable
+     */
+  ironGoalSource?: string | null;
+  /**
+     * @nullable
+     * @pattern ^\d{4}-\d{2}-\d{2}$
+     */
+  ironGoalReviewedOn?: string | null;
+  /**
      * @maximum 500
      * @exclusiveMinimum 0
      * @nullable
      */
   fatGoalG?: number | null;
+  /**
+     * @maxLength 300
+     * @nullable
+     */
+  fatGoalSource?: string | null;
+  /**
+     * @nullable
+     * @pattern ^\d{4}-\d{2}-\d{2}$
+     */
+  fatGoalReviewedOn?: string | null;
   activityLevel: ActivityLevel;
   /**
      * @minimum 1000

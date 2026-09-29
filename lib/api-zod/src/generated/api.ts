@@ -239,9 +239,15 @@ export const listPeopleResponseAgeYearsMax = 120;
 export const listPeopleResponseIronGoalMgExclusiveMin = 0;
 export const listPeopleResponseIronGoalMgMax = 100;
 
+export const listPeopleResponseIronGoalSourceMax = 300;
+
+export const listPeopleResponseIronGoalReviewedOnRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 export const listPeopleResponseFatGoalGExclusiveMin = 0;
 export const listPeopleResponseFatGoalGMax = 500;
 
+export const listPeopleResponseFatGoalSourceMax = 300;
+
+export const listPeopleResponseFatGoalReviewedOnRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 
 
 export const ListPeopleResponseItem = zod.object({
@@ -251,7 +257,11 @@ export const ListPeopleResponseItem = zod.object({
   "weightKg": zod.number().min(1).max(listPeopleResponseWeightKgMax).nullable(),
   "ageYears": zod.number().int().min(1).max(listPeopleResponseAgeYearsMax).nullable(),
   "ironGoalMg": zod.number().gt(listPeopleResponseIronGoalMgExclusiveMin).max(listPeopleResponseIronGoalMgMax).nullable(),
+  "ironGoalSource": zod.string().max(listPeopleResponseIronGoalSourceMax).nullable().describe('User-provided source note; not verified by the app.'),
+  "ironGoalReviewedOn": zod.string().regex(listPeopleResponseIronGoalReviewedOnRegExp).nullable().describe('User-provided date the goal was reviewed with a qualified professional; not verified by the app.'),
   "fatGoalG": zod.number().gt(listPeopleResponseFatGoalGExclusiveMin).max(listPeopleResponseFatGoalGMax).nullable(),
+  "fatGoalSource": zod.string().max(listPeopleResponseFatGoalSourceMax).nullable().describe('User-provided source note; not verified by the app.'),
+  "fatGoalReviewedOn": zod.string().regex(listPeopleResponseFatGoalReviewedOnRegExp).nullable().describe('User-provided date the goal was reviewed with a qualified professional; not verified by the app.'),
   "activityLevel": zod.enum(['sedentary', 'light', 'moderate', 'very_active']),
   "baselineCalories": zod.number().int(),
   "activityMultiplier": zod.number(),
@@ -272,9 +282,15 @@ export const createPersonBodyAgeYearsMax = 120;
 export const createPersonBodyIronGoalMgExclusiveMin = 0;
 export const createPersonBodyIronGoalMgMax = 100;
 
+export const createPersonBodyIronGoalSourceMax = 300;
+
+export const createPersonBodyIronGoalReviewedOnRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 export const createPersonBodyFatGoalGExclusiveMin = 0;
 export const createPersonBodyFatGoalGMax = 500;
 
+export const createPersonBodyFatGoalSourceMax = 300;
+
+export const createPersonBodyFatGoalReviewedOnRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 export const createPersonBodyBaselineCaloriesMin = 1000;
 export const createPersonBodyBaselineCaloriesMax = 5000;
 
@@ -285,7 +301,11 @@ export const CreatePersonBody = zod.object({
   "weightKg": zod.number().min(1).max(createPersonBodyWeightKgMax).nullish(),
   "ageYears": zod.number().int().min(1).max(createPersonBodyAgeYearsMax).nullish(),
   "ironGoalMg": zod.number().gt(createPersonBodyIronGoalMgExclusiveMin).max(createPersonBodyIronGoalMgMax).nullish(),
+  "ironGoalSource": zod.string().max(createPersonBodyIronGoalSourceMax).nullish(),
+  "ironGoalReviewedOn": zod.string().regex(createPersonBodyIronGoalReviewedOnRegExp).nullish(),
   "fatGoalG": zod.number().gt(createPersonBodyFatGoalGExclusiveMin).max(createPersonBodyFatGoalGMax).nullish(),
+  "fatGoalSource": zod.string().max(createPersonBodyFatGoalSourceMax).nullish(),
+  "fatGoalReviewedOn": zod.string().regex(createPersonBodyFatGoalReviewedOnRegExp).nullish(),
   "activityLevel": zod.enum(['sedentary', 'light', 'moderate', 'very_active']),
   "baselineCalories": zod.number().int().min(createPersonBodyBaselineCaloriesMin).max(createPersonBodyBaselineCaloriesMax)
 })
@@ -297,9 +317,15 @@ export const createPersonResponseAgeYearsMax = 120;
 export const createPersonResponseIronGoalMgExclusiveMin = 0;
 export const createPersonResponseIronGoalMgMax = 100;
 
+export const createPersonResponseIronGoalSourceMax = 300;
+
+export const createPersonResponseIronGoalReviewedOnRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 export const createPersonResponseFatGoalGExclusiveMin = 0;
 export const createPersonResponseFatGoalGMax = 500;
 
+export const createPersonResponseFatGoalSourceMax = 300;
+
+export const createPersonResponseFatGoalReviewedOnRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 
 
 export const CreatePersonResponse = zod.object({
@@ -309,7 +335,11 @@ export const CreatePersonResponse = zod.object({
   "weightKg": zod.number().min(1).max(createPersonResponseWeightKgMax).nullable(),
   "ageYears": zod.number().int().min(1).max(createPersonResponseAgeYearsMax).nullable(),
   "ironGoalMg": zod.number().gt(createPersonResponseIronGoalMgExclusiveMin).max(createPersonResponseIronGoalMgMax).nullable(),
+  "ironGoalSource": zod.string().max(createPersonResponseIronGoalSourceMax).nullable().describe('User-provided source note; not verified by the app.'),
+  "ironGoalReviewedOn": zod.string().regex(createPersonResponseIronGoalReviewedOnRegExp).nullable().describe('User-provided date the goal was reviewed with a qualified professional; not verified by the app.'),
   "fatGoalG": zod.number().gt(createPersonResponseFatGoalGExclusiveMin).max(createPersonResponseFatGoalGMax).nullable(),
+  "fatGoalSource": zod.string().max(createPersonResponseFatGoalSourceMax).nullable().describe('User-provided source note; not verified by the app.'),
+  "fatGoalReviewedOn": zod.string().regex(createPersonResponseFatGoalReviewedOnRegExp).nullable().describe('User-provided date the goal was reviewed with a qualified professional; not verified by the app.'),
   "activityLevel": zod.enum(['sedentary', 'light', 'moderate', 'very_active']),
   "baselineCalories": zod.number().int(),
   "activityMultiplier": zod.number(),
@@ -333,9 +363,15 @@ export const updatePersonBodyAgeYearsMax = 120;
 export const updatePersonBodyIronGoalMgExclusiveMin = 0;
 export const updatePersonBodyIronGoalMgMax = 100;
 
+export const updatePersonBodyIronGoalSourceMax = 300;
+
+export const updatePersonBodyIronGoalReviewedOnRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 export const updatePersonBodyFatGoalGExclusiveMin = 0;
 export const updatePersonBodyFatGoalGMax = 500;
 
+export const updatePersonBodyFatGoalSourceMax = 300;
+
+export const updatePersonBodyFatGoalReviewedOnRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 export const updatePersonBodyBaselineCaloriesMin = 1000;
 export const updatePersonBodyBaselineCaloriesMax = 5000;
 
@@ -346,7 +382,11 @@ export const UpdatePersonBody = zod.object({
   "weightKg": zod.number().min(1).max(updatePersonBodyWeightKgMax).nullish(),
   "ageYears": zod.number().int().min(1).max(updatePersonBodyAgeYearsMax).nullish(),
   "ironGoalMg": zod.number().gt(updatePersonBodyIronGoalMgExclusiveMin).max(updatePersonBodyIronGoalMgMax).nullish(),
+  "ironGoalSource": zod.string().max(updatePersonBodyIronGoalSourceMax).nullish(),
+  "ironGoalReviewedOn": zod.string().regex(updatePersonBodyIronGoalReviewedOnRegExp).nullish(),
   "fatGoalG": zod.number().gt(updatePersonBodyFatGoalGExclusiveMin).max(updatePersonBodyFatGoalGMax).nullish(),
+  "fatGoalSource": zod.string().max(updatePersonBodyFatGoalSourceMax).nullish(),
+  "fatGoalReviewedOn": zod.string().regex(updatePersonBodyFatGoalReviewedOnRegExp).nullish(),
   "activityLevel": zod.enum(['sedentary', 'light', 'moderate', 'very_active']).optional(),
   "baselineCalories": zod.number().int().min(updatePersonBodyBaselineCaloriesMin).max(updatePersonBodyBaselineCaloriesMax).optional()
 })
@@ -358,9 +398,15 @@ export const updatePersonResponseAgeYearsMax = 120;
 export const updatePersonResponseIronGoalMgExclusiveMin = 0;
 export const updatePersonResponseIronGoalMgMax = 100;
 
+export const updatePersonResponseIronGoalSourceMax = 300;
+
+export const updatePersonResponseIronGoalReviewedOnRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 export const updatePersonResponseFatGoalGExclusiveMin = 0;
 export const updatePersonResponseFatGoalGMax = 500;
 
+export const updatePersonResponseFatGoalSourceMax = 300;
+
+export const updatePersonResponseFatGoalReviewedOnRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 
 
 export const UpdatePersonResponse = zod.object({
@@ -370,7 +416,11 @@ export const UpdatePersonResponse = zod.object({
   "weightKg": zod.number().min(1).max(updatePersonResponseWeightKgMax).nullable(),
   "ageYears": zod.number().int().min(1).max(updatePersonResponseAgeYearsMax).nullable(),
   "ironGoalMg": zod.number().gt(updatePersonResponseIronGoalMgExclusiveMin).max(updatePersonResponseIronGoalMgMax).nullable(),
+  "ironGoalSource": zod.string().max(updatePersonResponseIronGoalSourceMax).nullable().describe('User-provided source note; not verified by the app.'),
+  "ironGoalReviewedOn": zod.string().regex(updatePersonResponseIronGoalReviewedOnRegExp).nullable().describe('User-provided date the goal was reviewed with a qualified professional; not verified by the app.'),
   "fatGoalG": zod.number().gt(updatePersonResponseFatGoalGExclusiveMin).max(updatePersonResponseFatGoalGMax).nullable(),
+  "fatGoalSource": zod.string().max(updatePersonResponseFatGoalSourceMax).nullable().describe('User-provided source note; not verified by the app.'),
+  "fatGoalReviewedOn": zod.string().regex(updatePersonResponseFatGoalReviewedOnRegExp).nullable().describe('User-provided date the goal was reviewed with a qualified professional; not verified by the app.'),
   "activityLevel": zod.enum(['sedentary', 'light', 'moderate', 'very_active']),
   "baselineCalories": zod.number().int(),
   "activityMultiplier": zod.number(),

@@ -482,6 +482,10 @@ function BodyDetails({ person }: { person: Person }) {
 function NutrientGoals({ person }: { person: Person }) {
   const [iron, setIron] = useState(person.ironGoalMg === null ? '' : String(person.ironGoalMg));
   const [fat, setFat] = useState(person.fatGoalG === null ? '' : String(person.fatGoalG));
+  const [ironSource, setIronSource] = useState(person.ironGoalSource ?? '');
+  const [fatSource, setFatSource] = useState(person.fatGoalSource ?? '');
+  const [ironReviewedOn, setIronReviewedOn] = useState(person.ironGoalReviewedOn ?? '');
+  const [fatReviewedOn, setFatReviewedOn] = useState(person.fatGoalReviewedOn ?? '');
   const [error, setError] = useState<unknown>(null);
   const [saved, setSaved] = useState(false);
   const update = useUpdatePerson();
@@ -489,7 +493,11 @@ function NutrientGoals({ person }: { person: Person }) {
   useEffect(() => {
     setIron(person.ironGoalMg === null ? '' : String(person.ironGoalMg));
     setFat(person.fatGoalG === null ? '' : String(person.fatGoalG));
-  }, [person.id, person.ironGoalMg, person.fatGoalG]);
+    setIronSource(person.ironGoalSource ?? '');
+    setFatSource(person.fatGoalSource ?? '');
+    setIronReviewedOn(person.ironGoalReviewedOn ?? '');
+    setFatReviewedOn(person.fatGoalReviewedOn ?? '');
+  }, [person.id, person.ironGoalMg, person.fatGoalG, person.ironGoalSource, person.fatGoalSource, person.ironGoalReviewedOn, person.fatGoalReviewedOn]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -503,7 +511,15 @@ function NutrientGoals({ person }: { person: Person }) {
     setError(null);
     setSaved(false);
     try {
-      await update.mutateAsync({ id: person.id, data: { ironGoalMg, fatGoalG } });
+      await update.mutateAsync({ id: person.id, data: {
+        ironGoalMg, fatGoalG,
+        ironGoalSource: ironGoalMg === null ? null : ironSource.trim() || null,
+        fatGoalSource: fatGoalG === null ? null : fatSource.trim() || null,
+        ironGoalReviewedOn: ironGoalMg === null ? null : ironReviewedOn || null,
+        fatGoalReviewedOn: fatGoalG === null ? null : fatReviewedOn || null,
+      } });
+      if (ironGoalMg === null) { setIronSource(''); setIronReviewedOn(''); }
+      if (fatGoalG === null) { setFatSource(''); setFatReviewedOn(''); }
       refresh.people();
       setSaved(true);
     } catch (cause) { setError(cause); }
@@ -513,13 +529,26 @@ function NutrientGoals({ person }: { person: Person }) {
     <SectionHeading kicker="Personal goals / optional" title={`${person.name}'s iron and fat goals`} />
     <p className="text-sm leading-6 text-[#6d7a79]">Enter goals you already have from a qualified professional or a source you trust. We do not calculate these from age, sex, activity, or the workbook. The workbook’s iron cells are invalid dates, and its fat ranges require person groups we cannot safely assign.</p>
     <form onSubmit={submit} className="mt-6">
-      <div className="grid gap-4 sm:grid-cols-2">
+      <p className="mb-4 text-xs leading-5 text-[#6d7a79]">Source notes and review dates are optional and provided by you. The app does not check the source or verify a professional review. Avoid entering private medical details or a professional’s contact information.</p>
+      <div className="grid gap-5 sm:grid-cols-2">
         <div><label className="workspace-label" htmlFor="goal-iron">Iron (mg / day)</label>
           <input id="goal-iron" type="number" min="0.01" max="100" step="any" placeholder="No goal set"
-            className="workspace-input" value={iron} onChange={event => { setIron(event.target.value); setSaved(false); }} data-testid="input-goal-iron" /></div>
+            className="workspace-input" value={iron} onChange={event => { setIron(event.target.value); setSaved(false); }} data-testid="input-goal-iron" />
+          <label className="workspace-label mt-3" htmlFor="goal-iron-source">Source note (optional, user-provided)</label>
+          <input id="goal-iron-source" className="workspace-input" maxLength={300} placeholder="e.g. advice or reference name" disabled={!iron.trim()}
+            value={iron.trim() ? ironSource : ''} onChange={event => { setIronSource(event.target.value); setSaved(false); }} data-testid="input-goal-iron-source" />
+          <label className="workspace-label mt-3" htmlFor="goal-iron-reviewed">Reviewed with a qualified professional on (optional, user-provided)</label>
+          <input id="goal-iron-reviewed" type="date" className="workspace-input" disabled={!iron.trim()}
+            value={iron.trim() ? ironReviewedOn : ''} onChange={event => { setIronReviewedOn(event.target.value); setSaved(false); }} data-testid="input-goal-iron-reviewed" /></div>
         <div><label className="workspace-label" htmlFor="goal-fat">Fat (g / day)</label>
           <input id="goal-fat" type="number" min="0.01" max="500" step="any" placeholder="No goal set"
-            className="workspace-input" value={fat} onChange={event => { setFat(event.target.value); setSaved(false); }} data-testid="input-goal-fat" /></div>
+            className="workspace-input" value={fat} onChange={event => { setFat(event.target.value); setSaved(false); }} data-testid="input-goal-fat" />
+          <label className="workspace-label mt-3" htmlFor="goal-fat-source">Source note (optional, user-provided)</label>
+          <input id="goal-fat-source" className="workspace-input" maxLength={300} placeholder="e.g. advice or reference name" disabled={!fat.trim()}
+            value={fat.trim() ? fatSource : ''} onChange={event => { setFatSource(event.target.value); setSaved(false); }} data-testid="input-goal-fat-source" />
+          <label className="workspace-label mt-3" htmlFor="goal-fat-reviewed">Reviewed with a qualified professional on (optional, user-provided)</label>
+          <input id="goal-fat-reviewed" type="date" className="workspace-input" disabled={!fat.trim()}
+            value={fat.trim() ? fatReviewedOn : ''} onChange={event => { setFatReviewedOn(event.target.value); setSaved(false); }} data-testid="input-goal-fat-reviewed" /></div>
       </div>
       <p className="mt-3 text-xs leading-5 text-[#6d7a79]">Both fields are optional. Clear a field and save to remove its goal. These are your own reference values, not recommendations from this app.</p>
       <p className="mt-2 text-xs leading-5 font-semibold text-[#6d7a79]">For adolescents{person.ageYears !== null && person.ageYears < 19 ? `, including ${person.name}` : ''}, do not choose an iron or fat goal from adult ranges. Ask a qualified healthcare professional for age-appropriate guidance before entering one.</p>

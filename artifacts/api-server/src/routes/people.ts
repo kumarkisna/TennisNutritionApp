@@ -11,10 +11,40 @@ import {
   UpdatePersonResponse,
 } from "@workspace/api-zod";
 import { ensureDefaultPerson, getOwnedPerson, toPerson } from "../lib/people";
+import { isValidCalendarDate } from "../lib/planner-data";
 import { requireUser } from "../middlewares/requireUser";
 
 const router: IRouter = Router();
 router.use("/people", requireUser);
+
+type GoalChanges = {
+  ironGoalMg?: number | null;
+  ironGoalSource?: string | null;
+  ironGoalReviewedOn?: string | null;
+  fatGoalG?: number | null;
+  fatGoalSource?: string | null;
+  fatGoalReviewedOn?: string | null;
+};
+
+function normalizeGoalChanges(changes: GoalChanges, existing?: GoalChanges): GoalChanges | null {
+  const result = { ...changes };
+  for (const prefix of ["iron", "fat"] as const) {
+    const amountKey = prefix === "iron" ? "ironGoalMg" : "fatGoalG";
+    const sourceKey = prefix === "iron" ? "ironGoalSource" : "fatGoalSource";
+    const reviewedKey = prefix === "iron" ? "ironGoalReviewedOn" : "fatGoalReviewedOn";
+    const amount = result[amountKey] === undefined ? existing?.[amountKey] : result[amountKey];
+    if (amount === null || amount === undefined) {
+      if (result[sourceKey]?.trim() || result[reviewedKey]) return null;
+      result[sourceKey] = null;
+      result[reviewedKey] = null;
+    } else {
+      if (result[sourceKey] !== undefined) result[sourceKey] = result[sourceKey]?.trim() || null;
+      const date = result[reviewedKey];
+      if (date !== undefined && date !== null && !isValidCalendarDate(date)) return null;
+    }
+  }
+  return result;
+}
 
 async function nameTaken(ownerId: string, name: string, excludingId?: number): Promise<boolean> {
   const [found] = await db
@@ -49,6 +79,11 @@ router.post("/people", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Enter a name and valid activity target." });
     return;
   }
+  const goals = normalizeGoalChanges(body.data);
+  if (!goals) {
+    res.status(400).json({ error: "Enter a valid review date, and only add source details to a goal that is set." });
+    return;
+  }
   const ownerId: string = res.locals.userId;
   await ensureDefaultPerson(ownerId);
   if (await nameTaken(ownerId, name)) {
@@ -64,6 +99,7 @@ router.post("/people", async (req, res): Promise<void> => {
       ageYears: body.data.ageYears ?? null,
       ironGoalMg: body.data.ironGoalMg ?? null,
       fatGoalG: body.data.fatGoalG ?? null,
+      ...goals,
       activityLevel: body.data.activityLevel,
       baselineCalories: body.data.baselineCalories,
     })
@@ -84,6 +120,11 @@ router.patch("/people/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Person not found in your planner." });
     return;
   }
+  const goals = normalizeGoalChanges(body.data, existing);
+  if (!goals) {
+    res.status(400).json({ error: "Enter a valid review date, and only add source details to a goal that is set." });
+    return;
+  }
   const name = body.data.name?.trim();
   if (name === "") {
     res.status(400).json({ error: "Name cannot be empty." });
@@ -95,7 +136,7 @@ router.patch("/people/:id", async (req, res): Promise<void> => {
   }
   const [person] = await db
     .update(peopleTable)
-    .set({ ...body.data, ...(name === undefined ? {} : { name }) })
+    .set({ ...body.data, ...goals, ...(name === undefined ? {} : { name }) })
     .where(and(eq(peopleTable.id, existing.id), eq(peopleTable.ownerId, ownerId)))
     .returning();
   res.json(UpdatePersonResponse.parse(toPerson(person)));

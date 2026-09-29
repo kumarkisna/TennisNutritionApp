@@ -30,6 +30,11 @@ const activities: Record<DayActivityType, {
 const format = (value: number, places = 0) =>
   value.toLocaleString(undefined, { maximumFractionDigits: places });
 
+function goalProvenance(source: string | null, reviewedOn: string | null) {
+  if (!source && !reviewedOn) return 'No source or professional-review date recorded.';
+  return `${source ? `Source note: ${source}. ` : ''}${reviewedOn ? `Professional review date: ${reviewedOn}. ` : ''}User-provided; not verified by this app.`;
+}
+
 function RangeRow({ label, expected, actual, unit, note }: {
   label: string;
   expected: string;
@@ -116,9 +121,9 @@ export function SportsReferencePanel({ person, date, totals, summaryLoading, sum
     <RangeRow label="Calcium" unit="mg" expected={calciumRange ? `${format(calciumRange[0])}–${format(calciumRange[1])} mg / day` : 'Add age (workbook covers 12+ only)'}
       actual={planned('calciumMg', 'mg')} note="If any planned food lacks calcium data, the total is not shown as complete. The workbook lists a separate post-menopausal range that is not inferred from age." />
     <RangeRow label="Fat" unit="g" expected={person.fatGoalG === null ? 'No personal goal set' : `${format(person.fatGoalG, 1)} g / day (your goal)`} actual={planned('fat', 'g')}
-      note="The workbook’s fat ranges depend on person groups; we do not infer one. Set or clear your own goal in Preferences." />
+      note={`The workbook’s fat ranges depend on person groups; we do not infer one. ${person.fatGoalG === null ? 'Set your own goal in Preferences.' : goalProvenance(person.fatGoalSource, person.fatGoalReviewedOn)} Set or clear your goal in Preferences.`} />
     <RangeRow label="Iron" unit="mg" expected={person.ironGoalMg === null ? 'No personal goal set' : `${format(person.ironGoalMg, 1)} mg / day (your goal)`} actual={planned('ironMg', 'mg')}
-      note="The workbook’s iron cells were saved as dates; we do not use them as targets. If any food lacks iron data, the planned total is not fully reported. Set or clear your own goal in Preferences." />
+      note={`The workbook’s iron cells were saved as dates; we do not use them as targets. If any food lacks iron data, the planned total is not fully reported. ${person.ironGoalMg === null ? '' : goalProvenance(person.ironGoalSource, person.ironGoalReviewedOn)} Set or clear your goal in Preferences.`} />
     <RangeRow label="Fiber" unit="g" expected="No quantitative range in workbook" actual={planned('fiber', 'g')}
       note="Fiber totals include reported values only; a food without fiber data may make the true amount higher." />
     <p className="mt-4 text-xs leading-6 text-[#6d7a79]">References depend on the activity category you select, not on a measured training load. Food data may be incomplete or inaccurate. Especially for adolescents, pregnancy or medical conditions, use qualified professional advice instead of these ranges.</p>
