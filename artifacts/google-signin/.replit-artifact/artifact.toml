@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Google Sign-In Website"
+description = "A standalone sign-in website that authenticates users through Google's official OAuth flow without ever collecting their Google password."
+version = "1.0.0"
+id = "artifacts/google-signin"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 20276
+
+[services.development]
+run = "pnpm --filter @workspace/google-signin run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/google-signin", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/google-signin/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "20276"
+BASE_PATH = "/"
