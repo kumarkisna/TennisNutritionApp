@@ -1,0 +1,1 @@
+- [Calendar dates in generated API validators](calendar-date-validation.md) — avoid OpenAPI format: date for date-only strings with the current Orval/Zod generator.

@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
-import { AuthenticateWithRedirectCallback, ClerkProvider, Show, useAuth, useClerk, useSignIn, useUser } from '@clerk/react';
+import { AuthenticateWithRedirectCallback, ClerkProvider, Show, useAuth, useClerk, useSignIn } from '@clerk/react';
 import { publishableKeyFromHost } from '@clerk/react/internal';
 import { shadcn } from '@clerk/themes';
 import {
@@ -8,7 +8,6 @@ import {
   Check,
   ChevronRight,
   CircleCheck,
-  LogOut,
   ShieldCheck,
   Sparkles,
 } from 'lucide-react';
@@ -16,6 +15,7 @@ import { Link, Redirect, Route, Router as WouterRouter, Switch, useLocation } fr
 import { SiGoogle } from 'react-icons/si';
 
 import { ErrorBoundary } from '@/components/error-boundary';
+import { FoodsPage, OverviewPage, PlannerPage, SettingsPage, WorkspaceLayout } from './PlannerWorkspace';
 
 const queryClient = new QueryClient();
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
@@ -113,7 +113,7 @@ function Home() {
         <BrandMark />
         <nav className="flex items-center gap-4" aria-label="Primary navigation">
           <span className="hidden text-xs font-semibold text-[#6d7a79] sm:inline" data-testid="text-nav-safety">
-            Your account. One clear handoff.
+            Your food. One clear place.
           </span>
           <Link
             href="/sign-in"
@@ -129,13 +129,13 @@ function Home() {
         <div className="relative z-10 max-w-[700px] self-center">
           <div className="rise-in mb-8 inline-flex items-center gap-2 rounded-full border border-[#c6ded5] bg-[#e8f3ed] px-3.5 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-[#176d61]" data-testid="status-oauth-safe">
             <ShieldCheck className="h-4 w-4" strokeWidth={2.2} />
-            A safer sign-in handoff
+            Plan clearly. Sign in safely.
           </div>
           <h1 className="display-face rise-in rise-in-delay-1 max-w-[690px] text-[clamp(3.35rem,8vw,6.9rem)] font-extrabold leading-[0.9] text-[#183542]" data-testid="heading-home">
-            Access, without the guesswork.
+            Food planning, without the guesswork.
           </h1>
           <p className="rise-in rise-in-delay-2 mt-8 max-w-[560px] text-[1.05rem] leading-8 text-[#5d6d71] sm:text-[1.18rem]" data-testid="text-home-description">
-            Clear Access is a small, focused portal. Choose Google, complete sign-in on Google's own page, and come back to the account you meant to reach.
+            Build a daily food plan using nutrition per 100 grams. Adjust portions, see your totals, and set a target based on your activity level. Google keeps sign-in secure.
           </p>
           <div className="rise-in rise-in-delay-3 mt-9 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
             <Link
@@ -143,7 +143,7 @@ function Home() {
               data-testid="link-home-sign-in"
               className="group inline-flex min-h-14 items-center justify-center gap-3 rounded-full bg-[#176d61] px-7 text-sm font-extrabold text-[#fbfaf6] shadow-[0_14px_28px_-16px_hsl(166_56%_37%_/_0.95)] transition hover:-translate-y-1 hover:bg-[#12564d]"
             >
-              Continue securely
+              Open my planner
               <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" strokeWidth={2.5} />
             </Link>
             <Link
@@ -182,7 +182,7 @@ function Home() {
               </div>
               <div className="flex items-center gap-3 rounded-xl border border-[#c6ded5] bg-[#f7fbf8] p-3">
                 <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#176d61] text-[#fbfaf6]"><Check className="h-4 w-4" strokeWidth={3} /></span>
-                <div><p className="text-xs font-bold text-[#183542]">Back in your portal</p><p className="text-[11px] text-[#74807e]">Just your account, nothing extra.</p></div>
+                <div><p className="text-xs font-bold text-[#183542]">Back in your planner</p><p className="text-[11px] text-[#74807e]">Meals, portions, and daily totals.</p></div>
               </div>
             </div>
           </div>
@@ -192,26 +192,26 @@ function Home() {
       <section className="border-t border-[#e3ddd2] bg-[#fbfaf6]">
         <div className="mx-auto grid w-full max-w-[1240px] grid-cols-1 gap-0 px-5 sm:px-8 md:grid-cols-3 lg:px-10">
           <div className="border-b border-[#e3ddd2] py-8 md:border-b-0 md:border-r md:pr-10" data-testid="feature-password">
-            <p className="mono-face mb-3 text-[10px] uppercase text-[#176d61]">01 / no password copy</p>
-            <h2 className="text-lg font-extrabold text-[#183542]">Google does the password work.</h2>
-            <p className="mt-2 text-sm leading-6 text-[#6d7a79]">The password field belongs on Google's page, not ours.</p>
+            <p className="mono-face mb-3 text-[10px] uppercase text-[#176d61]">01 / portion planning</p>
+            <h2 className="text-lg font-extrabold text-[#183542]">Every gram counts.</h2>
+            <p className="mt-2 text-sm leading-6 text-[#6d7a79]">Pick foods and enter grams. Calories and nutrients update from per-100 g values.</p>
           </div>
           <div className="border-b border-[#e3ddd2] py-8 md:border-b-0 md:border-r md:px-10" data-testid="feature-brand">
-            <p className="mono-face mb-3 text-[10px] uppercase text-[#176d61]">02 / clear identity</p>
-            <h2 className="text-lg font-extrabold text-[#183542]">A portal, not a Google clone.</h2>
-            <p className="mt-2 text-sm leading-6 text-[#6d7a79]">You are always handed off to the real Google OAuth page.</p>
+            <p className="mono-face mb-3 text-[10px] uppercase text-[#176d61]">02 / daily targets</p>
+            <h2 className="text-lg font-extrabold text-[#183542]">A target you can adjust.</h2>
+            <p className="mt-2 text-sm leading-6 text-[#6d7a79]">Choose an activity level and an editable baseline for your daily planning estimate.</p>
           </div>
           <div className="py-8 md:pl-10" data-testid="feature-portal">
-            <p className="mono-face mb-3 text-[10px] uppercase text-[#176d61]">03 / only what matters</p>
-            <h2 className="text-lg font-extrabold text-[#183542]">A small account destination.</h2>
-            <p className="mt-2 text-sm leading-6 text-[#6d7a79]">Sign in, see your details, and sign out when you&apos;re done.</p>
+            <p className="mono-face mb-3 text-[10px] uppercase text-[#176d61]">03 / private by design</p>
+            <h2 className="text-lg font-extrabold text-[#183542]">Your plan, your account.</h2>
+            <p className="mt-2 text-sm leading-6 text-[#6d7a79]">Sign in with Google to keep your meals and custom foods together.</p>
           </div>
         </div>
       </section>
 
       <footer className="mx-auto flex w-full max-w-[1240px] flex-col gap-2 px-5 py-8 text-xs text-[#74807e] sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-10" data-testid="footer-home">
-        <span>Clear Access is an independent account portal.</span>
-        <span className="mono-face text-[10px] uppercase">passwords stay with Google</span>
+        <span>Clear Access is an independent food-planning portal.</span>
+        <span className="mono-face text-[10px] uppercase">nutrition estimates · passwords stay with Google</span>
       </footer>
     </main>
   );
@@ -233,8 +233,8 @@ function AuthFrame({ children, mode }: { children: ReactNode; mode: 'sign-in' | 
             </h1>
             <p className="mt-6 max-w-[410px] text-base leading-7 text-[#5d6d71]" data-testid="text-auth-context">
               {mode === 'sign-in'
-                ? "Choose Google below. You will enter your password only on Google's page, then return here to your account portal."
-                : "Create your Clear Access account through Google. Your Google password stays on Google's page, where it belongs."}
+                ? "Choose Google below. You will enter your password only on Google's page, then return here to your food planner."
+                : "Create your Clear Access account through Google to save your food plans. Your password stays on Google's page."}
             </p>
           </div>
           <div className="mt-10 hidden items-center gap-3 text-xs text-[#74807e] lg:flex" data-testid="text-auth-trust-note">
@@ -367,68 +367,11 @@ function PortalLoading() {
   );
 }
 
-function UserPortalPage() {
-  const { user, isLoaded } = useUser();
-  const { signOut } = useClerk();
-
+function ProtectedWorkspace({ children }: { children: ReactNode }) {
+  const { isLoaded, isSignedIn } = useAuth();
   if (!isLoaded) return <PortalLoading />;
-  if (!user) return <Redirect to="/" />;
-
-  const email = user.primaryEmailAddress?.emailAddress ?? 'No primary email listed';
-  const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ') || 'Clear Access member';
-  const initials = `${user.firstName?.[0] ?? ''}${user.lastName?.[0] ?? user.primaryEmailAddress?.emailAddress?.[0] ?? 'C'}`.toUpperCase();
-
-  return (
-    <main className="grain min-h-[100dvh] bg-[#f7f4ed]" data-testid="page-user-portal">
-      <header className="mx-auto flex max-w-[920px] items-center justify-between px-5 py-6 sm:px-8 sm:py-8">
-        <BrandMark compact />
-        <button
-          type="button"
-          onClick={() => signOut({ redirectUrl: basePath || '/' })}
-          data-testid="button-sign-out"
-          className="inline-flex items-center gap-2 rounded-full border border-[#d9d2c5] bg-[#fbfaf6] px-4 py-2.5 text-sm font-bold text-[#183542] transition hover:-translate-y-0.5 hover:border-[#e7856b] hover:text-[#b84f42]"
-        >
-          <LogOut className="h-4 w-4" />
-          Sign out
-        </button>
-      </header>
-      <section className="mx-auto max-w-[920px] px-5 pb-16 sm:px-8 sm:pb-24">
-        <div className="relative overflow-hidden rounded-[2rem] bg-[#183542] px-6 py-10 text-[#fbfaf6] shadow-[0_32px_80px_-36px_hsl(203_37%_18%_/_0.7)] sm:px-12 sm:py-14" data-testid="card-portal-welcome">
-          <div className="absolute -right-20 -top-24 h-72 w-72 rounded-full border-[36px] border-[#2c6970]/60" />
-          <div className="relative z-10 max-w-[600px]">
-            <p className="mono-face mb-5 text-[10px] uppercase text-[#9bd1c0]" data-testid="status-signed-in">signed in / verified session</p>
-            <h1 className="display-face text-5xl font-extrabold leading-[0.95] sm:text-7xl" data-testid="heading-portal">
-              You&apos;re in, {user.firstName || 'there'}.
-            </h1>
-            <p className="mt-6 max-w-[470px] text-base leading-7 text-[#c5d8d2]">
-              This is your Clear Access account portal. Nothing else is competing for your attention.
-            </p>
-          </div>
-        </div>
-        <div className="mt-5 grid gap-5 md:grid-cols-[1.15fr_.85fr]">
-          <section className="rounded-[1.6rem] border border-[#e0d9ce] bg-[#fbfaf6] p-6 sm:p-8" data-testid="card-user-details">
-            <div className="flex items-center gap-4 border-b border-[#e7e1d6] pb-6">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#e8f3ed] text-lg font-extrabold text-[#176d61]" data-testid="avatar-user-initials">{initials}</div>
-              <div>
-                <p className="text-lg font-extrabold text-[#183542]" data-testid="text-user-name">{fullName}</p>
-                <p className="text-sm text-[#6d7a79]" data-testid="text-user-email">{email}</p>
-              </div>
-            </div>
-            <dl className="mt-6 grid gap-5 sm:grid-cols-2">
-              <div><dt className="mono-face text-[10px] uppercase text-[#74807e]">account status</dt><dd className="mt-2 flex items-center gap-2 text-sm font-bold text-[#176d61]" data-testid="status-account-active"><span className="h-2 w-2 rounded-full bg-[#176d61]" />Active</dd></div>
-              <div><dt className="mono-face text-[10px] uppercase text-[#74807e]">session</dt><dd className="mt-2 text-sm font-bold text-[#183542]" data-testid="text-auth-provider">Clerk-managed</dd></div>
-            </dl>
-          </section>
-          <section className="rounded-[1.6rem] border border-[#c6ded5] bg-[#e8f3ed] p-6 sm:p-8" data-testid="card-portal-safety">
-            <ShieldCheck className="h-6 w-6 text-[#176d61]" />
-            <h2 className="mt-7 text-lg font-extrabold text-[#183542]">A clear finish.</h2>
-            <p className="mt-2 text-sm leading-6 text-[#5d6d71]">Your session is managed by Clerk. Sign out here when you are finished.</p>
-            <div className="mt-6 flex items-center gap-2 text-xs font-bold text-[#176d61]"><CircleCheck className="h-4 w-4" /> Password never entered here</div>
-          </section>
-        </div>
-      </section>
-    </main>
-  );
+  if (!isSignedIn) return <Redirect to="/" />;
+  return <WorkspaceLayout>{children}</WorkspaceLayout>;
 }
 
 function HomeRedirect() {
@@ -468,7 +411,10 @@ function Router() {
         <Route path="/" component={HomeRedirect} />
         <Route path="/sign-in/*?" component={SignInPage} />
         <Route path="/sign-up/*?" component={SignUpPage} />
-        <Route path="/user-portal" component={UserPortalPage} />
+        <Route path="/user-portal">{() => <ProtectedWorkspace><OverviewPage /></ProtectedWorkspace>}</Route>
+        <Route path="/planner">{() => <ProtectedWorkspace><PlannerPage /></ProtectedWorkspace>}</Route>
+        <Route path="/foods">{() => <ProtectedWorkspace><FoodsPage /></ProtectedWorkspace>}</Route>
+        <Route path="/settings">{() => <ProtectedWorkspace><SettingsPage /></ProtectedWorkspace>}</Route>
         <Route component={() => <Redirect to="/" />} />
       </Switch>
     </ErrorBoundary>

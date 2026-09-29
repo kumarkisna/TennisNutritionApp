@@ -1,22 +1,23 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
+  # Do not change the title; generated import paths depend on it.
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Food planning API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
-    description: Health operations
+  - name: foods
+  - name: planner
+  - name: preferences
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +25,234 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /foods:
+    get:
+      operationId: listFoods
+      tags: [foods]
+      summary: List reference foods and the signed-in user's custom foods
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Food catalog
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Food"
+    post:
+      operationId: createFood
+      tags: [foods]
+      summary: Add a custom food with nutrition values per 100 grams
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FoodInput"
+      responses:
+        "201":
+          description: Created food
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Food"
+  /foods/discover:
+    get:
+      operationId: discoverFoods
+      tags: [foods]
+      summary: Search Open Food Facts for products with nutrition data per 100 grams
+      parameters:
+        - name: search
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 3
+            maxLength: 80
+      responses:
+        "200":
+          description: Matching products with usable per-100 g nutrition
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DiscoveredFood"
+        "429":
+          description: Search rate limit reached; try again shortly
+  /foods/import:
+    post:
+      operationId: importFood
+      tags: [foods]
+      summary: Save a source-attributed food in the signed-in user's catalog
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportFoodInput"
+      responses:
+        "201":
+          description: Imported or previously saved food
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Food"
+  /foods/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    patch:
+      operationId: updateFood
+      tags: [foods]
+      summary: Update a custom food owned by the signed-in user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FoodUpdate"
+      responses:
+        "200":
+          description: Updated food
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Food"
+    delete:
+      operationId: deleteFood
+      tags: [foods]
+      summary: Delete a custom food not used in any meal entries
+      responses:
+        "204":
+          description: Deleted
+        "409":
+          description: Food is still used in a plan
+  /meal-entries:
+    get:
+      operationId: listMealEntries
+      tags: [planner]
+      summary: List all meal entries for a date
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{2}-\d{2}$'
+      responses:
+        "200":
+          description: Meal entries for the day
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MealEntry"
+    post:
+      operationId: createMealEntry
+      tags: [planner]
+      summary: Plan a food portion for a meal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MealEntryInput"
+      responses:
+        "201":
+          description: Created meal entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MealEntry"
+  /meal-entries/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    patch:
+      operationId: updateMealEntry
+      tags: [planner]
+      summary: Change a planned portion or meal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MealEntryUpdate"
+      responses:
+        "200":
+          description: Updated meal entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MealEntry"
+    delete:
+      operationId: deleteMealEntry
+      tags: [planner]
+      summary: Remove a planned food portion
+      responses:
+        "204":
+          description: Removed
+  /preferences:
+    get:
+      operationId: getPreferences
+      tags: [preferences]
+      summary: Get the user's activity level and planning target
+      responses:
+        "200":
+          description: Current preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Preferences"
+    put:
+      operationId: savePreferences
+      tags: [preferences]
+      summary: Save the user's activity level and baseline calorie target
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PreferencesInput"
+      responses:
+        "200":
+          description: Saved preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Preferences"
+  /daily-summary:
+    get:
+      operationId: getDailySummary
+      tags: [planner]
+      summary: Get calorie and macro totals by meal for a date
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: '^\d{4}-\d{2}-\d{2}$'
+      responses:
+        "200":
+          description: Daily nutrition summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailySummary"
 components:
   schemas:
     HealthStatus:
@@ -31,6 +260,149 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
-
+      required: [status]
+    FoodCategory:
+      type: string
+      enum: [grains, protein, vegetables, fruit, dairy, other]
+    Meal:
+      type: string
+      enum: [breakfast, lunch, dinner, snack]
+    ActivityLevel:
+      type: string
+      enum: [sedentary, light, moderate, very_active]
+    Nutrition:
+      type: object
+      properties:
+        calories: { type: number }
+        protein: { type: number }
+        carbs: { type: number }
+        fat: { type: number }
+        fiber: { type: number }
+      required: [calories, protein, carbs, fat, fiber]
+    Food:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        brand: { type: string }
+        sourceUrl: { type: string, format: uri }
+        category:
+          $ref: "#/components/schemas/FoodCategory"
+        source:
+          type: string
+          enum: [reference, custom, open_food_facts]
+        caloriesPer100g: { type: number }
+        proteinPer100g: { type: number }
+        carbsPer100g: { type: number }
+        fatPer100g: { type: number }
+        fiberPer100g: { type: number }
+        fiberKnown: { type: boolean }
+      required: [id, name, category, source, caloriesPer100g, proteinPer100g, carbsPer100g, fatPer100g, fiberPer100g, fiberKnown]
+    DiscoveredFood:
+      type: object
+      properties:
+        code: { type: string }
+        name: { type: string }
+        brand: { type: string }
+        sourceUrl: { type: string, format: uri }
+        caloriesPer100g: { type: number }
+        proteinPer100g: { type: number }
+        carbsPer100g: { type: number }
+        fatPer100g: { type: number }
+        fiberPer100g: { type: number }
+        fiberKnown: { type: boolean }
+      required: [code, name, sourceUrl, caloriesPer100g, proteinPer100g, carbsPer100g, fatPer100g, fiberPer100g, fiberKnown]
+    ImportFoodInput:
+      type: object
+      properties:
+        code: { type: string, pattern: '^\d{6,20}$' }
+      required: [code]
+    FoodInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        category:
+          $ref: "#/components/schemas/FoodCategory"
+        caloriesPer100g: { type: number, minimum: 0, maximum: 1000 }
+        proteinPer100g: { type: number, minimum: 0, maximum: 100 }
+        carbsPer100g: { type: number, minimum: 0, maximum: 100 }
+        fatPer100g: { type: number, minimum: 0, maximum: 100 }
+        fiberPer100g: { type: number, minimum: 0, maximum: 100 }
+      required: [name, category, caloriesPer100g, proteinPer100g, carbsPer100g, fatPer100g, fiberPer100g]
+    FoodUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        category:
+          $ref: "#/components/schemas/FoodCategory"
+        caloriesPer100g: { type: number, minimum: 0, maximum: 1000 }
+        proteinPer100g: { type: number, minimum: 0, maximum: 100 }
+        carbsPer100g: { type: number, minimum: 0, maximum: 100 }
+        fatPer100g: { type: number, minimum: 0, maximum: 100 }
+        fiberPer100g: { type: number, minimum: 0, maximum: 100 }
+    MealEntry:
+      type: object
+      properties:
+        id: { type: integer }
+        date: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        meal:
+          $ref: "#/components/schemas/Meal"
+        grams: { type: number }
+        food:
+          $ref: "#/components/schemas/Food"
+        nutrition:
+          $ref: "#/components/schemas/Nutrition"
+      required: [id, date, meal, grams, food, nutrition]
+    MealEntryInput:
+      type: object
+      properties:
+        date: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        meal:
+          $ref: "#/components/schemas/Meal"
+        foodId: { type: integer, minimum: 1 }
+        grams: { type: number, minimum: 1, maximum: 3000 }
+      required: [date, meal, foodId, grams]
+    MealEntryUpdate:
+      type: object
+      properties:
+        meal:
+          $ref: "#/components/schemas/Meal"
+        grams: { type: number, minimum: 1, maximum: 3000 }
+    Preferences:
+      type: object
+      properties:
+        activityLevel:
+          $ref: "#/components/schemas/ActivityLevel"
+        baselineCalories: { type: integer }
+        activityMultiplier: { type: number }
+        targetCalories: { type: integer }
+      required: [activityLevel, baselineCalories, activityMultiplier, targetCalories]
+    PreferencesInput:
+      type: object
+      properties:
+        activityLevel:
+          $ref: "#/components/schemas/ActivityLevel"
+        baselineCalories: { type: integer, minimum: 1000, maximum: 5000 }
+      required: [activityLevel, baselineCalories]
+    MealSummary:
+      type: object
+      properties:
+        meal:
+          $ref: "#/components/schemas/Meal"
+        count: { type: integer }
+        nutrition:
+          $ref: "#/components/schemas/Nutrition"
+      required: [meal, count, nutrition]
+    DailySummary:
+      type: object
+      properties:
+        date: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        targetCalories: { type: integer }
+        totals:
+          $ref: "#/components/schemas/Nutrition"
+        entryCount: { type: integer }
+        meals:
+          type: array
+          items:
+            $ref: "#/components/schemas/MealSummary"
+      required: [date, targetCalories, totals, entryCount, meals]
