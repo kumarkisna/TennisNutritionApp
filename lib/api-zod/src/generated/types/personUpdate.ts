@@ -13,6 +13,18 @@ export interface PersonUpdate {
      * @maxLength 80
      */
   name?: string;
+  /**
+     * @minimum 1
+     * @maximum 500
+     * @nullable
+     */
+  weightKg?: number | null;
+  /**
+     * @minimum 1
+     * @maximum 120
+     * @nullable
+     */
+  ageYears?: number | null;
   activityLevel?: ActivityLevel;
   /**
      * @minimum 1000

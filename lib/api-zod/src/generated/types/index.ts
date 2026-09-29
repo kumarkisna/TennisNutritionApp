@@ -8,6 +8,9 @@
 
 export * from './activityLevel';
 export * from './dailySummary';
+export * from './dayActivity';
+export * from './dayActivityInput';
+export * from './dayActivityType';
 export * from './discoveredFood';
 export * from './discoverFoodsParams';
 export * from './food';
@@ -16,6 +19,7 @@ export * from './foodInput';
 export * from './foodSource';
 export * from './foodUpdate';
 export * from './getDailySummaryParams';
+export * from './getDayActivityParams';
 export * from './healthStatus';
 export * from './importFoodInput';
 export * from './listFoodsParams';

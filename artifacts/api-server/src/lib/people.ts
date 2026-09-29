@@ -13,6 +13,8 @@ export function toPerson(person: PersonRow) {
     id: person.id,
     name: person.name,
     isDefault: person.defaultKey !== null,
+    weightKg: person.weightKg,
+    ageYears: person.ageYears,
     ...toPreferences(person),
   };
 }

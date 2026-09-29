@@ -39,4 +39,16 @@ export interface FoodInput {
      * @maximum 100
      */
   fiberPer100g: number;
+  /**
+     * @minimum 0
+     * @maximum 10000
+     * @nullable
+     */
+  calciumMgPer100g?: number | null;
+  /**
+     * @minimum 0
+     * @maximum 1000
+     * @nullable
+     */
+  ironMgPer100g?: number | null;
 }

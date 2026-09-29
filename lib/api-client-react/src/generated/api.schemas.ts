@@ -41,10 +41,50 @@ export const ActivityLevel = {
   very_active: 'very_active',
 } as const;
 
+export type DayActivityType = typeof DayActivityType[keyof typeof DayActivityType];
+
+
+export const DayActivityType = {
+  rest: 'rest',
+  low_intensity: 'low_intensity',
+  training_60: 'training_60',
+  training_120: 'training_120',
+  endurance: 'endurance',
+  extreme: 'extreme',
+  strength: 'strength',
+} as const;
+
+export interface DayActivity {
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  date: string;
+  personId: number;
+  activityType: DayActivityType;
+}
+
+export interface DayActivityInput {
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  date: string;
+  /** @minimum 1 */
+  personId: number;
+  activityType: DayActivityType;
+}
+
 export interface Person {
   id: number;
   name: string;
   isDefault: boolean;
+  /**
+     * @minimum 1
+     * @maximum 500
+     * @nullable
+     */
+  weightKg: number | null;
+  /**
+     * @minimum 1
+     * @maximum 120
+     * @nullable
+     */
+  ageYears: number | null;
   activityLevel: ActivityLevel;
   baselineCalories: number;
   activityMultiplier: number;
@@ -57,6 +97,18 @@ export interface PersonInput {
      * @maxLength 80
      */
   name: string;
+  /**
+     * @minimum 1
+     * @maximum 500
+     * @nullable
+     */
+  weightKg?: number | null;
+  /**
+     * @minimum 1
+     * @maximum 120
+     * @nullable
+     */
+  ageYears?: number | null;
   activityLevel: ActivityLevel;
   /**
      * @minimum 1000
@@ -71,6 +123,18 @@ export interface PersonUpdate {
      * @maxLength 80
      */
   name?: string;
+  /**
+     * @minimum 1
+     * @maximum 500
+     * @nullable
+     */
+  weightKg?: number | null;
+  /**
+     * @minimum 1
+     * @maximum 120
+     * @nullable
+     */
+  ageYears?: number | null;
   activityLevel?: ActivityLevel;
   /**
      * @minimum 1000
@@ -85,6 +149,10 @@ export interface Nutrition {
   carbs: number;
   fat: number;
   fiber: number;
+  /** @nullable */
+  calciumMg: number | null;
+  /** @nullable */
+  ironMg: number | null;
 }
 
 export type FoodSource = typeof FoodSource[keyof typeof FoodSource];
@@ -109,6 +177,10 @@ export interface Food {
   fatPer100g: number;
   fiberPer100g: number;
   fiberKnown: boolean;
+  /** @nullable */
+  calciumMgPer100g: number | null;
+  /** @nullable */
+  ironMgPer100g: number | null;
 }
 
 export interface DiscoveredFood {
@@ -122,6 +194,10 @@ export interface DiscoveredFood {
   fatPer100g: number;
   fiberPer100g: number;
   fiberKnown: boolean;
+  /** @nullable */
+  calciumMgPer100g: number | null;
+  /** @nullable */
+  ironMgPer100g: number | null;
 }
 
 export interface ImportFoodInput {
@@ -161,6 +237,18 @@ export interface FoodInput {
      * @maximum 100
      */
   fiberPer100g: number;
+  /**
+     * @minimum 0
+     * @maximum 10000
+     * @nullable
+     */
+  calciumMgPer100g?: number | null;
+  /**
+     * @minimum 0
+     * @maximum 1000
+     * @nullable
+     */
+  ironMgPer100g?: number | null;
 }
 
 export interface FoodUpdate {
@@ -195,6 +283,18 @@ export interface FoodUpdate {
      * @maximum 100
      */
   fiberPer100g?: number;
+  /**
+     * @minimum 0
+     * @maximum 10000
+     * @nullable
+     */
+  calciumMgPer100g?: number | null;
+  /**
+     * @minimum 0
+     * @maximum 1000
+     * @nullable
+     */
+  ironMgPer100g?: number | null;
 }
 
 export interface MealEntry {
@@ -288,6 +388,17 @@ personId: number;
 };
 
 export type GetDailySummaryParams = {
+/**
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+date: string;
+/**
+ * @minimum 1
+ */
+personId: number;
+};
+
+export type GetDayActivityParams = {
 /**
  * @pattern ^\d{4}-\d{2}-\d{2}$
  */

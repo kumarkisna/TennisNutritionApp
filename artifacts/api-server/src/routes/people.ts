@@ -57,7 +57,14 @@ router.post("/people", async (req, res): Promise<void> => {
   }
   const [person] = await db
     .insert(peopleTable)
-    .values({ ownerId, name, activityLevel: body.data.activityLevel, baselineCalories: body.data.baselineCalories })
+    .values({
+      ownerId,
+      name,
+      weightKg: body.data.weightKg ?? null,
+      ageYears: body.data.ageYears ?? null,
+      activityLevel: body.data.activityLevel,
+      baselineCalories: body.data.baselineCalories,
+    })
     .returning();
   res.status(201).json(CreatePersonResponse.parse(toPerson(person)));
 });

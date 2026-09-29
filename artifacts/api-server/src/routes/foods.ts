@@ -132,6 +132,8 @@ router.post("/foods/import", async (req, res): Promise<void> => {
         fatPer100g: product.fatPer100g,
         fiberPer100g: product.fiberPer100g,
         fiberKnown: product.fiberKnown,
+        calciumMgPer100g: product.calciumMgPer100g,
+        ironMgPer100g: product.ironMgPer100g,
       })
       .onConflictDoNothing({ target: foodsTable.referenceKey })
       .returning();

@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type FormEvent, type Re
 import { useQueryClient } from '@tanstack/react-query';
 import { useClerk, useUser } from '@clerk/react';
 import { Link, useLocation } from 'wouter';
+import { SportsReferencePanel } from './SportsReferencePanel';
 import { Activity, ArrowLeft, ArrowRight, BookOpen, CalendarDays, ChevronLeft, ChevronRight, CirclePlus, ExternalLink, LayoutDashboard, LogOut, Pencil, Plus, Search, Settings2, Trash2, Users, X } from 'lucide-react';
 import {
   useListFoods, getListFoodsQueryKey, useCreateFood, useUpdateFood, useDeleteFood,
@@ -268,6 +269,7 @@ export function PlannerPage() {
     try { await remove.mutateAsync({ id: entry.id }); refresh.entries(); } catch (cause) { setError(cause); }
   }
   return <main data-testid="page-planner"><Header eyebrow="02 / Day planner" title={`${person.name}'s day, in focus.`} description="Pick a day, build their meals, and adjust portions whenever you need." action={<DatePicker date={date} setDate={setDate} />} />
+    <SportsReferencePanel key={`${person.id}:${date}`} person={person} date={date} totals={summary.data?.totals} summaryLoading={summary.isLoading} summaryError={summary.isError} />
     <div className="workspace-section grid gap-5 lg:grid-cols-[1fr_290px]">
       <div><div className="mb-6 flex items-center justify-between gap-4"><div><p className="workspace-eyebrow">Selected day</p><h2 className="mt-2 text-2xl font-extrabold tracking-[-.04em]" data-testid="text-selected-date">{dateLabel(date)}</h2></div>{date !== today() && <button type="button" onClick={() => setDate(today())} className="text-xs font-extrabold text-[#176d61] hover:underline" data-testid="button-jump-today">Back to today</button>}</div>
         {error && <div className="mb-5"><Alert error={error} /></div>}
@@ -277,7 +279,7 @@ export function PlannerPage() {
   </main>;
 }
 
-const blankFood: FoodInput = { name: '', category: 'other', caloriesPer100g: 0, proteinPer100g: 0, carbsPer100g: 0, fatPer100g: 0, fiberPer100g: 0 };
+const blankFood: FoodInput = { name: '', category: 'other', caloriesPer100g: 0, proteinPer100g: 0, carbsPer100g: 0, fatPer100g: 0, fiberPer100g: 0, calciumMgPer100g: null, ironMgPer100g: null };
 const nutrientFields = [
   { key: 'caloriesPer100g', label: 'Calories', max: 1000, unit: 'kcal' },
   { key: 'proteinPer100g', label: 'Protein', max: 100, unit: 'g' },
@@ -286,19 +288,42 @@ const nutrientFields = [
   { key: 'fiberPer100g', label: 'Fiber', max: 100, unit: 'g' },
 ] as const;
 function FoodDialog({ food, close }: { food?: Food; close: () => void }) {
-  const [value, setValue] = useState<FoodInput>(food ? { name: food.name, category: food.category, caloriesPer100g: food.caloriesPer100g, proteinPer100g: food.proteinPer100g, carbsPer100g: food.carbsPer100g, fatPer100g: food.fatPer100g, fiberPer100g: food.fiberPer100g } : blankFood);
+  const [value, setValue] = useState<FoodInput>(food ? { name: food.name, category: food.category, caloriesPer100g: food.caloriesPer100g, proteinPer100g: food.proteinPer100g, carbsPer100g: food.carbsPer100g, fatPer100g: food.fatPer100g, fiberPer100g: food.fiberPer100g, calciumMgPer100g: food.calciumMgPer100g, ironMgPer100g: food.ironMgPer100g } : blankFood);
   const [error, setError] = useState<any>(null);
   const create = useCreateFood();
   const update = useUpdateFood();
   const refresh = useRefresh();
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!value.name.trim() || nutrientFields.some(field => !Number.isFinite(value[field.key]) || value[field.key] < 0 || value[field.key] > field.max)) { setError(new Error('Enter a name and valid per-100g values.')); return; }
+    if (!value.name.trim() ||
+      nutrientFields.some(field => !Number.isFinite(value[field.key]) || value[field.key] < 0 || value[field.key] > field.max) ||
+      (value.calciumMgPer100g != null && (!Number.isFinite(value.calciumMgPer100g) || value.calciumMgPer100g < 0 || value.calciumMgPer100g > 10000)) ||
+      (value.ironMgPer100g != null && (!Number.isFinite(value.ironMgPer100g) || value.ironMgPer100g < 0 || value.ironMgPer100g > 1000))) {
+      setError(new Error('Enter a name and valid per-100g values.')); return;
+    }
     setError(null);
     try { if (food) await update.mutateAsync({ id: food.id, data: { ...value, name: value.name.trim() } }); else await create.mutateAsync({ data: { ...value, name: value.name.trim() } }); refresh.foods(); close(); } catch (cause) { setError(cause); }
   }
   return <div className="workspace-modal-backdrop" onMouseDown={e => e.target === e.currentTarget && close()}><div className="workspace-modal" role="dialog" aria-modal="true" aria-label={food ? 'Edit custom food' : 'Create custom food'} data-testid="dialog-custom-food"><div className="flex justify-between gap-3"><div><p className="workspace-eyebrow">Your food library</p><h2 className="mt-2 text-3xl font-extrabold tracking-[-.05em]">{food ? 'Edit your food.' : 'Add your own food.'}</h2><p className="mt-2 text-sm text-[#6d7a79]">Enter approximate values for 100 grams.</p></div><button type="button" onClick={close} aria-label="Close" data-testid="button-close-food"><X size={21} /></button></div>
-    <form onSubmit={submit} className="mt-8 space-y-5"><div><label htmlFor="food-name" className="workspace-label">Food name</label><input id="food-name" required maxLength={120} className="workspace-input" value={value.name} onChange={e => setValue({ ...value, name: e.target.value })} placeholder="e.g. Homemade oat bowl" data-testid="input-food-name" /></div><div><label htmlFor="food-category" className="workspace-label">Category</label><select id="food-category" className="workspace-input" value={value.category} onChange={e => setValue({ ...value, category: e.target.value as FoodCategory })} data-testid="select-food-category">{categories.map(category => <option key={category} value={category}>{cap(category)}</option>)}</select></div><div className="grid grid-cols-2 gap-4">{nutrientFields.map(field => <div key={field.key}><label htmlFor={field.key} className="workspace-label">{field.label} / 100g <span className="font-normal">({field.unit})</span></label><input id={field.key} className="workspace-input" type="number" min="0" max={field.max} step="0.1" required value={value[field.key]} onChange={e => setValue({ ...value, [field.key]: Number(e.target.value) })} data-testid={`input-food-${field.key}`} /></div>)}</div>{error && <Alert error={error} />}<div className="flex justify-end gap-2 pt-2"><button type="button" className="workspace-button ghost" onClick={close} data-testid="button-cancel-food">Cancel</button><button type="submit" className="workspace-button" disabled={create.isPending || update.isPending} data-testid="button-save-food">{create.isPending || update.isPending ? 'Saving…' : food ? 'Save food' : 'Create food'}</button></div></form>
+    <form onSubmit={submit} className="mt-8 space-y-5">
+      <div><label htmlFor="food-name" className="workspace-label">Food name</label><input id="food-name" required maxLength={120} className="workspace-input" value={value.name} onChange={e => setValue({ ...value, name: e.target.value })} placeholder="e.g. Homemade oat bowl" data-testid="input-food-name" /></div>
+      <div><label htmlFor="food-category" className="workspace-label">Category</label><select id="food-category" className="workspace-input" value={value.category} onChange={e => setValue({ ...value, category: e.target.value as FoodCategory })} data-testid="select-food-category">{categories.map(category => <option key={category} value={category}>{cap(category)}</option>)}</select></div>
+      <div className="grid grid-cols-2 gap-4">{nutrientFields.map(field => <div key={field.key}><label htmlFor={field.key} className="workspace-label">{field.label} / 100g <span className="font-normal">({field.unit})</span></label><input id={field.key} className="workspace-input" type="number" min="0" max={field.max} step="0.1" required value={value[field.key]} onChange={e => setValue({ ...value, [field.key]: Number(e.target.value) })} data-testid={`input-food-${field.key}`} /></div>)}</div>
+      <p className="text-xs leading-5 text-[#6d7a79]">Optional minerals from a verified label. Leave blank if unknown; zero means the label explicitly reports zero.</p>
+      <div className="grid grid-cols-2 gap-4">
+        {([
+          { key: 'calciumMgPer100g', label: 'Calcium', max: 10000 },
+          { key: 'ironMgPer100g', label: 'Iron', max: 1000 },
+        ] as const).map(field => <div key={field.key}>
+          <label htmlFor={field.key} className="workspace-label">{field.label} / 100g (mg)</label>
+          <input id={field.key} className="workspace-input" type="number" min="0" max={field.max} step="0.1"
+            value={value[field.key] ?? ''} onChange={event => setValue({ ...value, [field.key]: event.target.value === '' ? null : Number(event.target.value) })}
+            data-testid={`input-food-${field.key}`} />
+        </div>)}
+      </div>
+      {error && <Alert error={error} />}
+      <div className="flex justify-end gap-2 pt-2"><button type="button" className="workspace-button ghost" onClick={close} data-testid="button-cancel-food">Cancel</button><button type="submit" className="workspace-button" disabled={create.isPending || update.isPending} data-testid="button-save-food">{create.isPending || update.isPending ? 'Saving…' : food ? 'Save food' : 'Create food'}</button></div>
+    </form>
   </div></div>;
 }
 
@@ -405,6 +430,55 @@ export function FoodsPage() {
   </main>;
 }
 
+function BodyDetails({ person }: { person: Person }) {
+  const [weight, setWeight] = useState(person.weightKg === null ? '' : String(person.weightKg));
+  const [age, setAge] = useState(person.ageYears === null ? '' : String(person.ageYears));
+  const [error, setError] = useState<unknown>(null);
+  const [saved, setSaved] = useState(false);
+  const update = useUpdatePerson();
+  const refresh = useRefresh();
+  useEffect(() => {
+    setWeight(person.weightKg === null ? '' : String(person.weightKg));
+    setAge(person.ageYears === null ? '' : String(person.ageYears));
+    setSaved(false);
+  }, [person.id, person.weightKg, person.ageYears]);
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const weightKg = weight.trim() === '' ? null : Number(weight);
+    const ageYears = age.trim() === '' ? null : Number(age);
+    if ((weightKg !== null && (!Number.isFinite(weightKg) || weightKg < 1 || weightKg > 500)) ||
+      (ageYears !== null && (!Number.isInteger(ageYears) || ageYears < 1 || ageYears > 120))) {
+      setError(new Error('Use a weight from 1 to 500 kg and an age from 1 to 120 years, or leave either blank.'));
+      return;
+    }
+    setError(null);
+    setSaved(false);
+    try {
+      await update.mutateAsync({ id: person.id, data: { weightKg, ageYears } });
+      refresh.people();
+      setSaved(true);
+    } catch (cause) { setError(cause); }
+  }
+  return <div className="workspace-card workspace-card-pad">
+    <SectionHeading kicker="Personal details / optional" title={`${person.name}'s body weight and age`} />
+    <p className="text-sm leading-6 text-[#6d7a79]">Weight is used for the workbook’s grams-per-kilogram protein and carbohydrate ranges. Age selects its calcium range; it is not used to guess anyone’s iron needs.</p>
+    <form onSubmit={submit} className="mt-6">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div><label className="workspace-label" htmlFor="profile-weight">Body weight (kg)</label>
+          <input id="profile-weight" type="number" min="1" max="500" step="0.1" placeholder="Optional"
+            className="workspace-input" value={weight} onChange={event => { setWeight(event.target.value); setSaved(false); }} data-testid="input-profile-weight" /></div>
+        <div><label className="workspace-label" htmlFor="profile-age">Age (years)</label>
+          <input id="profile-age" type="number" min="1" max="120" step="1" placeholder="Optional"
+            className="workspace-input" value={age} onChange={event => { setAge(event.target.value); setSaved(false); }} data-testid="input-profile-age" /></div>
+      </div>
+      <p className="mt-3 text-xs leading-5 text-[#6d7a79]">Clear either field and save to remove it. The workbook’s calcium table only covers ages 12 and older.</p>
+      {error !== null && <div className="mt-4"><Alert error={error} /></div>}
+      {saved && <p className="mt-4 text-sm font-bold text-[#176d61]" role="status" data-testid="status-body-details-saved">Body details saved for {person.name}.</p>}
+      <button type="submit" className="workspace-button mt-5" disabled={update.isPending} data-testid="button-save-body-details">{update.isPending ? 'Saving…' : 'Save body details'}</button>
+    </form>
+  </div>;
+}
+
 export function SettingsPage() {
   const { person } = usePersonSelection();
   const prefs = useListPeople();
@@ -428,5 +502,6 @@ export function SettingsPage() {
     <section className="workspace-section grid gap-5 lg:grid-cols-[1.2fr_.8fr]"><div className="workspace-card workspace-card-pad"><SectionHeading kicker="Personal planning" title="Your daily estimate" />{prefs.isLoading ? <Loading rows={4} /> : prefs.isError ? <Alert error={prefs.error} onRetry={() => prefs.refetch()} /> : <form onSubmit={submit} className="mt-7"><label htmlFor="baseline-calories" className="workspace-label">Baseline calories</label><p className="mb-3 text-xs leading-6 text-[#6d7a79]">This is your editable starting number before applying activity. It is not a medical recommendation.</p><div className="relative max-w-xs"><input id="baseline-calories" type="number" min="1000" max="5000" step="1" required className="workspace-input !pr-16" value={baseline} onChange={e => { setBaseline(e.target.value); setSaved(false); }} data-testid="input-baseline-calories" /><span className="absolute right-4 top-3.5 text-xs text-[#82918a]">kcal</span></div><fieldset className="mt-9"><legend className="workspace-label">Activity level</legend><div className="mt-3 grid gap-3 sm:grid-cols-2">{activityOptions.map(option => <label key={option.value} className={`cursor-pointer rounded-2xl border p-5 transition-colors ${level === option.value ? 'border-[#176d61] bg-[#e8f3ed]' : 'border-[#e0d9ce] bg-[#f7f4ed] hover:border-[#91bea9]'}`} data-testid={`option-activity-${option.value}`}><input type="radio" className="sr-only" name="activity" value={option.value} checked={level === option.value} onChange={() => { setLevel(option.value); setSaved(false); }} data-testid={`input-activity-${option.value}`} /><span className="flex justify-between gap-3 text-sm font-extrabold"><span>{option.title}</span><span className="text-[#176d61]">×{option.multiplier}</span></span><span className="mt-2 block text-xs leading-5 text-[#6d7a79]">{option.description}</span></label>)}</div></fieldset>{error && <div className="mt-5"><Alert error={error} /></div>}{saved && <div className="mt-5 rounded-xl bg-[#e8f3ed] p-4 text-sm font-bold text-[#176d61]" role="status" data-testid="status-preferences-saved">Preferences saved. Your daily summaries have been updated.</div>}<button type="submit" disabled={save.isPending} className="workspace-button mt-8" data-testid="button-save-preferences">{save.isPending ? 'Saving preferences…' : 'Save preferences'} <ArrowRight size={16} /></button></form>}</div>
       <aside className="space-y-5"><div className="workspace-card workspace-card-pad !bg-[#183542] text-[#fbfaf6]" data-testid="card-target-preview"><Activity size={22} className="text-[#91ceb7]" /><p className="workspace-eyebrow mt-7 !text-[#91ceb7]">Estimated daily target</p><strong className="mt-3 block text-5xl font-extrabold tracking-[-.07em]" data-testid="value-estimated-target">{Number.isFinite(estimate) ? n(estimate) : '—'}</strong><span className="text-sm text-[#b4cec5]">kcal / day</span><div className="mt-7 border-t border-[#45606a] pt-5 text-xs leading-6 text-[#b4cec5]">{n(Number(baseline) || 0)} baseline × {multiplier} activity multiplier</div></div><div className="workspace-card workspace-card-pad"><p className="workspace-eyebrow">A note on targets</p><p className="mt-4 text-sm leading-7 text-[#5d6d71]">This number is a planning estimate, not a prescription. Food values are approximate too. Use it as a helpful reference and adjust it to fit your own context.</p><Link href="/planner" className="mt-6 inline-flex items-center gap-2 text-xs font-extrabold text-[#176d61]" data-testid="link-settings-planner">Return to planner <ArrowRight size={14} /></Link></div></aside>
     </section>
+    <section className="workspace-section"><BodyDetails key={person.id} person={person} /></section>
   </main>;
 }

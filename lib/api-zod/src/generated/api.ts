@@ -35,7 +35,9 @@ export const ListFoodsResponseItem = zod.object({
   "carbsPer100g": zod.number(),
   "fatPer100g": zod.number(),
   "fiberPer100g": zod.number(),
-  "fiberKnown": zod.boolean()
+  "fiberKnown": zod.boolean(),
+  "calciumMgPer100g": zod.number().nullable(),
+  "ironMgPer100g": zod.number().nullable()
 })
 export const ListFoodsResponse = zod.array(ListFoodsResponseItem)
 
@@ -60,6 +62,12 @@ export const createFoodBodyFatPer100gMax = 100;
 export const createFoodBodyFiberPer100gMin = 0;
 export const createFoodBodyFiberPer100gMax = 100;
 
+export const createFoodBodyCalciumMgPer100gMin = 0;
+export const createFoodBodyCalciumMgPer100gMax = 10000;
+
+export const createFoodBodyIronMgPer100gMin = 0;
+export const createFoodBodyIronMgPer100gMax = 1000;
+
 
 
 export const CreateFoodBody = zod.object({
@@ -69,7 +77,9 @@ export const CreateFoodBody = zod.object({
   "proteinPer100g": zod.number().min(createFoodBodyProteinPer100gMin).max(createFoodBodyProteinPer100gMax),
   "carbsPer100g": zod.number().min(createFoodBodyCarbsPer100gMin).max(createFoodBodyCarbsPer100gMax),
   "fatPer100g": zod.number().min(createFoodBodyFatPer100gMin).max(createFoodBodyFatPer100gMax),
-  "fiberPer100g": zod.number().min(createFoodBodyFiberPer100gMin).max(createFoodBodyFiberPer100gMax)
+  "fiberPer100g": zod.number().min(createFoodBodyFiberPer100gMin).max(createFoodBodyFiberPer100gMax),
+  "calciumMgPer100g": zod.number().min(createFoodBodyCalciumMgPer100gMin).max(createFoodBodyCalciumMgPer100gMax).nullish(),
+  "ironMgPer100g": zod.number().min(createFoodBodyIronMgPer100gMin).max(createFoodBodyIronMgPer100gMax).nullish()
 })
 
 export const CreateFoodResponse = zod.object({
@@ -84,7 +94,9 @@ export const CreateFoodResponse = zod.object({
   "carbsPer100g": zod.number(),
   "fatPer100g": zod.number(),
   "fiberPer100g": zod.number(),
-  "fiberKnown": zod.boolean()
+  "fiberKnown": zod.boolean(),
+  "calciumMgPer100g": zod.number().nullable(),
+  "ironMgPer100g": zod.number().nullable()
 })
 
 
@@ -110,7 +122,9 @@ export const DiscoverFoodsResponseItem = zod.object({
   "carbsPer100g": zod.number(),
   "fatPer100g": zod.number(),
   "fiberPer100g": zod.number(),
-  "fiberKnown": zod.boolean()
+  "fiberKnown": zod.boolean(),
+  "calciumMgPer100g": zod.number().nullable(),
+  "ironMgPer100g": zod.number().nullable()
 })
 export const DiscoverFoodsResponse = zod.array(DiscoverFoodsResponseItem)
 
@@ -137,7 +151,9 @@ export const ImportFoodResponse = zod.object({
   "carbsPer100g": zod.number(),
   "fatPer100g": zod.number(),
   "fiberPer100g": zod.number(),
-  "fiberKnown": zod.boolean()
+  "fiberKnown": zod.boolean(),
+  "calciumMgPer100g": zod.number().nullable(),
+  "ironMgPer100g": zod.number().nullable()
 })
 
 
@@ -165,6 +181,12 @@ export const updateFoodBodyFatPer100gMax = 100;
 export const updateFoodBodyFiberPer100gMin = 0;
 export const updateFoodBodyFiberPer100gMax = 100;
 
+export const updateFoodBodyCalciumMgPer100gMin = 0;
+export const updateFoodBodyCalciumMgPer100gMax = 10000;
+
+export const updateFoodBodyIronMgPer100gMin = 0;
+export const updateFoodBodyIronMgPer100gMax = 1000;
+
 
 
 export const UpdateFoodBody = zod.object({
@@ -174,7 +196,9 @@ export const UpdateFoodBody = zod.object({
   "proteinPer100g": zod.number().min(updateFoodBodyProteinPer100gMin).max(updateFoodBodyProteinPer100gMax).optional(),
   "carbsPer100g": zod.number().min(updateFoodBodyCarbsPer100gMin).max(updateFoodBodyCarbsPer100gMax).optional(),
   "fatPer100g": zod.number().min(updateFoodBodyFatPer100gMin).max(updateFoodBodyFatPer100gMax).optional(),
-  "fiberPer100g": zod.number().min(updateFoodBodyFiberPer100gMin).max(updateFoodBodyFiberPer100gMax).optional()
+  "fiberPer100g": zod.number().min(updateFoodBodyFiberPer100gMin).max(updateFoodBodyFiberPer100gMax).optional(),
+  "calciumMgPer100g": zod.number().min(updateFoodBodyCalciumMgPer100gMin).max(updateFoodBodyCalciumMgPer100gMax).nullish(),
+  "ironMgPer100g": zod.number().min(updateFoodBodyIronMgPer100gMin).max(updateFoodBodyIronMgPer100gMax).nullish()
 })
 
 export const UpdateFoodResponse = zod.object({
@@ -189,7 +213,9 @@ export const UpdateFoodResponse = zod.object({
   "carbsPer100g": zod.number(),
   "fatPer100g": zod.number(),
   "fiberPer100g": zod.number(),
-  "fiberKnown": zod.boolean()
+  "fiberKnown": zod.boolean(),
+  "calciumMgPer100g": zod.number().nullable(),
+  "ironMgPer100g": zod.number().nullable()
 })
 
 
@@ -206,10 +232,18 @@ export const DeleteFoodResponse = zod.void()
 /**
  * @summary List named people and their individual planning targets
  */
+export const listPeopleResponseWeightKgMax = 500;
+
+export const listPeopleResponseAgeYearsMax = 120;
+
+
+
 export const ListPeopleResponseItem = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "isDefault": zod.boolean(),
+  "weightKg": zod.number().min(1).max(listPeopleResponseWeightKgMax).nullable(),
+  "ageYears": zod.number().int().min(1).max(listPeopleResponseAgeYearsMax).nullable(),
   "activityLevel": zod.enum(['sedentary', 'light', 'moderate', 'very_active']),
   "baselineCalories": zod.number().int(),
   "activityMultiplier": zod.number(),
@@ -223,6 +257,10 @@ export const ListPeopleResponse = zod.array(ListPeopleResponseItem)
  */
 export const createPersonBodyNameMax = 80;
 
+export const createPersonBodyWeightKgMax = 500;
+
+export const createPersonBodyAgeYearsMax = 120;
+
 export const createPersonBodyBaselineCaloriesMin = 1000;
 export const createPersonBodyBaselineCaloriesMax = 5000;
 
@@ -230,14 +268,24 @@ export const createPersonBodyBaselineCaloriesMax = 5000;
 
 export const CreatePersonBody = zod.object({
   "name": zod.string().min(1).max(createPersonBodyNameMax),
+  "weightKg": zod.number().min(1).max(createPersonBodyWeightKgMax).nullish(),
+  "ageYears": zod.number().int().min(1).max(createPersonBodyAgeYearsMax).nullish(),
   "activityLevel": zod.enum(['sedentary', 'light', 'moderate', 'very_active']),
   "baselineCalories": zod.number().int().min(createPersonBodyBaselineCaloriesMin).max(createPersonBodyBaselineCaloriesMax)
 })
+
+export const createPersonResponseWeightKgMax = 500;
+
+export const createPersonResponseAgeYearsMax = 120;
+
+
 
 export const CreatePersonResponse = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "isDefault": zod.boolean(),
+  "weightKg": zod.number().min(1).max(createPersonResponseWeightKgMax).nullable(),
+  "ageYears": zod.number().int().min(1).max(createPersonResponseAgeYearsMax).nullable(),
   "activityLevel": zod.enum(['sedentary', 'light', 'moderate', 'very_active']),
   "baselineCalories": zod.number().int(),
   "activityMultiplier": zod.number(),
@@ -254,6 +302,10 @@ export const UpdatePersonParams = zod.object({
 
 export const updatePersonBodyNameMax = 80;
 
+export const updatePersonBodyWeightKgMax = 500;
+
+export const updatePersonBodyAgeYearsMax = 120;
+
 export const updatePersonBodyBaselineCaloriesMin = 1000;
 export const updatePersonBodyBaselineCaloriesMax = 5000;
 
@@ -261,14 +313,24 @@ export const updatePersonBodyBaselineCaloriesMax = 5000;
 
 export const UpdatePersonBody = zod.object({
   "name": zod.string().min(1).max(updatePersonBodyNameMax).optional(),
+  "weightKg": zod.number().min(1).max(updatePersonBodyWeightKgMax).nullish(),
+  "ageYears": zod.number().int().min(1).max(updatePersonBodyAgeYearsMax).nullish(),
   "activityLevel": zod.enum(['sedentary', 'light', 'moderate', 'very_active']).optional(),
   "baselineCalories": zod.number().int().min(updatePersonBodyBaselineCaloriesMin).max(updatePersonBodyBaselineCaloriesMax).optional()
 })
+
+export const updatePersonResponseWeightKgMax = 500;
+
+export const updatePersonResponseAgeYearsMax = 120;
+
+
 
 export const UpdatePersonResponse = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
   "isDefault": zod.boolean(),
+  "weightKg": zod.number().min(1).max(updatePersonResponseWeightKgMax).nullable(),
+  "ageYears": zod.number().int().min(1).max(updatePersonResponseAgeYearsMax).nullable(),
   "activityLevel": zod.enum(['sedentary', 'light', 'moderate', 'very_active']),
   "baselineCalories": zod.number().int(),
   "activityMultiplier": zod.number(),
@@ -319,14 +381,18 @@ export const ListMealEntriesResponseItem = zod.object({
   "carbsPer100g": zod.number(),
   "fatPer100g": zod.number(),
   "fiberPer100g": zod.number(),
-  "fiberKnown": zod.boolean()
+  "fiberKnown": zod.boolean(),
+  "calciumMgPer100g": zod.number().nullable(),
+  "ironMgPer100g": zod.number().nullable()
 }),
   "nutrition": zod.object({
   "calories": zod.number(),
   "protein": zod.number(),
   "carbs": zod.number(),
   "fat": zod.number(),
-  "fiber": zod.number()
+  "fiber": zod.number(),
+  "calciumMg": zod.number().nullable(),
+  "ironMg": zod.number().nullable()
 })
 })
 export const ListMealEntriesResponse = zod.array(ListMealEntriesResponseItem)
@@ -371,14 +437,18 @@ export const CreateMealEntryResponse = zod.object({
   "carbsPer100g": zod.number(),
   "fatPer100g": zod.number(),
   "fiberPer100g": zod.number(),
-  "fiberKnown": zod.boolean()
+  "fiberKnown": zod.boolean(),
+  "calciumMgPer100g": zod.number().nullable(),
+  "ironMgPer100g": zod.number().nullable()
 }),
   "nutrition": zod.object({
   "calories": zod.number(),
   "protein": zod.number(),
   "carbs": zod.number(),
   "fat": zod.number(),
-  "fiber": zod.number()
+  "fiber": zod.number(),
+  "calciumMg": zod.number().nullable(),
+  "ironMg": zod.number().nullable()
 })
 })
 
@@ -420,14 +490,18 @@ export const UpdateMealEntryResponse = zod.object({
   "carbsPer100g": zod.number(),
   "fatPer100g": zod.number(),
   "fiberPer100g": zod.number(),
-  "fiberKnown": zod.boolean()
+  "fiberKnown": zod.boolean(),
+  "calciumMgPer100g": zod.number().nullable(),
+  "ironMgPer100g": zod.number().nullable()
 }),
   "nutrition": zod.object({
   "calories": zod.number(),
   "protein": zod.number(),
   "carbs": zod.number(),
   "fat": zod.number(),
-  "fiber": zod.number()
+  "fiber": zod.number(),
+  "calciumMg": zod.number().nullable(),
+  "ironMg": zod.number().nullable()
 })
 })
 
@@ -498,7 +572,9 @@ export const GetDailySummaryResponse = zod.object({
   "protein": zod.number(),
   "carbs": zod.number(),
   "fat": zod.number(),
-  "fiber": zod.number()
+  "fiber": zod.number(),
+  "calciumMg": zod.number().nullable(),
+  "ironMg": zod.number().nullable()
 }),
   "entryCount": zod.number().int(),
   "meals": zod.array(zod.object({
@@ -509,9 +585,56 @@ export const GetDailySummaryResponse = zod.object({
   "protein": zod.number(),
   "carbs": zod.number(),
   "fat": zod.number(),
-  "fiber": zod.number()
+  "fiber": zod.number(),
+  "calciumMg": zod.number().nullable(),
+  "ironMg": zod.number().nullable()
 })
 }))
+})
+
+
+/**
+ * @summary Get the planned activity for one person's day
+ */
+export const getDayActivityQueryDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+
+export const GetDayActivityQueryParams = zod.object({
+  "date": zod.coerce.string().regex(getDayActivityQueryDateRegExp),
+  "personId": zod.coerce.number().int().min(1)
+})
+
+export const getDayActivityResponseDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const GetDayActivityResponse = zod.object({
+  "date": zod.string().regex(getDayActivityResponseDateRegExp),
+  "personId": zod.number().int(),
+  "activityType": zod.enum(['rest', 'low_intensity', 'training_60', 'training_120', 'endurance', 'extreme', 'strength'])
+})
+
+
+/**
+ * @summary Save the planned activity for one person's day
+ */
+export const saveDayActivityBodyDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+
+export const SaveDayActivityBody = zod.object({
+  "date": zod.string().regex(saveDayActivityBodyDateRegExp),
+  "personId": zod.number().int().min(1),
+  "activityType": zod.enum(['rest', 'low_intensity', 'training_60', 'training_120', 'endurance', 'extreme', 'strength'])
+})
+
+export const saveDayActivityResponseDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const SaveDayActivityResponse = zod.object({
+  "date": zod.string().regex(saveDayActivityResponseDateRegExp),
+  "personId": zod.number().int(),
+  "activityType": zod.enum(['rest', 'low_intensity', 'training_60', 'training_120', 'endurance', 'extreme', 'strength'])
 })
 
 

@@ -328,6 +328,44 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DailySummary"
+  /day-activity:
+    get:
+      operationId: getDayActivity
+      tags: [planner]
+      summary: Get the planned activity for one person's day
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        - name: personId
+          in: query
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Planned activity, or rest if none was saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DayActivity"
+    put:
+      operationId: saveDayActivity
+      tags: [planner]
+      summary: Save the planned activity for one person's day
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DayActivityInput"
+      responses:
+        "200":
+          description: Saved activity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DayActivity"
 components:
   schemas:
     HealthStatus:
@@ -345,22 +383,45 @@ components:
     ActivityLevel:
       type: string
       enum: [sedentary, light, moderate, very_active]
+    DayActivityType:
+      type: string
+      enum: [rest, low_intensity, training_60, training_120, endurance, extreme, strength]
+    DayActivity:
+      type: object
+      properties:
+        date: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        personId: { type: integer }
+        activityType:
+          $ref: "#/components/schemas/DayActivityType"
+      required: [date, personId, activityType]
+    DayActivityInput:
+      type: object
+      properties:
+        date: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        personId: { type: integer, minimum: 1 }
+        activityType:
+          $ref: "#/components/schemas/DayActivityType"
+      required: [date, personId, activityType]
     Person:
       type: object
       properties:
         id: { type: integer }
         name: { type: string }
         isDefault: { type: boolean }
+        weightKg: { type: [number, "null"], minimum: 1, maximum: 500 }
+        ageYears: { type: [integer, "null"], minimum: 1, maximum: 120 }
         activityLevel:
           $ref: "#/components/schemas/ActivityLevel"
         baselineCalories: { type: integer }
         activityMultiplier: { type: number }
         targetCalories: { type: integer }
-      required: [id, name, isDefault, activityLevel, baselineCalories, activityMultiplier, targetCalories]
+      required: [id, name, isDefault, weightKg, ageYears, activityLevel, baselineCalories, activityMultiplier, targetCalories]
     PersonInput:
       type: object
       properties:
         name: { type: string, minLength: 1, maxLength: 80 }
+        weightKg: { type: [number, "null"], minimum: 1, maximum: 500 }
+        ageYears: { type: [integer, "null"], minimum: 1, maximum: 120 }
         activityLevel:
           $ref: "#/components/schemas/ActivityLevel"
         baselineCalories: { type: integer, minimum: 1000, maximum: 5000 }
@@ -369,6 +430,8 @@ components:
       type: object
       properties:
         name: { type: string, minLength: 1, maxLength: 80 }
+        weightKg: { type: [number, "null"], minimum: 1, maximum: 500 }
+        ageYears: { type: [integer, "null"], minimum: 1, maximum: 120 }
         activityLevel:
           $ref: "#/components/schemas/ActivityLevel"
         baselineCalories: { type: integer, minimum: 1000, maximum: 5000 }
@@ -380,7 +443,9 @@ components:
         carbs: { type: number }
         fat: { type: number }
         fiber: { type: number }
-      required: [calories, protein, carbs, fat, fiber]
+        calciumMg: { type: [number, "null"] }
+        ironMg: { type: [number, "null"] }
+      required: [calories, protein, carbs, fat, fiber, calciumMg, ironMg]
     Food:
       type: object
       properties:
@@ -399,7 +464,9 @@ components:
         fatPer100g: { type: number }
         fiberPer100g: { type: number }
         fiberKnown: { type: boolean }
-      required: [id, name, category, source, caloriesPer100g, proteinPer100g, carbsPer100g, fatPer100g, fiberPer100g, fiberKnown]
+        calciumMgPer100g: { type: [number, "null"] }
+        ironMgPer100g: { type: [number, "null"] }
+      required: [id, name, category, source, caloriesPer100g, proteinPer100g, carbsPer100g, fatPer100g, fiberPer100g, fiberKnown, calciumMgPer100g, ironMgPer100g]
     DiscoveredFood:
       type: object
       properties:
@@ -413,7 +480,9 @@ components:
         fatPer100g: { type: number }
         fiberPer100g: { type: number }
         fiberKnown: { type: boolean }
-      required: [code, name, sourceUrl, caloriesPer100g, proteinPer100g, carbsPer100g, fatPer100g, fiberPer100g, fiberKnown]
+        calciumMgPer100g: { type: [number, "null"] }
+        ironMgPer100g: { type: [number, "null"] }
+      required: [code, name, sourceUrl, caloriesPer100g, proteinPer100g, carbsPer100g, fatPer100g, fiberPer100g, fiberKnown, calciumMgPer100g, ironMgPer100g]
     ImportFoodInput:
       type: object
       properties:
@@ -430,6 +499,8 @@ components:
         carbsPer100g: { type: number, minimum: 0, maximum: 100 }
         fatPer100g: { type: number, minimum: 0, maximum: 100 }
         fiberPer100g: { type: number, minimum: 0, maximum: 100 }
+        calciumMgPer100g: { type: [number, "null"], minimum: 0, maximum: 10000 }
+        ironMgPer100g: { type: [number, "null"], minimum: 0, maximum: 1000 }
       required: [name, category, caloriesPer100g, proteinPer100g, carbsPer100g, fatPer100g, fiberPer100g]
     FoodUpdate:
       type: object
@@ -442,6 +513,8 @@ components:
         carbsPer100g: { type: number, minimum: 0, maximum: 100 }
         fatPer100g: { type: number, minimum: 0, maximum: 100 }
         fiberPer100g: { type: number, minimum: 0, maximum: 100 }
+        calciumMgPer100g: { type: [number, "null"], minimum: 0, maximum: 10000 }
+        ironMgPer100g: { type: [number, "null"], minimum: 0, maximum: 1000 }
     MealEntry:
       type: object
       properties:

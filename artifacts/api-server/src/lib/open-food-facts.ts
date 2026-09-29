@@ -15,6 +15,8 @@ export type DiscoveredFood = {
   fatPer100g: number;
   fiberPer100g: number;
   fiberKnown: boolean;
+  calciumMgPer100g: number | null;
+  ironMgPer100g: number | null;
 };
 
 export class FoodSourceRateLimitError extends Error {}
@@ -65,6 +67,9 @@ function normalizeProduct(raw: unknown): DiscoveredFood | null {
     return null;
   }
   const fiber = numeric(nutrients.fiber_100g, 100);
+  // Open Food Facts normalizes mineral *_100g values to grams; the UI uses milligrams.
+  const calcium = numeric(nutrients.calcium_100g, 10);
+  const iron = numeric(nutrients.iron_100g, 1);
   const brand = typeof product.brands === "string" ? product.brands.trim().slice(0, 100) : "";
   return {
     code,
@@ -77,6 +82,8 @@ function normalizeProduct(raw: unknown): DiscoveredFood | null {
     fatPer100g: round1(fat),
     fiberPer100g: fiber === null ? 0 : round1(fiber),
     fiberKnown: fiber !== null,
+    calciumMgPer100g: calcium === null ? null : round1(calcium * 1000),
+    ironMgPer100g: iron === null ? null : round1(iron * 1000),
   };
 }
 

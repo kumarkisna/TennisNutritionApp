@@ -1,4 +1,4 @@
-import { index, integer, pgTable, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { index, integer, pgTable, real, serial, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -9,6 +9,8 @@ export const peopleTable = pgTable(
     ownerId: text("owner_id").notNull(),
     defaultKey: text("default_key").unique(),
     name: text("name").notNull(),
+    weightKg: real("weight_kg"),
+    ageYears: integer("age_years"),
     activityLevel: text("activity_level").notNull().default("sedentary"),
     baselineCalories: integer("baseline_calories").notNull().default(2000),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

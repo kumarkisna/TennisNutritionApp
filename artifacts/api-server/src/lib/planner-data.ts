@@ -16,6 +16,8 @@ export type Nutrition = {
   carbs: number;
   fat: number;
   fiber: number;
+  calciumMg: number | null;
+  ironMg: number | null;
 };
 
 export const meals = ["breakfast", "lunch", "dinner", "snack"] as const;
@@ -44,6 +46,8 @@ export function toFood(food: Food) {
     fatPer100g: food.fatPer100g,
     fiberPer100g: food.fiberPer100g,
     fiberKnown: food.fiberKnown,
+    calciumMgPer100g: food.calciumMgPer100g,
+    ironMgPer100g: food.ironMgPer100g,
   };
 }
 
@@ -59,16 +63,25 @@ export function nutritionFor(food: Food, grams: number): Nutrition {
     carbs: round1(food.carbsPer100g * portion),
     fat: round1(food.fatPer100g * portion),
     fiber: round1(food.fiberPer100g * portion),
+    calciumMg: food.calciumMgPer100g === null ? null : round1(food.calciumMgPer100g * portion),
+    ironMg: food.ironMgPer100g === null ? null : round1(food.ironMgPer100g * portion),
   };
 }
 
 export function sumNutrition(items: Nutrition[]): Nutrition {
+  // A partial micronutrient sum must never be mistaken for the day's complete intake.
+  const sumKnown = (key: "calciumMg" | "ironMg") =>
+    items.some((item) => item[key] === null)
+      ? null
+      : round1(items.reduce((sum, item) => sum + (item[key] ?? 0), 0));
   return {
     calories: round1(items.reduce((sum, item) => sum + item.calories, 0)),
     protein: round1(items.reduce((sum, item) => sum + item.protein, 0)),
     carbs: round1(items.reduce((sum, item) => sum + item.carbs, 0)),
     fat: round1(items.reduce((sum, item) => sum + item.fat, 0)),
     fiber: round1(items.reduce((sum, item) => sum + item.fiber, 0)),
+    calciumMg: sumKnown("calciumMg"),
+    ironMg: sumKnown("ironMg"),
   };
 }
 

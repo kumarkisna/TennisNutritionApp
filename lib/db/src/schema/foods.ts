@@ -17,6 +17,8 @@ export const foodsTable = pgTable(
     fatPer100g: real("fat_per_100g").notNull(),
     fiberPer100g: real("fiber_per_100g").notNull(),
     fiberKnown: boolean("fiber_known").notNull().default(true),
+    calciumMgPer100g: real("calcium_mg_per_100g"),
+    ironMgPer100g: real("iron_mg_per_100g"),
   },
   (table) => [index("foods_owner_id_idx").on(table.ownerId)],
 );

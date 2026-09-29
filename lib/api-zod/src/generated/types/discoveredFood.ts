@@ -17,4 +17,8 @@ export interface DiscoveredFood {
   fatPer100g: number;
   fiberPer100g: number;
   fiberKnown: boolean;
+  /** @nullable */
+  calciumMgPer100g: number | null;
+  /** @nullable */
+  ironMgPer100g: number | null;
 }

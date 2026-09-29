@@ -12,4 +12,8 @@ export interface Nutrition {
   carbs: number;
   fat: number;
   fiber: number;
+  /** @nullable */
+  calciumMg: number | null;
+  /** @nullable */
+  ironMg: number | null;
 }
