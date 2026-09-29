@@ -68,8 +68,10 @@ function normalizeProduct(raw: unknown): DiscoveredFood | null {
   }
   const fiber = numeric(nutrients.fiber_100g, 100);
   // Open Food Facts normalizes mineral *_100g values to grams; the UI uses milligrams.
-  const calcium = numeric(nutrients.calcium_100g, 10);
-  const iron = numeric(nutrients.iron_100g, 1);
+  // Treat implausibly high food values as unknown rather than counting them toward daily goals.
+  // These generous ceilings also allow concentrated ingredients (3,000 mg Ca / 200 mg Fe per 100 g).
+  const calcium = numeric(nutrients.calcium_100g, 3);
+  const iron = numeric(nutrients.iron_100g, 0.2);
   const brand = typeof product.brands === "string" ? product.brands.trim().slice(0, 100) : "";
   return {
     code,
