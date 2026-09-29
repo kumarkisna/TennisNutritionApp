@@ -2,3 +2,4 @@
 - [Open Food Facts text search](open-food-facts-search.md) — its v2 search endpoint ignores free-text search_terms; use the classic search API with deliberate, rate-limited requests.
 - [Sports workbook target integrity](sports-workbook-targets.md) — iron target cells were stored as Excel dates; never turn them into mg/day targets without a verified source.
 - [Direct React server-render tests](react-ssr-tests.md) — standalone TSX runners may use classic JSX despite Vite's automatic runtime.
+- [Wouter links in server-render tests](wouter-ssr-tests.md) — SSR tests that render a Link need a static location hook, not browser or memory-location hooks.

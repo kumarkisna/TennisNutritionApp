@@ -76,8 +76,8 @@ export function SportsReferencePanel({ person, date, totals, summaryLoading, sum
   }
 
   function target(range?: [number, number], unit = 'g') {
-    if (weight === null) return 'Add body weight to calculate';
     if (!range) return 'Not specified in workbook';
+    if (weight === null) return 'Add body weight to calculate';
     const [low, high] = range.map(value => value * weight);
     return `${format(low)}${low === high ? '' : `–${format(high)}`} ${unit} / day`;
   }
@@ -118,7 +118,7 @@ export function SportsReferencePanel({ person, date, totals, summaryLoading, sum
     <RangeRow label="Carbohydrates" unit="g" expected={target(selected.carbs)} actual={planned('carbs', 'g')} />
     <RangeRow label="Protein" unit="g" expected={target(selected.protein)} actual={planned('protein', 'g')}
       note={`${activity === 'training_60' || activity === 'training_120' ? 'This is the workbook’s basic protein range, not a sport-specific target. ' : ''}${weight !== null && totals ? `Planned protein: ${format(totals.protein / weight, 2)} g/kg body weight.` : ''}`} />
-    <RangeRow label="Calcium" unit="mg" expected={calciumRange ? `${format(calciumRange[0])}–${format(calciumRange[1])} mg / day` : 'Add age (workbook covers 12+ only)'}
+    <RangeRow label="Calcium" unit="mg" expected={calciumRange ? `${format(calciumRange[0])}–${format(calciumRange[1])} mg / day` : age === null ? 'Add age (workbook covers 12+ only)' : 'Not specified in workbook for under 12'}
       actual={planned('calciumMg', 'mg')} note="If any planned food lacks calcium data, the total is not shown as complete. The workbook lists a separate post-menopausal range that is not inferred from age." />
     <RangeRow label="Fat" unit="g" expected={person.fatGoalG === null ? 'No personal goal set' : `${format(person.fatGoalG, 1)} g / day (your goal)`} actual={planned('fat', 'g')}
       note={`The workbook’s fat ranges depend on person groups; we do not infer one. ${person.fatGoalG === null ? 'Set your own goal in Preferences.' : goalProvenance(person.fatGoalSource, person.fatGoalReviewedOn)} Set or clear your goal in Preferences.`} />
