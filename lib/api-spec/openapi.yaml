@@ -410,18 +410,22 @@ components:
         isDefault: { type: boolean }
         weightKg: { type: [number, "null"], minimum: 1, maximum: 500 }
         ageYears: { type: [integer, "null"], minimum: 1, maximum: 120 }
+        ironGoalMg: { type: [number, "null"], exclusiveMinimum: 0, maximum: 100 }
+        fatGoalG: { type: [number, "null"], exclusiveMinimum: 0, maximum: 500 }
         activityLevel:
           $ref: "#/components/schemas/ActivityLevel"
         baselineCalories: { type: integer }
         activityMultiplier: { type: number }
         targetCalories: { type: integer }
-      required: [id, name, isDefault, weightKg, ageYears, activityLevel, baselineCalories, activityMultiplier, targetCalories]
+      required: [id, name, isDefault, weightKg, ageYears, ironGoalMg, fatGoalG, activityLevel, baselineCalories, activityMultiplier, targetCalories]
     PersonInput:
       type: object
       properties:
         name: { type: string, minLength: 1, maxLength: 80 }
         weightKg: { type: [number, "null"], minimum: 1, maximum: 500 }
         ageYears: { type: [integer, "null"], minimum: 1, maximum: 120 }
+        ironGoalMg: { type: [number, "null"], exclusiveMinimum: 0, maximum: 100 }
+        fatGoalG: { type: [number, "null"], exclusiveMinimum: 0, maximum: 500 }
         activityLevel:
           $ref: "#/components/schemas/ActivityLevel"
         baselineCalories: { type: integer, minimum: 1000, maximum: 5000 }
@@ -432,6 +436,8 @@ components:
         name: { type: string, minLength: 1, maxLength: 80 }
         weightKg: { type: [number, "null"], minimum: 1, maximum: 500 }
         ageYears: { type: [integer, "null"], minimum: 1, maximum: 120 }
+        ironGoalMg: { type: [number, "null"], exclusiveMinimum: 0, maximum: 100 }
+        fatGoalG: { type: [number, "null"], exclusiveMinimum: 0, maximum: 500 }
         activityLevel:
           $ref: "#/components/schemas/ActivityLevel"
         baselineCalories: { type: integer, minimum: 1000, maximum: 5000 }

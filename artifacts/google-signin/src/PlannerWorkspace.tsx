@@ -479,6 +479,57 @@ function BodyDetails({ person }: { person: Person }) {
   </div>;
 }
 
+function NutrientGoals({ person }: { person: Person }) {
+  const [iron, setIron] = useState(person.ironGoalMg === null ? '' : String(person.ironGoalMg));
+  const [fat, setFat] = useState(person.fatGoalG === null ? '' : String(person.fatGoalG));
+  const [error, setError] = useState<unknown>(null);
+  const [saved, setSaved] = useState(false);
+  const update = useUpdatePerson();
+  const refresh = useRefresh();
+  useEffect(() => {
+    setIron(person.ironGoalMg === null ? '' : String(person.ironGoalMg));
+    setFat(person.fatGoalG === null ? '' : String(person.fatGoalG));
+  }, [person.id, person.ironGoalMg, person.fatGoalG]);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const ironGoalMg = iron.trim() === '' ? null : Number(iron);
+    const fatGoalG = fat.trim() === '' ? null : Number(fat);
+    if ((ironGoalMg !== null && (!Number.isFinite(ironGoalMg) || ironGoalMg <= 0 || ironGoalMg > 100)) ||
+        (fatGoalG !== null && (!Number.isFinite(fatGoalG) || fatGoalG <= 0 || fatGoalG > 500))) {
+      setError(new Error('Enter a positive iron goal up to 100 mg/day and fat goal up to 500 g/day, or leave either blank.'));
+      return;
+    }
+    setError(null);
+    setSaved(false);
+    try {
+      await update.mutateAsync({ id: person.id, data: { ironGoalMg, fatGoalG } });
+      refresh.people();
+      setSaved(true);
+    } catch (cause) { setError(cause); }
+  }
+
+  return <div className="workspace-card workspace-card-pad" data-testid="section-nutrient-goals">
+    <SectionHeading kicker="Personal goals / optional" title={`${person.name}'s iron and fat goals`} />
+    <p className="text-sm leading-6 text-[#6d7a79]">Enter goals you already have from a qualified professional or a source you trust. We do not calculate these from age, sex, activity, or the workbook. The workbook’s iron cells are invalid dates, and its fat ranges require person groups we cannot safely assign.</p>
+    <form onSubmit={submit} className="mt-6">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div><label className="workspace-label" htmlFor="goal-iron">Iron (mg / day)</label>
+          <input id="goal-iron" type="number" min="0.01" max="100" step="any" placeholder="No goal set"
+            className="workspace-input" value={iron} onChange={event => { setIron(event.target.value); setSaved(false); }} data-testid="input-goal-iron" /></div>
+        <div><label className="workspace-label" htmlFor="goal-fat">Fat (g / day)</label>
+          <input id="goal-fat" type="number" min="0.01" max="500" step="any" placeholder="No goal set"
+            className="workspace-input" value={fat} onChange={event => { setFat(event.target.value); setSaved(false); }} data-testid="input-goal-fat" /></div>
+      </div>
+      <p className="mt-3 text-xs leading-5 text-[#6d7a79]">Both fields are optional. Clear a field and save to remove its goal. These are your own reference values, not recommendations from this app.</p>
+      <p className="mt-2 text-xs leading-5 font-semibold text-[#6d7a79]">For adolescents{person.ageYears !== null && person.ageYears < 19 ? `, including ${person.name}` : ''}, do not choose an iron or fat goal from adult ranges. Ask a qualified healthcare professional for age-appropriate guidance before entering one.</p>
+      {error !== null && <div className="mt-4"><Alert error={error} /></div>}
+      {saved && <p className="mt-4 text-sm font-bold text-[#176d61]" role="status" data-testid="status-nutrient-goals-saved">Goals saved for {person.name}. The daily comparison now uses these values.</p>}
+      <button type="submit" className="workspace-button mt-5" disabled={update.isPending} data-testid="button-save-nutrient-goals">{update.isPending ? 'Saving…' : 'Save nutrient goals'}</button>
+    </form>
+  </div>;
+}
+
 export function SettingsPage() {
   const { person } = usePersonSelection();
   const prefs = useListPeople();
@@ -503,5 +554,6 @@ export function SettingsPage() {
       <aside className="space-y-5"><div className="workspace-card workspace-card-pad !bg-[#183542] text-[#fbfaf6]" data-testid="card-target-preview"><Activity size={22} className="text-[#91ceb7]" /><p className="workspace-eyebrow mt-7 !text-[#91ceb7]">Estimated daily target</p><strong className="mt-3 block text-5xl font-extrabold tracking-[-.07em]" data-testid="value-estimated-target">{Number.isFinite(estimate) ? n(estimate) : '—'}</strong><span className="text-sm text-[#b4cec5]">kcal / day</span><div className="mt-7 border-t border-[#45606a] pt-5 text-xs leading-6 text-[#b4cec5]">{n(Number(baseline) || 0)} baseline × {multiplier} activity multiplier</div></div><div className="workspace-card workspace-card-pad"><p className="workspace-eyebrow">A note on targets</p><p className="mt-4 text-sm leading-7 text-[#5d6d71]">This number is a planning estimate, not a prescription. Food values are approximate too. Use it as a helpful reference and adjust it to fit your own context.</p><Link href="/planner" className="mt-6 inline-flex items-center gap-2 text-xs font-extrabold text-[#176d61]" data-testid="link-settings-planner">Return to planner <ArrowRight size={14} /></Link></div></aside>
     </section>
     <section className="workspace-section"><BodyDetails key={person.id} person={person} /></section>
+    <section className="workspace-section"><NutrientGoals key={person.id} person={person} /></section>
   </main>;
 }

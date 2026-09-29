@@ -11,6 +11,8 @@ export const peopleTable = pgTable(
     name: text("name").notNull(),
     weightKg: real("weight_kg"),
     ageYears: integer("age_years"),
+    ironGoalMg: real("iron_goal_mg"),
+    fatGoalG: real("fat_goal_g"),
     activityLevel: text("activity_level").notNull().default("sedentary"),
     baselineCalories: integer("baseline_calories").notNull().default(2000),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

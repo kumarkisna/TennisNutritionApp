@@ -62,6 +62,8 @@ router.post("/people", async (req, res): Promise<void> => {
       name,
       weightKg: body.data.weightKg ?? null,
       ageYears: body.data.ageYears ?? null,
+      ironGoalMg: body.data.ironGoalMg ?? null,
+      fatGoalG: body.data.fatGoalG ?? null,
       activityLevel: body.data.activityLevel,
       baselineCalories: body.data.baselineCalories,
     })

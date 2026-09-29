@@ -23,6 +23,18 @@ export interface Person {
      * @nullable
      */
   ageYears: number | null;
+  /**
+     * @maximum 100
+     * @exclusiveMinimum 0
+     * @nullable
+     */
+  ironGoalMg: number | null;
+  /**
+     * @maximum 500
+     * @exclusiveMinimum 0
+     * @nullable
+     */
+  fatGoalG: number | null;
   activityLevel: ActivityLevel;
   baselineCalories: number;
   activityMultiplier: number;

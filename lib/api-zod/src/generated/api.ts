@@ -236,6 +236,12 @@ export const listPeopleResponseWeightKgMax = 500;
 
 export const listPeopleResponseAgeYearsMax = 120;
 
+export const listPeopleResponseIronGoalMgExclusiveMin = 0;
+export const listPeopleResponseIronGoalMgMax = 100;
+
+export const listPeopleResponseFatGoalGExclusiveMin = 0;
+export const listPeopleResponseFatGoalGMax = 500;
+
 
 
 export const ListPeopleResponseItem = zod.object({
@@ -244,6 +250,8 @@ export const ListPeopleResponseItem = zod.object({
   "isDefault": zod.boolean(),
   "weightKg": zod.number().min(1).max(listPeopleResponseWeightKgMax).nullable(),
   "ageYears": zod.number().int().min(1).max(listPeopleResponseAgeYearsMax).nullable(),
+  "ironGoalMg": zod.number().gt(listPeopleResponseIronGoalMgExclusiveMin).max(listPeopleResponseIronGoalMgMax).nullable(),
+  "fatGoalG": zod.number().gt(listPeopleResponseFatGoalGExclusiveMin).max(listPeopleResponseFatGoalGMax).nullable(),
   "activityLevel": zod.enum(['sedentary', 'light', 'moderate', 'very_active']),
   "baselineCalories": zod.number().int(),
   "activityMultiplier": zod.number(),
@@ -261,6 +269,12 @@ export const createPersonBodyWeightKgMax = 500;
 
 export const createPersonBodyAgeYearsMax = 120;
 
+export const createPersonBodyIronGoalMgExclusiveMin = 0;
+export const createPersonBodyIronGoalMgMax = 100;
+
+export const createPersonBodyFatGoalGExclusiveMin = 0;
+export const createPersonBodyFatGoalGMax = 500;
+
 export const createPersonBodyBaselineCaloriesMin = 1000;
 export const createPersonBodyBaselineCaloriesMax = 5000;
 
@@ -270,6 +284,8 @@ export const CreatePersonBody = zod.object({
   "name": zod.string().min(1).max(createPersonBodyNameMax),
   "weightKg": zod.number().min(1).max(createPersonBodyWeightKgMax).nullish(),
   "ageYears": zod.number().int().min(1).max(createPersonBodyAgeYearsMax).nullish(),
+  "ironGoalMg": zod.number().gt(createPersonBodyIronGoalMgExclusiveMin).max(createPersonBodyIronGoalMgMax).nullish(),
+  "fatGoalG": zod.number().gt(createPersonBodyFatGoalGExclusiveMin).max(createPersonBodyFatGoalGMax).nullish(),
   "activityLevel": zod.enum(['sedentary', 'light', 'moderate', 'very_active']),
   "baselineCalories": zod.number().int().min(createPersonBodyBaselineCaloriesMin).max(createPersonBodyBaselineCaloriesMax)
 })
@@ -277,6 +293,12 @@ export const CreatePersonBody = zod.object({
 export const createPersonResponseWeightKgMax = 500;
 
 export const createPersonResponseAgeYearsMax = 120;
+
+export const createPersonResponseIronGoalMgExclusiveMin = 0;
+export const createPersonResponseIronGoalMgMax = 100;
+
+export const createPersonResponseFatGoalGExclusiveMin = 0;
+export const createPersonResponseFatGoalGMax = 500;
 
 
 
@@ -286,6 +308,8 @@ export const CreatePersonResponse = zod.object({
   "isDefault": zod.boolean(),
   "weightKg": zod.number().min(1).max(createPersonResponseWeightKgMax).nullable(),
   "ageYears": zod.number().int().min(1).max(createPersonResponseAgeYearsMax).nullable(),
+  "ironGoalMg": zod.number().gt(createPersonResponseIronGoalMgExclusiveMin).max(createPersonResponseIronGoalMgMax).nullable(),
+  "fatGoalG": zod.number().gt(createPersonResponseFatGoalGExclusiveMin).max(createPersonResponseFatGoalGMax).nullable(),
   "activityLevel": zod.enum(['sedentary', 'light', 'moderate', 'very_active']),
   "baselineCalories": zod.number().int(),
   "activityMultiplier": zod.number(),
@@ -306,6 +330,12 @@ export const updatePersonBodyWeightKgMax = 500;
 
 export const updatePersonBodyAgeYearsMax = 120;
 
+export const updatePersonBodyIronGoalMgExclusiveMin = 0;
+export const updatePersonBodyIronGoalMgMax = 100;
+
+export const updatePersonBodyFatGoalGExclusiveMin = 0;
+export const updatePersonBodyFatGoalGMax = 500;
+
 export const updatePersonBodyBaselineCaloriesMin = 1000;
 export const updatePersonBodyBaselineCaloriesMax = 5000;
 
@@ -315,6 +345,8 @@ export const UpdatePersonBody = zod.object({
   "name": zod.string().min(1).max(updatePersonBodyNameMax).optional(),
   "weightKg": zod.number().min(1).max(updatePersonBodyWeightKgMax).nullish(),
   "ageYears": zod.number().int().min(1).max(updatePersonBodyAgeYearsMax).nullish(),
+  "ironGoalMg": zod.number().gt(updatePersonBodyIronGoalMgExclusiveMin).max(updatePersonBodyIronGoalMgMax).nullish(),
+  "fatGoalG": zod.number().gt(updatePersonBodyFatGoalGExclusiveMin).max(updatePersonBodyFatGoalGMax).nullish(),
   "activityLevel": zod.enum(['sedentary', 'light', 'moderate', 'very_active']).optional(),
   "baselineCalories": zod.number().int().min(updatePersonBodyBaselineCaloriesMin).max(updatePersonBodyBaselineCaloriesMax).optional()
 })
@@ -322,6 +354,12 @@ export const UpdatePersonBody = zod.object({
 export const updatePersonResponseWeightKgMax = 500;
 
 export const updatePersonResponseAgeYearsMax = 120;
+
+export const updatePersonResponseIronGoalMgExclusiveMin = 0;
+export const updatePersonResponseIronGoalMgMax = 100;
+
+export const updatePersonResponseFatGoalGExclusiveMin = 0;
+export const updatePersonResponseFatGoalGMax = 500;
 
 
 
@@ -331,6 +369,8 @@ export const UpdatePersonResponse = zod.object({
   "isDefault": zod.boolean(),
   "weightKg": zod.number().min(1).max(updatePersonResponseWeightKgMax).nullable(),
   "ageYears": zod.number().int().min(1).max(updatePersonResponseAgeYearsMax).nullable(),
+  "ironGoalMg": zod.number().gt(updatePersonResponseIronGoalMgExclusiveMin).max(updatePersonResponseIronGoalMgMax).nullable(),
+  "fatGoalG": zod.number().gt(updatePersonResponseFatGoalGExclusiveMin).max(updatePersonResponseFatGoalGMax).nullable(),
   "activityLevel": zod.enum(['sedentary', 'light', 'moderate', 'very_active']),
   "baselineCalories": zod.number().int(),
   "activityMultiplier": zod.number(),

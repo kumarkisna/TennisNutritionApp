@@ -38,7 +38,7 @@ function RangeRow({ label, expected, actual, unit, note }: {
 }) {
   return <div className="grid gap-2 border-t border-[#e9e4d9] py-4 sm:grid-cols-[1fr_1.2fr_1fr]" data-testid={`comparison-${label.toLowerCase()}`}>
     <div className="font-bold">{label}<span className="ml-1 text-xs font-normal text-[#6d7a79]">({unit})</span></div>
-    <div><span className="text-[10px] uppercase tracking-[.12em] text-[#6d7a79] sm:hidden">Workbook reference: </span><strong>{expected}</strong></div>
+    <div><span className="text-[10px] uppercase tracking-[.12em] text-[#6d7a79] sm:hidden">Daily reference: </span><strong>{expected}</strong></div>
     <div><span className="text-[10px] uppercase tracking-[.12em] text-[#6d7a79] sm:hidden">Planned: </span><strong>{actual}</strong></div>
     {note && <p className="text-xs leading-5 text-[#6d7a79] sm:col-span-3">{note}</p>}
   </div>;
@@ -90,7 +90,7 @@ export function SportsReferencePanel({ person, date, totals, summaryLoading, sum
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div><p className="workspace-eyebrow">Before you plan / workbook reference</p>
         <h2 className="mt-2 text-2xl font-extrabold tracking-[-.05em]">What is planned vs. expected</h2>
-        <p className="mt-2 text-sm leading-6 text-[#6d7a79]">For {person.name} on this day. These ranges come from the supplied Sports Nutrition workbook, not from a clinical assessment.</p></div>
+         <p className="mt-2 text-sm leading-6 text-[#6d7a79]">For {person.name} on this day. Workbook ranges are not clinical requirements. Iron and fat use only goals you explicitly enter in Preferences.</p></div>
       <div className="min-w-56"><label htmlFor="planned-activity" className="workspace-label">Activity you are planning</label>
         <select id="planned-activity" className="workspace-input" value={activity} disabled={query.isLoading || query.isError || save.isPending}
           onChange={event => void chooseActivity(event.target.value as DayActivityType)} data-testid="select-planned-activity">
@@ -114,9 +114,10 @@ export function SportsReferencePanel({ person, date, totals, summaryLoading, sum
       note={`${activity === 'training_60' || activity === 'training_120' ? 'This is the workbook’s basic protein range, not a sport-specific target. ' : ''}${weight !== null && totals ? `Planned protein: ${format(totals.protein / weight, 2)} g/kg body weight.` : ''}`} />
     <RangeRow label="Calcium" unit="mg" expected={calciumRange ? `${format(calciumRange[0])}–${format(calciumRange[1])} mg / day` : 'Add age (workbook covers 12+ only)'}
       actual={planned('calciumMg', 'mg')} note="If any planned food lacks calcium data, the total is not shown as complete. The workbook lists a separate post-menopausal range that is not inferred from age." />
-    <RangeRow label="Fat" unit="g" expected="Depends on person group; not inferred" actual={planned('fat', 'g')} />
-    <RangeRow label="Iron" unit="mg" expected="Unavailable — workbook values are corrupted" actual={planned('ironMg', 'mg')}
-      note="The iron cells were saved as dates in the workbook. We do not convert those into medical targets." />
+    <RangeRow label="Fat" unit="g" expected={person.fatGoalG === null ? 'No personal goal set' : `${format(person.fatGoalG, 1)} g / day (your goal)`} actual={planned('fat', 'g')}
+      note="The workbook’s fat ranges depend on person groups; we do not infer one. Set or clear your own goal in Preferences." />
+    <RangeRow label="Iron" unit="mg" expected={person.ironGoalMg === null ? 'No personal goal set' : `${format(person.ironGoalMg, 1)} mg / day (your goal)`} actual={planned('ironMg', 'mg')}
+      note="The workbook’s iron cells were saved as dates; we do not use them as targets. If any food lacks iron data, the planned total is not fully reported. Set or clear your own goal in Preferences." />
     <RangeRow label="Fiber" unit="g" expected="No quantitative range in workbook" actual={planned('fiber', 'g')}
       note="Fiber totals include reported values only; a food without fiber data may make the true amount higher." />
     <p className="mt-4 text-xs leading-6 text-[#6d7a79]">References depend on the activity category you select, not on a measured training load. Food data may be incomplete or inaccurate. Especially for adolescents, pregnancy or medical conditions, use qualified professional advice instead of these ranges.</p>

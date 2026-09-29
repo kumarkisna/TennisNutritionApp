@@ -15,6 +15,8 @@ export function toPerson(person: PersonRow) {
     isDefault: person.defaultKey !== null,
     weightKg: person.weightKg,
     ageYears: person.ageYears,
+    ironGoalMg: person.ironGoalMg,
+    fatGoalG: person.fatGoalG,
     ...toPreferences(person),
   };
 }
