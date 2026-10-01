@@ -45,6 +45,28 @@ const baselinePerson = (name: string): PersonInput => ({
   baselineCalories: 2000,
 });
 
+test('adolescent athlete activity survives reload and local backup restore', async () => {
+  const storage = new MemoryStorage();
+  const store = createLocalStore(storage);
+  const athlete = await store.createPerson({
+    name: 'Adolescent athlete',
+    weightKg: 50,
+    ageYears: 16,
+    activityLevel: 'moderate',
+    baselineCalories: 2000,
+  });
+  const params = { personId: athlete.id, date: '2020-03-04' };
+  await store.saveDayActivity({ ...params, activityType: 'adolescent_athletes' });
+  const reloaded = createLocalStore(storage);
+  assert.equal((await reloaded.getDayActivity(params)).activityType, 'adolescent_athletes');
+  assert.equal((await reloaded.getDailySummary(params)).targetCalories, null);
+  const backup = await reloaded.exportBackup();
+  assert.equal(reloaded.previewBackup(backup).activities, 1);
+  const restored = createLocalStore(new MemoryStorage());
+  await restored.restoreBackup(backup);
+  assert.equal((await restored.getDayActivity(params)).activityType, 'adolescent_athletes');
+});
+
 test('hydrates from the versioned seed and preserves changes across store restarts', async () => {
   const storage = new MemoryStorage();
   const firstStore = createLocalStore(storage);

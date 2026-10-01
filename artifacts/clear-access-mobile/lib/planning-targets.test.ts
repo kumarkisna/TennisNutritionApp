@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 // @ts-ignore Node test modules are used only in the direct regression runner.
 import test from 'node:test';
-import { activityCaloriesPerKg, calculatePlanningEstimates, getPlanningTargets } from './planning-targets';
+import { activityCaloriesPerKg, adolescentProteinReference, calculatePlanningEstimates, getPlanningTargets, sportsActivities } from './planning-targets';
 
 const person = {
   targetCalories: 2400,
@@ -25,7 +25,7 @@ test('app-chosen kcal/kg activity heuristics and 30% energy fat formula are used
     extreme: 70,
     strength: 45,
   } as const;
-  assert.deepEqual(activityCaloriesPerKg, coefficients);
+  assert.deepEqual(activityCaloriesPerKg, { ...coefficients, adolescent_athletes: null });
   for (const [activity, kcalPerKg] of Object.entries(coefficients) as [keyof typeof coefficients, number][]) {
     const estimates = calculatePlanningEstimates(person, activity, date);
     const calories = Math.round(70 * kcalPerKg);
@@ -33,6 +33,19 @@ test('app-chosen kcal/kg activity heuristics and 30% energy fat formula are used
     assert.equal(estimates.fat, calories * 0.30 / 9, `${activity} fat`);
     assert.equal(estimates.unavailableReason, null);
   }
+});
+
+test('adolescent athletes use 2 g/kg/day for both protein endpoints with no adult energy fallback', () => {
+  const adolescent = { ...person, ageYears: 16, weightKg: 50 };
+  assert.deepEqual(sportsActivities.adolescent_athletes.protein, [2, 2]);
+  const targets = getPlanningTargets(adolescent, 'adolescent_athletes', date);
+  assert.equal(targets.protein, '100 g / day');
+  assert.match(adolescentProteinReference(50), /minimum 2 g\/kg\/day \(100 g\/day\); maximum 2 g\/kg\/day \(100 g\/day\)/);
+  assert.equal(getPlanningTargets({ ...adolescent, weightKg: 60 }, 'adolescent_athletes', date).protein, '120 g / day');
+  assert.equal(getPlanningTargets({ ...adolescent, weightKg: null }, 'adolescent_athletes', date).protein, 'Add body weight to calculate');
+  assert.equal(targets.carbs, 'No carbohydrate reference supplied');
+  assert.equal(calculatePlanningEstimates(adolescent, 'adolescent_athletes', date).calories, null);
+  assert.equal(calculatePlanningEstimates(person, 'adolescent_athletes', date).fat, null);
 });
 
 test('estimates change with activity and saved body weight, not baseline or manual fat goal', () => {

@@ -27,8 +27,11 @@ function pathFor(values: { x: number; y: number }[]) {
 }
 
 function pointInteraction(onSelect: () => void) {
-  // SVG onPress adds native responder attributes that browsers do not support.
-  return Platform.OS === 'web' ? { onClick: onSelect } : { onPress: onSelect };
+  // react-native-svg 15.15.4 web prepare overwrites onClick with onPress unless
+  // onPress is explicitly null; the null avoids adding native responder props.
+  return Platform.OS === 'web'
+    ? { onClick: onSelect, onPress: null as never }
+    : { onPress: onSelect };
 }
 function LegendItem({ color, label, dash }: { color: string; label: string; dash?: string }) {
   const c = useColors();

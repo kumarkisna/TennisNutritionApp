@@ -5,7 +5,7 @@ import { getGetDayActivityQueryKey, useGetDayActivity, useSaveDayActivity, type 
 import { useColors } from '@/hooks/useColors';
 import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Muted, success } from '@/components/ui';
 import { n, plannedValue } from '@/lib/format';
-import { activityCaloriesPerKg, calculatePlanningEstimates, getAgeOnDate, getPlanningTargets, nutritionSources, sportsActivities as activities } from '@/lib/planning-targets';
+import { activityCaloriesPerKg, adolescentProteinReference, calculatePlanningEstimates, getAgeOnDate, getPlanningTargets, nutritionSources, sportsActivities as activities } from '@/lib/planning-targets';
 
 function provenance(source: string | null, reviewedOn: string | null) {
   if (!source && !reviewedOn) return 'No source or professional-review date recorded.';
@@ -49,7 +49,7 @@ export function ReferencePanel({ person, date, totals, summaryLoading, summaryEr
   const calcium: [number, number] | undefined = age === null || age < 12 ? undefined : age <= 18 ? [1000, 1200] : [800, 1000];
 
   return <Card style={{ gap: 12 }}>
-    <Eyebrow>Before you plan / workbook reference</Eyebrow>
+    <Eyebrow>Before you plan / activity references</Eyebrow>
     <Text style={{ fontFamily: F.bold, fontSize: 22, letterSpacing: -0.8, color: c.foreground }}>What is planned vs. expected</Text>
     <Muted>For {person.name} on this day. Workbook ranges are not clinical requirements. Energy and fat estimates are app-chosen adult planning heuristics; iron and any saved manual fat goal are kept separate.</Muted>
     <Text style={{ fontFamily: F.bold, fontSize: 11.5, color: '#3c575e', marginTop: 4 }}>Activity you are planning</Text>
@@ -62,11 +62,11 @@ export function ReferencePanel({ person, date, totals, summaryLoading, summaryEr
       {(weight === null || age === null) ? <View style={{ alignSelf: 'flex-start' }}><Btn small variant="ghost" label="Add details in Settings" onPress={() => router.push('/settings')} testID="link-reference-settings" /></View> : null}
     </View>
     <Row label="Energy" unit="kcal" expected={targets.calories} actual={planned('calories', 'kcal')}
-      note={`App-chosen heuristic: ${weight === null ? 'body weight' : `${n(weight, 1)} kg`} × ${activityCaloriesPerKg[activity]} kcal/kg/day, rounded to whole kcal. ${estimates.unavailableReason ?? 'Not an official ISSN or CDC activity rule.'}`} />
+      note={activityCaloriesPerKg[activity] === null ? estimates.unavailableReason ?? undefined : `App-chosen heuristic: ${weight === null ? 'body weight' : `${n(weight, 1)} kg`} × ${activityCaloriesPerKg[activity]} kcal/kg/day, rounded to whole kcal. ${estimates.unavailableReason ?? 'Not an official ISSN or CDC activity rule.'}`} />
     <Row label="Carbohydrates" unit="g" expected={targets.carbs} actual={planned('carbs', 'g')}
-      note={sel.carbs ? 'Activity-specific range from the uploaded workbook.' : 'The workbook has no numeric range here; shown instead is the ISSN general-fitness reference of 3–5 g/kg/day, not a workbook or activity-specific requirement.'} />
+      note={activity === 'adolescent_athletes' ? 'The supplied adolescent-athlete reference specifies protein only; no carbohydrate range is inferred.' : sel.carbs ? 'Activity-specific range from the uploaded workbook.' : 'The workbook has no numeric range here; shown instead is the ISSN general-fitness reference of 3–5 g/kg/day, not a workbook or activity-specific requirement.'} />
     <Row label="Protein" unit="g" expected={targets.protein} actual={planned('protein', 'g')}
-      note={`${activity === 'training_60' || activity === 'training_120' ? 'This is the workbook’s basic protein range, not a sport-specific target. ' : ''}${weight !== null && totals ? `Planned protein: ${n(totals.protein / weight, 2)} g/kg body weight.` : ''}`} />
+      note={`${activity === 'adolescent_athletes' ? `${adolescentProteinReference(weight)} ` : activity === 'training_60' || activity === 'training_120' ? 'This is the workbook’s basic protein range, not a sport-specific target. ' : ''}${weight !== null && totals ? `Planned protein: ${n(totals.protein / weight, 2)} g/kg body weight.` : ''}`} />
     <Row label="Calcium" unit="mg" expected={calcium ? `${n(calcium[0])}–${n(calcium[1])} mg / day` : age === null ? 'Add age (workbook covers 12+ only)' : 'Not specified in workbook for under 12'} actual={planned('calciumMg', 'mg')}
       note="If any planned food lacks calcium data, the total is not shown as complete. The workbook lists a separate post-menopausal range that is not inferred from age." />
     <Row label="Fat" unit="g" expected={targets.fat} actual={planned('fat', 'g')}

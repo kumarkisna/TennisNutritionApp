@@ -33,6 +33,7 @@ export const DayActivityType = {
   endurance: 'endurance',
   extreme: 'extreme',
   strength: 'strength',
+  adolescent_athletes: 'adolescent_athletes',
 } as const;
 export type DayActivityType = typeof DayActivityType[keyof typeof DayActivityType];
 

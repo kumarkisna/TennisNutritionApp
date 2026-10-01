@@ -4,3 +4,4 @@
 - [Direct React server-render tests](react-ssr-tests.md) — standalone TSX runners may use classic JSX despite Vite's automatic runtime.
 - [Wouter links in server-render tests](wouter-ssr-tests.md) — SSR tests that render a Link need a static location hook, not browser or memory-location hooks.
 - [Local backup validation boundary](local-backup-validation.md) — validate external backups strictly without tightening legacy storage hydration as a side effect.
+- [SVG preview event verification](svg-preview-events.md) — test rendered-element clicks; React component callbacks can survive in props but be discarded by native-to-web normalization.
