@@ -64,6 +64,12 @@ type StoreData = {
   nextHeightRecordId: number;
 };
 
+type BackupEnvelope = {
+  format: 'clear-access-local-backup';
+  version: 1;
+  createdAt: string;
+  data: StoreData;
+};
 function fail(message: string): never {
   throw new Error(message);
 }
@@ -75,6 +81,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 function isFiniteInRange(value: unknown, min: number, max: number): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
+}
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function hasExactKeys(value: Record<string, unknown>, required: string[], optional: string[] = []): boolean {
+  const keys = Object.keys(value);
+  return required.every(key => Object.hasOwn(value, key)) &&
+    keys.every(key => required.includes(key) || optional.includes(key));
 }
 export function isValidCalendarDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -221,6 +236,146 @@ function validateStoredData(value: unknown): StoreData {
     (entryIds.size && (nextEntryId as number) <= Math.max(...entryIds)) ||
     (heightRecordIds.size && (nextHeightRecordId as number) <= Math.max(...heightRecordIds))) {
     fail('Local planner storage has invalid next-ID counters. Your data was not changed.');
+  }
+  return value as unknown as StoreData;
+}
+
+function validateBackupData(value: unknown): StoreData {
+  const invalid = (kind: string): never => fail(`Backup contains an invalid ${kind}.`);
+  if (!isRecord(value) || !hasExactKeys(value, [
+    'version', 'people', 'foods', 'entries', 'activities', 'heightRecords',
+    'nextPersonId', 'nextFoodId', 'nextEntryId', 'nextHeightRecordId',
+  ]) || value.version !== STORE_VERSION ||
+    !Array.isArray(value.people) || !Array.isArray(value.foods) || !Array.isArray(value.entries) ||
+    !Array.isArray(value.activities) || !Array.isArray(value.heightRecords)) {
+    return invalid('data structure');
+  }
+  const counters = [value.nextPersonId, value.nextFoodId, value.nextEntryId, value.nextHeightRecordId];
+  if (!counters.every(counter => Number.isSafeInteger(counter) && (counter as number) >= 1)) {
+    return invalid('ID counter');
+  }
+
+  const peopleById = new Map<number, Record<string, unknown>>();
+  const peopleNames = new Set<string>();
+  let defaultPeople = 0;
+  for (const person of value.people) {
+    if (!isRecord(person) || !hasExactKeys(person, [
+      'id', 'name', 'isDefault', 'weightKg', 'ageYears', 'dateOfBirth', 'growthReferenceSex',
+      'ironGoalMg', 'ironGoalSource', 'ironGoalReviewedOn', 'fatGoalG', 'fatGoalSource',
+      'fatGoalReviewedOn', 'activityLevel', 'baselineCalories', 'activityMultiplier', 'targetCalories',
+    ]) || !Number.isSafeInteger(person.id) || (person.id as number) < 1 ||
+      typeof person.name !== 'string' || !person.name.trim() || person.name.length > 80 ||
+      typeof person.isDefault !== 'boolean' ||
+      !(person.weightKg === null || isFiniteInRange(person.weightKg, 1, 500)) ||
+      !(person.ageYears === null || (Number.isInteger(person.ageYears) && isFiniteInRange(person.ageYears, 1, 120))) ||
+      !(person.dateOfBirth === null || (typeof person.dateOfBirth === 'string' &&
+        isValidCalendarDate(person.dateOfBirth) && person.dateOfBirth <= todayDate())) ||
+      !(person.growthReferenceSex === null || person.growthReferenceSex === 'male' || person.growthReferenceSex === 'female') ||
+      !(person.ironGoalMg === null || isFiniteInRange(person.ironGoalMg, Number.EPSILON, 100)) ||
+      !(person.fatGoalG === null || isFiniteInRange(person.fatGoalG, Number.EPSILON, 500)) ||
+      !(person.ironGoalSource === null || (typeof person.ironGoalSource === 'string' && person.ironGoalSource.length <= 300)) ||
+      !(person.fatGoalSource === null || (typeof person.fatGoalSource === 'string' && person.fatGoalSource.length <= 300)) ||
+      !(person.ironGoalReviewedOn === null || (typeof person.ironGoalReviewedOn === 'string' && isValidCalendarDate(person.ironGoalReviewedOn))) ||
+      !(person.fatGoalReviewedOn === null || (typeof person.fatGoalReviewedOn === 'string' && isValidCalendarDate(person.fatGoalReviewedOn))) ||
+      (person.ironGoalMg === null && (person.ironGoalSource !== null || person.ironGoalReviewedOn !== null)) ||
+      (person.fatGoalG === null && (person.fatGoalSource !== null || person.fatGoalReviewedOn !== null)) ||
+      !ACTIVITY_LEVELS.includes(person.activityLevel as ActivityLevelType) ||
+      !Number.isInteger(person.baselineCalories) || !isFiniteInRange(person.baselineCalories, 1000, 5000) ||
+      !isFiniteInRange(person.activityMultiplier, 1, 1.35) ||
+      !Number.isInteger(person.targetCalories) || !isFiniteInRange(person.targetCalories, 1000, 6750) ||
+      peopleById.has(person.id as number) ||
+      peopleNames.has((person.name as string).trim().toLocaleLowerCase())) {
+      return invalid('person');
+    }
+    const expectedMultiplier = MULTIPLIERS[person.activityLevel as ActivityLevelType];
+    if (person.activityMultiplier !== expectedMultiplier ||
+      person.targetCalories !== Math.round((person.baselineCalories as number) * expectedMultiplier)) {
+      return invalid('person planning preferences');
+    }
+    peopleById.set(person.id as number, person);
+    peopleNames.add((person.name as string).trim().toLocaleLowerCase());
+    if (person.isDefault) defaultPeople += 1;
+  }
+  if (defaultPeople !== 1) return invalid('default person');
+
+  const foodIds = new Set<number>();
+  for (const food of value.foods) {
+    if (!isRecord(food) || !hasExactKeys(food, [
+      'id', 'name', 'category', 'source', 'caloriesPer100g', 'proteinPer100g', 'carbsPer100g',
+      'fatPer100g', 'fiberPer100g', 'fiberKnown', 'calciumMgPer100g', 'ironMgPer100g',
+    ], ['brand', 'sourceUrl', 'referenceKey']) ||
+      !Number.isSafeInteger(food.id) || (food.id as number) < 1 ||
+      typeof food.name !== 'string' || !food.name.trim() || food.name.length > 120 ||
+      (food.brand !== undefined && (typeof food.brand !== 'string' || food.brand.length > 160)) ||
+      (food.sourceUrl !== undefined && (typeof food.sourceUrl !== 'string' || food.sourceUrl.length > 2048)) ||
+      (food.referenceKey !== undefined && (typeof food.referenceKey !== 'string' || !food.referenceKey.trim() || food.referenceKey.length > 120)) ||
+      !CATEGORIES.includes(food.category as Food['category']) ||
+      !['reference', 'custom', 'open_food_facts'].includes(String(food.source)) ||
+      !isFiniteNumber(food.caloriesPer100g) ||
+      !isFiniteNumber(food.proteinPer100g) ||
+      !isFiniteNumber(food.carbsPer100g) ||
+      !isFiniteNumber(food.fatPer100g) ||
+      !isFiniteNumber(food.fiberPer100g) ||
+      typeof food.fiberKnown !== 'boolean' ||
+      !(food.calciumMgPer100g === null || isFiniteNumber(food.calciumMgPer100g)) ||
+      !(food.ironMgPer100g === null || isFiniteNumber(food.ironMgPer100g)) ||
+      foodIds.has(food.id as number)) {
+      return invalid('food');
+    }
+    foodIds.add(food.id as number);
+  }
+
+  const entryIds = new Set<number>();
+  for (const entry of value.entries) {
+    if (!isRecord(entry) || !hasExactKeys(entry, ['id', 'date', 'personId', 'meal', 'grams', 'foodId']) ||
+      !Number.isSafeInteger(entry.id) || (entry.id as number) < 1 || entryIds.has(entry.id as number) ||
+      typeof entry.date !== 'string' || !isValidCalendarDate(entry.date) ||
+      !Number.isSafeInteger(entry.personId) || !peopleById.has(entry.personId as number) ||
+      !Number.isSafeInteger(entry.foodId) || !foodIds.has(entry.foodId as number) ||
+      !MEALS.includes(entry.meal as MealEntryInput['meal']) || !isFiniteInRange(entry.grams, 1, 3000)) {
+      return invalid('meal entry');
+    }
+    entryIds.add(entry.id as number);
+  }
+
+  const activityKeys = new Set<string>();
+  for (const activity of value.activities) {
+    if (!isRecord(activity) || !hasExactKeys(activity, ['date', 'personId', 'activityType']) ||
+      typeof activity.date !== 'string' || !isValidCalendarDate(activity.date) ||
+      !Number.isSafeInteger(activity.personId) || !peopleById.has(activity.personId as number) ||
+      !DAY_ACTIVITIES.includes(activity.activityType as DayActivity['activityType'])) {
+      return invalid('day activity');
+    }
+    const key = `${activity.personId}:${activity.date}`;
+    if (activityKeys.has(key)) return invalid('duplicate day activity');
+    activityKeys.add(key);
+  }
+
+  const heightRecordIds = new Set<number>();
+  const heightRecordKeys = new Set<string>();
+  for (const record of value.heightRecords) {
+    if (!isRecord(record) || !hasExactKeys(record, ['id', 'personId', 'date', 'heightCm']) ||
+      !Number.isSafeInteger(record.id) || (record.id as number) < 1 || heightRecordIds.has(record.id as number) ||
+      !Number.isSafeInteger(record.personId) || !peopleById.has(record.personId as number) ||
+      typeof record.date !== 'string' || !isValidCalendarDate(record.date) || record.date > todayDate() ||
+      !isFiniteInRange(record.heightCm, 20, 300)) {
+      return invalid('height record');
+    }
+    const person = peopleById.get(record.personId as number)!;
+    if (typeof person.dateOfBirth === 'string' && person.dateOfBirth > record.date) {
+      return invalid('height record date');
+    }
+    const key = `${record.personId}:${record.date}`;
+    if (heightRecordKeys.has(key)) return invalid('duplicate height record');
+    heightRecordKeys.add(key);
+    heightRecordIds.add(record.id as number);
+  }
+
+  if ((value.nextPersonId as number) <= Math.max(0, ...peopleById.keys()) ||
+    (value.nextFoodId as number) <= Math.max(0, ...foodIds) ||
+    (value.nextEntryId as number) <= Math.max(0, ...entryIds) ||
+    (value.nextHeightRecordId as number) <= Math.max(0, ...heightRecordIds)) {
+    return invalid('ID counter');
   }
   return value as unknown as StoreData;
 }
@@ -410,8 +565,10 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
   let data: StoreData | undefined;
   let hydration: Promise<StoreData> | undefined;
   let writeQueue: Promise<unknown> = Promise.resolve();
+  let restoreInProgress: Promise<void> | undefined;
 
   const load = (): Promise<StoreData> => {
+    if (restoreInProgress) return restoreInProgress.then(() => load());
     if (data) return Promise.resolve(data);
     if (hydration) return hydration;
     hydration = (async () => {
@@ -709,6 +866,55 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
           { date: params.date, personId: params.personId, activityType: 'rest' as const };
       });
     },
+    async exportBackup(): Promise<string> {
+      const pending = writeQueue.then(async () => {
+        const current = await load();
+        const envelope: BackupEnvelope = {
+          format: 'clear-access-local-backup',
+          version: 1,
+          createdAt: new Date().toISOString(),
+          data: clone(current),
+        };
+        const serialized = JSON.stringify(envelope, null, 2);
+        parseBackup(serialized);
+        return serialized;
+      });
+      writeQueue = pending.then(() => undefined, () => undefined);
+      return pending;
+    },
+    previewBackup(serialized: string): BackupPreview {
+      const { envelope, data: backup } = parseBackup(serialized);
+      return summarizeBackup(backup, envelope.createdAt);
+    },
+    async getBackupSummary(): Promise<BackupPreview> {
+      const current = await load();
+      return summarizeBackup(current, new Date().toISOString());
+    },
+    async restoreBackup(serialized: string): Promise<void> {
+      // Validate immediately for useful failures, then validate again when this operation
+      // reaches the write queue so no state can be committed from stale assumptions.
+      parseBackup(serialized);
+      let restorationGuard: Promise<void> = Promise.resolve();
+      const pending = writeQueue.then(async () => {
+        restoreInProgress = restorationGuard;
+        const pendingHydration = hydration;
+        if (pendingHydration) await pendingHydration.catch(() => undefined);
+        const restored = parseBackup(serialized).data;
+        try {
+          await storage.setItem(storageKey, JSON.stringify(restored));
+        } catch (error) {
+          throw new Error(`Could not restore local planner data; the change was not applied: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        data = clone(restored);
+        hydration = undefined;
+      });
+      writeQueue = pending.then(() => undefined, () => undefined);
+      restorationGuard = pending.then(() => undefined, () => undefined);
+      void restorationGuard.then(() => {
+        if (restoreInProgress === restorationGuard) restoreInProgress = undefined;
+      });
+      return pending;
+    },
     async saveDayActivity(input: DayActivityInput): Promise<DayActivity> {
       return transact(draft => {
         if (!isValidCalendarDate(input.date)) fail('Choose a valid date.');
@@ -724,4 +930,54 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
       return read(current => current);
     },
   };
+}
+
+export type BackupPreview = {
+  createdAt: string;
+  people: Array<{ id: number; name: string; entries: number; activities: number; heightRecords: number }>;
+  foods: number;
+  entries: number;
+  activities: number;
+  heightRecords: number;
+};
+
+function summarizeBackup(data: StoreData, createdAt: string): BackupPreview {
+  return {
+    createdAt,
+    people: data.people.map(person => ({
+      id: person.id,
+      name: person.name,
+      entries: data.entries.filter(entry => entry.personId === person.id).length,
+      activities: data.activities.filter(activity => activity.personId === person.id).length,
+      heightRecords: data.heightRecords.filter(record => record.personId === person.id).length,
+    })),
+    foods: data.foods.length,
+    entries: data.entries.length,
+    activities: data.activities.length,
+    heightRecords: data.heightRecords.length,
+  };
+}
+
+function isISODateTime(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  const parsed = new Date(value);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString() === value;
+}
+
+function parseBackup(serialized: string): { envelope: BackupEnvelope; data: StoreData } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(serialized);
+  } catch {
+    fail('Backup is not valid JSON.');
+  }
+  if (!isRecord(parsed) || !hasExactKeys(parsed, ['format', 'version', 'createdAt', 'data'])) {
+    fail('Backup has an invalid envelope.');
+  }
+  if (parsed.format !== 'clear-access-local-backup' || parsed.version !== 1) {
+    fail(`Unsupported local backup format or version (${String(parsed.version)}).`);
+  }
+  if (!isISODateTime(parsed.createdAt)) fail('Backup has an invalid creation timestamp.');
+  const data = validateBackupData(parsed.data);
+  return { envelope: parsed as unknown as BackupEnvelope, data };
 }

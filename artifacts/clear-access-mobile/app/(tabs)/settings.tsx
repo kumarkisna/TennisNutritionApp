@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { PlanningTargets } from '@/components/PlanningTargets';
+import { LocalBackup } from '@/components/LocalBackup';
 import { Text } from 'react-native';
 import { useUpdatePerson, type ActivityLevelType, type Person, type PersonUpdate } from '@/lib/local-api';
 import { usePlanner } from '@/contexts/PlannerProvider';
@@ -89,12 +90,13 @@ export default function Settings() {
   return <Screen tabs>
     <Eyebrow>04 / Settings</Eyebrow>
     <Title sub="Each person keeps their own details. Estimates are for planning only, never medical requirements.">{`${person.name}'s details.`}</Title>
+    <LocalBackup />
     <Card>
       <Eyebrow>Saved planning targets</Eyebrow>
       <PlanningTargets person={person} date={date} testPrefix="settings-target" />
       <Muted>These use saved details. Save changes below to update them. Choose the day's planned activity in Planner.</Muted>
     </Card>
     <Btn variant="ghost" label="Height history & CDC reference" icon="trending-up" testID="button-settings-height-chart" onPress={() => router.push('/height')} />
-    <SettingsForm key={person.id} person={person} />
+    <SettingsForm key={JSON.stringify(person)} person={person} />
   </Screen>;
 }

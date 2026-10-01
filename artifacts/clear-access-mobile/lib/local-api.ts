@@ -79,6 +79,7 @@ export { createLocalStore, LOCAL_STORAGE_KEY, isValidCalendarDate } from './loca
 
 const localStore = createLocalStore(AsyncStorage);
 
+export const exportLocalBackup = () => localStore.exportBackup();
 export const getListPeopleQueryKey = () => ['listPeople'] as const;
 export const getListFoodsQueryKey = (params?: ListFoodsParams) => ['listFoods', params] as const;
 export const getListHeightRecordsQueryKey = (params?: ListHeightRecordsParams) => ['listHeightRecords', params] as const;
@@ -209,3 +210,14 @@ export function useImportFood() {
     },
   });
 }
+
+export const LOCAL_PLANNER_QUERY_PREFIXES = [
+  'listPeople', 'listFoods', 'listHeightRecords', 'listMealEntries', 'getDailySummary', 'getDayActivity',
+] as const;
+
+export const previewLocalBackup = (serialized: string) => localStore.previewBackup(serialized);
+
+export const restoreLocalBackup = (serialized: string) => localStore.restoreBackup(serialized);
+
+export const getLocalPeople = () => localStore.listPeople();
+export const getLocalBackupSummary = () => localStore.getBackupSummary();
