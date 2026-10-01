@@ -27,7 +27,7 @@ function People() {
 
   return <Screen title="People">
     <Eyebrow>This device / separate plans</Eyebrow>
-    <Title sub="Everyone has their own meals and activity-based target. Your food library stays shared on this device.">People in your planner.</Title>
+    <Title sub="Everyone has their own meals and body details for daily planning estimates. Your food library stays shared on this device.">People in your planner.</Title>
     {people.map(p => {
       const on = p.id === person.id;
       return <Card key={p.id} tone={on ? 'mint' : 'card'} style={{ gap: 8 }}>
@@ -35,7 +35,7 @@ function People() {
           <Feather name={on ? 'check-circle' : 'circle'} size={22} color={on ? c.primary : c.mutedForeground} />
           <View style={{ flex: 1 }}>
             <Text style={{ fontFamily: F.bold, fontSize: 16, color: c.foreground }}>{p.name}</Text>
-            <Muted>{p.isDefault ? 'Default · ' : ''}{n(p.targetCalories)} kcal / day{on ? ' · Selected' : ''}</Muted>
+            <Muted>{p.isDefault ? 'Default · ' : ''}{p.weightKg === null ? 'Weight not set' : `${n(p.weightKg, 1)} kg`}{p.ageYears === null ? ' · Age not set' : ` · ${p.ageYears} years`}{on ? ' · Selected' : ''}</Muted>
           </View>
         </Pressable>
         <View style={{ flexDirection: 'row', gap: 8 }}>

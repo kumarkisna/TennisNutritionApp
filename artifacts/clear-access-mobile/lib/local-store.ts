@@ -1,4 +1,5 @@
 import { referenceFoodSeed } from './reference-food-seed';
+import { calculatePlanningEstimates } from './planning-targets';
 import {
   ActivityLevel,
   DayActivityType,
@@ -11,9 +12,13 @@ import {
   type Food,
   type FoodInput,
   type FoodUpdate,
+  type HeightRecord,
+  type HeightRecordInput,
+  type HeightRecordUpdate,
   type GetDayActivityParams,
   type GetDailySummaryParams,
   type ListFoodsParams,
+  type ListHeightRecordsParams,
   type ListMealEntriesParams,
   type MealEntry,
   type MealEntryInput,
@@ -26,7 +31,7 @@ import {
 } from './local-models';
 
 export const LOCAL_STORAGE_KEY = 'clear-access-mobile:planner:v1';
-const STORE_VERSION = 1;
+const STORE_VERSION = 2;
 const MEALS = Object.values(Meal);
 const ACTIVITY_LEVELS = Object.values(ActivityLevel);
 const DAY_ACTIVITIES = Object.values(DayActivityType);
@@ -45,15 +50,18 @@ export type AsyncKeyValueStorage = {
 
 type StoredFood = Food & { referenceKey?: string };
 type StoredEntry = { id: number; date: string; personId: number; meal: MealEntryInput['meal']; grams: number; foodId: number };
+type StoredHeightRecord = HeightRecord;
 type StoreData = {
   version: number;
   people: Person[];
   foods: StoredFood[];
   entries: StoredEntry[];
   activities: DayActivity[];
+  heightRecords: StoredHeightRecord[];
   nextPersonId: number;
   nextFoodId: number;
   nextEntryId: number;
+  nextHeightRecordId: number;
 };
 
 function fail(message: string): never {
@@ -73,6 +81,10 @@ export function isValidCalendarDate(value: string): boolean {
   const parsed = new Date(`${value}T00:00:00Z`);
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
+function todayDate(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
 
 function seedStore(): StoreData {
   const foods = referenceFoodSeed.map((food, index): StoredFood => ({
@@ -89,6 +101,8 @@ function seedStore(): StoreData {
     isDefault: true,
     weightKg: null,
     ageYears: null,
+    dateOfBirth: null,
+    growthReferenceSex: null,
     ironGoalMg: null,
     ironGoalSource: null,
     ironGoalReviewedOn: null,
@@ -106,9 +120,11 @@ function seedStore(): StoreData {
     foods,
     entries: [],
     activities: [],
+    heightRecords: [],
     nextPersonId: 2,
     nextFoodId: foods.length + 1,
     nextEntryId: 1,
+    nextHeightRecordId: 1,
   };
 }
 
@@ -117,10 +133,12 @@ function validateStoredData(value: unknown): StoreData {
   if (value.version !== STORE_VERSION) {
     fail(`Unsupported local planner storage version (${String(value.version)}). Your data was not changed.`);
   }
-  const { people, foods, entries, activities, nextPersonId, nextFoodId, nextEntryId } = value;
+  const { people, foods, entries, activities, heightRecords, nextPersonId, nextFoodId, nextEntryId, nextHeightRecordId } = value;
   if (
     !Array.isArray(people) || !Array.isArray(foods) || !Array.isArray(entries) || !Array.isArray(activities) ||
+    !Array.isArray(heightRecords) ||
     !Number.isSafeInteger(nextPersonId) || !Number.isSafeInteger(nextFoodId) || !Number.isSafeInteger(nextEntryId) ||
+    !Number.isSafeInteger(nextHeightRecordId) ||
     !people.some(p => isRecord(p) && p.isDefault === true)
   ) {
     fail('Local planner storage is corrupted. Your data was not changed.');
@@ -130,6 +148,9 @@ function validateStoredData(value: unknown): StoreData {
   for (const person of people) {
     if (!isRecord(person) || !Number.isSafeInteger(person.id) || (person.id as number) < 1 ||
       typeof person.name !== 'string' || !person.name.trim() ||
+       !(person.dateOfBirth === null || (typeof person.dateOfBirth === 'string' &&
+         isValidCalendarDate(person.dateOfBirth) && person.dateOfBirth <= todayDate())) ||
+       !(person.growthReferenceSex === null || person.growthReferenceSex === 'male' || person.growthReferenceSex === 'female') ||
       !ACTIVITY_LEVELS.includes(person.activityLevel as ActivityLevelType) ||
       !Number.isInteger(person.baselineCalories) ||
       !isFiniteInRange(person.activityMultiplier, 1, 1.35) ||
@@ -175,12 +196,51 @@ function validateStoredData(value: unknown): StoreData {
     if (activityKeys.has(key)) fail('Local planner storage contains duplicate day activities. Your data was not changed.');
     activityKeys.add(key);
   }
+  const heightRecordIds = new Set<number>();
+  const heightRecordKeys = new Set<string>();
+  for (const record of heightRecords) {
+    if (!isRecord(record) || !Number.isSafeInteger(record.id) || (record.id as number) < 1 ||
+      heightRecordIds.has(record.id as number) || !personIds.has(record.personId as number) ||
+      typeof record.date !== 'string' || !isValidCalendarDate(record.date) || record.date > todayDate() ||
+      !isFiniteInRange(record.heightCm, 20, 300)) {
+      fail('Local planner storage contains an invalid height record. Your data was not changed.');
+    }
+    const person = people.find(candidate => isRecord(candidate) && candidate.id === record.personId);
+    if (person && typeof person.dateOfBirth === 'string' && person.dateOfBirth > record.date) {
+      fail('Local planner storage contains a height record before the person’s date of birth. Your data was not changed.');
+    }
+    const key = `${record.personId}:${record.date}`;
+    if (heightRecordKeys.has(key)) {
+      fail('Local planner storage contains duplicate height records. Your data was not changed.');
+    }
+    heightRecordKeys.add(key);
+    heightRecordIds.add(record.id as number);
+  }
   if ((nextPersonId as number) <= Math.max(...personIds) ||
     (foodIds.size && (nextFoodId as number) <= Math.max(...foodIds)) ||
-    (entryIds.size && (nextEntryId as number) <= Math.max(...entryIds))) {
+    (entryIds.size && (nextEntryId as number) <= Math.max(...entryIds)) ||
+    (heightRecordIds.size && (nextHeightRecordId as number) <= Math.max(...heightRecordIds))) {
     fail('Local planner storage has invalid next-ID counters. Your data was not changed.');
   }
   return value as unknown as StoreData;
+}
+
+function migrateVersionOne(value: unknown): StoreData {
+  if (!isRecord(value) || value.version !== 1 || !Array.isArray(value.people)) {
+    fail('Local planner storage is corrupted. Your data was not changed.');
+  }
+  const migrated = {
+    ...value,
+    version: STORE_VERSION,
+    people: value.people.map(person => isRecord(person) ? {
+      ...person,
+      dateOfBirth: person.dateOfBirth === undefined ? null : person.dateOfBirth,
+      growthReferenceSex: person.growthReferenceSex === undefined ? null : person.growthReferenceSex,
+    } : person),
+    heightRecords: [],
+    nextHeightRecordId: 1,
+  };
+  return validateStoredData(migrated);
 }
 
 function clone<T>(value: T): T {
@@ -252,6 +312,16 @@ function validatePersonInput(input: PersonInput | PersonUpdate, existing?: Perso
     (!Number.isInteger(result.ageYears) || !isFiniteInRange(result.ageYears, 1, 120))) {
     fail('Age must be a whole number from 1 to 120, or left blank.');
   }
+  if (result.dateOfBirth !== null && result.dateOfBirth !== undefined) {
+    if (typeof result.dateOfBirth !== 'string' || !isValidCalendarDate(result.dateOfBirth)) {
+      fail('Enter a valid date of birth.');
+    }
+    if (result.dateOfBirth > todayDate()) fail('Date of birth cannot be in the future.');
+  }
+  if (result.growthReferenceSex !== null && result.growthReferenceSex !== undefined &&
+    result.growthReferenceSex !== 'male' && result.growthReferenceSex !== 'female') {
+    fail('Choose a valid growth reference sex.');
+  }
   const normalized: Record<string, unknown> = { ...result };
   for (const prefix of ['iron', 'fat'] as const) {
     const amountKey = prefix === 'iron' ? 'ironGoalMg' : 'fatGoalG';
@@ -284,6 +354,8 @@ function validatePersonInput(input: PersonInput | PersonUpdate, existing?: Perso
     name: name ?? existing?.name ?? '',
     weightKg: normalized.weightKg as number | null ?? null,
     ageYears: normalized.ageYears as number | null ?? null,
+    dateOfBirth: normalized.dateOfBirth as string | null ?? null,
+    growthReferenceSex: normalized.growthReferenceSex as Person['growthReferenceSex'] ?? null,
     ironGoalMg: normalized.ironGoalMg as number | null ?? null,
     ironGoalSource: normalized.ironGoalSource as string | null ?? null,
     ironGoalReviewedOn: normalized.ironGoalReviewedOn as string | null ?? null,
@@ -365,6 +437,17 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
       } catch {
         fail('Local planner storage is corrupted and could not be read. Your data was not changed.');
       }
+      if (isRecord(parsed) && parsed.version === 1) {
+        const migrated = migrateVersionOne(parsed);
+        try {
+          // Keep the v1 bytes until the complete, validated replacement is durable.
+          await storage.setItem(storageKey, JSON.stringify(migrated));
+        } catch (error) {
+          throw new Error(`Could not migrate local planner data; the change was not applied: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        data = migrated;
+        return migrated;
+      }
       data = validateStoredData(parsed);
       return data;
     })();
@@ -410,6 +493,10 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
       return transact(draft => {
         const existing = findPerson(draft, id);
         const fields = validatePersonInput(input, existing);
+        if (fields.dateOfBirth && draft.heightRecords.some(record =>
+          record.personId === id && record.date < fields.dateOfBirth!)) {
+          fail('Date of birth cannot be after an existing height measurement.');
+        }
         if (draft.people.some(person => person.id !== id && person.name.toLocaleLowerCase() === fields.name.toLocaleLowerCase())) {
           fail('That person is already in your planner.');
         }
@@ -424,6 +511,7 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
         draft.people = draft.people.filter(candidate => candidate.id !== id);
         draft.entries = draft.entries.filter(entry => entry.personId !== id);
         draft.activities = draft.activities.filter(activity => activity.personId !== id);
+        draft.heightRecords = draft.heightRecords.filter(record => record.personId !== id);
       });
     },
     async listFoods(params?: ListFoodsParams): Promise<Food[]> {
@@ -433,6 +521,68 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
         .sort((left, right) => left.name.localeCompare(right.name))
         .slice(0, 100)
         .map(publicFood));
+    },
+    async listHeightRecords(params?: ListHeightRecordsParams): Promise<HeightRecord[]> {
+      return read(current => {
+        if (params?.personId !== undefined) {
+          if (!Number.isSafeInteger(params.personId) || params.personId < 1) fail('Choose a valid person.');
+          findPerson(current, params.personId);
+        }
+        return current.heightRecords
+          .filter(record => params?.personId === undefined || record.personId === params.personId)
+          .sort((left, right) => right.date.localeCompare(left.date) || right.id - left.id);
+      });
+    },
+    async createHeightRecord(input: HeightRecordInput): Promise<HeightRecord> {
+      return transact(draft => {
+        if (!Number.isSafeInteger(input.personId) || input.personId < 1) fail('Choose a valid person.');
+        const person = findPerson(draft, input.personId);
+        if (!isValidCalendarDate(input.date)) fail('Enter a valid height measurement date.');
+        if (input.date > todayDate()) fail('Height measurement date cannot be in the future.');
+        if (person.dateOfBirth && input.date < person.dateOfBirth) {
+          fail('Height measurement date cannot be before the person’s date of birth.');
+        }
+        if (!isFiniteInRange(input.heightCm, 20, 300)) fail('Height must be between 20 and 300 cm.');
+        if (draft.heightRecords.some(record => record.personId === input.personId && record.date === input.date)) {
+          fail('A height record already exists for this person on that date. Edit the existing record instead.');
+        }
+        const record: StoredHeightRecord = {
+          id: draft.nextHeightRecordId++,
+          personId: input.personId,
+          date: input.date,
+          heightCm: input.heightCm,
+        };
+        draft.heightRecords.push(record);
+        return record;
+      });
+    },
+    async updateHeightRecord(id: number, input: HeightRecordUpdate): Promise<HeightRecord> {
+      return transact(draft => {
+        const record = draft.heightRecords.find(candidate => candidate.id === id);
+        if (!record) fail('Height record not found.');
+        const person = findPerson(draft, record.personId);
+        const date = input.date === undefined ? record.date : input.date;
+        const heightCm = input.heightCm === undefined ? record.heightCm : input.heightCm;
+        if (!isValidCalendarDate(date)) fail('Enter a valid height measurement date.');
+        if (date > todayDate()) fail('Height measurement date cannot be in the future.');
+        if (person.dateOfBirth && date < person.dateOfBirth) {
+          fail('Height measurement date cannot be before the person’s date of birth.');
+        }
+        if (!isFiniteInRange(heightCm, 20, 300)) fail('Height must be between 20 and 300 cm.');
+        if (draft.heightRecords.some(candidate =>
+          candidate.id !== id && candidate.personId === record.personId && candidate.date === date)) {
+          fail('A height record already exists for this person on that date. Edit the existing record instead.');
+        }
+        record.date = date;
+        record.heightCm = heightCm;
+        return record;
+      });
+    },
+    async deleteHeightRecord(id: number): Promise<void> {
+      return transact(draft => {
+        if (!draft.heightRecords.some(record => record.id === id)) fail('Height record not found.');
+        draft.heightRecords = draft.heightRecords.filter(record => record.id !== id);
+      });
     },
     async createFood(input: FoodInput): Promise<Food> {
       return transact(draft => {
@@ -522,6 +672,13 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
       if (!isValidCalendarDate(params.date)) fail('Choose a valid date.');
       return read(current => {
         const person = findPerson(current, params.personId);
+        const activity = current.activities.find(candidate =>
+          candidate.date === params.date && candidate.personId === params.personId)?.activityType ?? 'rest';
+        const estimate = calculatePlanningEstimates(
+          { weightKg: person.weightKg, ageYears: person.ageYears, dateOfBirth: person.dateOfBirth },
+          activity,
+          params.date,
+        );
         const entries = current.entries
           .filter(entry => entry.date === params.date && entry.personId === params.personId)
           .sort((left, right) => left.id - right.id)
@@ -537,7 +694,7 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
         return {
           date: params.date,
           personId: person.id,
-          targetCalories: person.targetCalories,
+          targetCalories: estimate.calories,
           totals: sumNutrition(entries.map(entry => entry.nutrition)),
           entryCount: entries.length,
           meals,

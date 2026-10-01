@@ -14,6 +14,22 @@ export const sportsActivities: Record<DayActivityKind, {
   strength: { label: 'Strength or power training', short: 'Strength / power', detail: 'No numeric carbohydrate range for strength in the workbook', protein: [1.6, 1.7] },
 };
 
+// App-chosen planning heuristics, not official ISSN or CDC activity rules.
+export const activityCaloriesPerKg: Record<DayActivityKind, number> = {
+  rest: 30,
+  low_intensity: 35,
+  training_60: 40,
+  training_120: 50,
+  endurance: 60,
+  extreme: 70,
+  strength: 45,
+};
+
+export const nutritionSources = {
+  exerciseNutrition: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC2853497/',
+  fatEnergy: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC3905293/',
+} as const;
+
 export function formatWorkbookRange(range: [number, number] | undefined, weightKg: number | null) {
   if (!range) return 'Not specified in workbook';
   if (weightKg === null) return 'Add body weight to calculate';
@@ -21,15 +37,65 @@ export function formatWorkbookRange(range: [number, number] | undefined, weightK
   return `${n(low)}${low === high ? '' : `–${n(high)}`} g / day`;
 }
 
-export function getPlanningTargets(
-  person: Pick<Person, 'targetCalories' | 'weightKg' | 'fatGoalG'>,
+function validIsoDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
+export function getAgeOnDate(dateOfBirth: string, date: string) {
+  if (!validIsoDate(dateOfBirth) || !validIsoDate(date) || dateOfBirth > date) return null;
+  const [birthYear, birthMonth, birthDay] = dateOfBirth.split('-').map(Number);
+  const [year, month, day] = date.split('-').map(Number);
+  return year - birthYear - (month < birthMonth || (month === birthMonth && day < birthDay) ? 1 : 0);
+}
+
+export function calculatePlanningEstimates(
+  person: Pick<Person, 'weightKg' | 'ageYears' | 'dateOfBirth'>,
   activity: DayActivityKind,
+  date: string,
+): { calories: number | null; fat: number | null; unavailableReason: string | null } {
+  if (!validIsoDate(date)) {
+    return { calories: null, fat: null, unavailableReason: 'A valid selected date is required for an adult estimate.' };
+  }
+  const age = person.dateOfBirth !== null ? getAgeOnDate(person.dateOfBirth, date) : person.ageYears;
+  if (person.dateOfBirth !== null && age === null) {
+    return { calories: null, fat: null, unavailableReason: 'The saved date of birth is invalid or after the selected date; it takes precedence over saved age.' };
+  }
+  if (age === null || age === undefined) {
+    const weightMissing = person.weightKg === null || !Number.isFinite(person.weightKg) || person.weightKg <= 0;
+    return {
+      calories: null,
+      fat: null,
+      unavailableReason: `Adult estimates are unavailable until a date of birth or age is saved.${weightMissing ? ' Body weight is also needed.' : ''}`,
+    };
+  }
+  if (!Number.isFinite(age) || age < 18) {
+    return { calories: null, fat: null, unavailableReason: 'Adult estimates are not provided for people under 18.' };
+  }
+  if (person.weightKg === null || !Number.isFinite(person.weightKg) || person.weightKg <= 0) {
+    return { calories: null, fat: null, unavailableReason: 'Adult estimates are unavailable until body weight is saved.' };
+  }
+  const calories = Math.round(person.weightKg * activityCaloriesPerKg[activity]);
+  return { calories, fat: calories * 0.30 / 9, unavailableReason: null };
+}
+
+export function getPlanningTargets(
+  person: Pick<Person, 'weightKg' | 'ageYears' | 'dateOfBirth' | 'fatGoalG'>,
+  activity: DayActivityKind,
+  date: string,
 ) {
   const reference = sportsActivities[activity];
+  const estimates = calculatePlanningEstimates(person, activity, date);
+  const usesGeneralFitnessCarbReference = !reference.carbs;
+  const carbs = reference.carbs
+    ? formatWorkbookRange(reference.carbs, person.weightKg)
+    : formatWorkbookRange([3, 5], person.weightKg);
   return {
-    calories: `${n(person.targetCalories)} kcal / day`,
+    calories: estimates.calories === null ? estimates.unavailableReason! : `${n(estimates.calories)} kcal / day`,
     protein: formatWorkbookRange(reference.protein, person.weightKg),
-    carbs: formatWorkbookRange(reference.carbs, person.weightKg),
-    fat: person.fatGoalG === null ? 'No personal goal set' : `${n(person.fatGoalG, 1)} g / day`,
+    carbs: usesGeneralFitnessCarbReference ? `${carbs} (ISSN general-fitness reference)` : carbs,
+    fat: estimates.fat === null ? estimates.unavailableReason! : `${n(estimates.fat, 1)} g / day`,
   };
 }

@@ -16,7 +16,8 @@ export default function Overview() {
   const { person, date, setDate } = usePlanner();
   const summary = useGetDailySummary({ date, personId: person.id });
   const total = summary.data?.totals.calories ?? 0;
-  const pct = Math.min(100, Math.max(0, (total / (summary.data?.targetCalories || person.targetCalories || 1)) * 100));
+  const targetCalories = summary.data?.targetCalories ?? null;
+  const pct = targetCalories === null ? 0 : Math.min(100, Math.max(0, (total / targetCalories) * 100));
 
   return <Screen tabs onRefresh={() => summary.refetch()} refreshing={summary.isRefetching}>
     <Eyebrow>01 / Daily overview</Eyebrow>
@@ -31,17 +32,19 @@ export default function Overview() {
       <Eyebrow light>Planned calories + macros</Eyebrow>
       {summary.isLoading ? <LoadingBlock rows={1} height={64} /> : summary.isError ? <ErrorBox error={summary.error} onRetry={() => summary.refetch()} /> : <>
         <CaloriesMacros large light calories={total} protein={summary.data?.totals.protein ?? 0} carbs={summary.data?.totals.carbs ?? 0} fat={summary.data?.totals.fat ?? 0} testPrefix="total" />
-        <View style={{ height: 8, borderRadius: 4, backgroundColor: '#45606a', overflow: 'hidden' }}><View style={{ width: `${pct}%`, height: 8, backgroundColor: c.mint, borderRadius: 4 }} /></View>
+        {targetCalories === null
+          ? <Text style={{ fontFamily: F.regular, fontSize: 12, color: c.inkSoft }}>Adult calorie estimate unavailable for this person and date. See planning targets for the reason.</Text>
+          : <View style={{ height: 8, borderRadius: 4, backgroundColor: '#45606a', overflow: 'hidden' }}><View style={{ width: `${pct}%`, height: 8, backgroundColor: c.mint, borderRadius: 4 }} /></View>}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           <Text style={{ fontFamily: F.regular, fontSize: 12, color: c.inkSoft }}>{summary.data?.entryCount ?? 0} portions planned</Text>
-           <Text testID="value-overview-target" style={{ fontFamily: F.regular, fontSize: 12, color: c.inkSoft }}>Calorie target ~{n(person.targetCalories)} kcal</Text>
+           <Text testID="value-overview-target" style={{ fontFamily: F.regular, fontSize: 12, color: c.inkSoft }}>{targetCalories === null ? 'Adult estimate unavailable' : `Calorie target ${n(targetCalories)} kcal`}</Text>
         </View></>}
     </Card>
     <Btn label="Plan this day" icon="arrow-right" testID="link-overview-plan-day" onPress={() => { setDate(date); router.push('/planner'); }} />
+    <Btn variant="ghost" label="Height history & CDC chart" icon="trending-up" testID="button-overview-height-chart" onPress={() => router.push('/height')} />
     <Card>
       <Eyebrow>{person.name}'s planning targets</Eyebrow>
       <PlanningTargets person={person} date={date} />
-      <Muted>{cap(person.activityLevel)} activity · {n(person.baselineCalories)} baseline × {person.activityMultiplier}</Muted>
       <View style={{ alignSelf: 'flex-start' }}><Btn small variant="ghost" label="Adjust details and goals" icon="arrow-right" testID="link-overview-settings" onPress={() => router.push('/settings')} /></View>
       <View style={{ alignSelf: 'flex-start' }}><Btn small variant="ghost" label="Change this day's activity" testID="link-overview-target-activity" onPress={() => router.push('/planner')} /></View>
     </Card>

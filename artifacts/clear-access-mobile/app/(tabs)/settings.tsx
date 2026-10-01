@@ -1,10 +1,11 @@
 import { useState } from 'react';
+import { useRouter } from 'expo-router';
 import { PlanningTargets } from '@/components/PlanningTargets';
 import { Text } from 'react-native';
 import { useUpdatePerson, type ActivityLevelType, type Person, type PersonUpdate } from '@/lib/local-api';
 import { usePlanner } from '@/contexts/PlannerProvider';
 import { Btn, Card, Chips, ErrorBox, Eyebrow, Field, Muted, Screen, Title, success, warn } from '@/components/ui';
-import { isIsoDate, n, parseOptional } from '@/lib/format';
+import { isIsoDate, parseOptional } from '@/lib/format';
 import { activityOptions } from '@/lib/activity';
 
 const s = (v: number | string | null) => (v === null ? '' : String(v));
@@ -52,13 +53,13 @@ function SettingsForm({ person }: { person: Person }) {
 
   return <>
     <Card>
-      <Eyebrow>Body and energy</Eyebrow>
+      <Eyebrow>Body details and legacy settings</Eyebrow>
       <Field label="Body weight (kg)" value={weight} onChangeText={setWeight} keyboardType="decimal-pad" placeholder="Not set" hint="Used to scale workbook carbohydrate and protein ranges. Clear to remove." testID="input-weight" />
-      <Field label="Age (years)" value={age} onChangeText={setAge} keyboardType="number-pad" placeholder="Not set" hint="Used for the workbook calcium reference (ages 12+). Clear to remove." testID="input-age" />
-      <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 11.5, color: '#3c575e' }}>Activity estimate</Text>
+      <Field label="Age (years)" value={age} onChangeText={setAge} keyboardType="number-pad" placeholder="Not set" hint="Used for calcium and adult-estimate eligibility only when no date of birth is saved. Unknown age is not assumed to be adult." testID="input-age" />
+      <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 11.5, color: '#3c575e' }}>Legacy/manual energy settings</Text>
       <Chips testPrefix="select-activity-level" value={level} onChange={setLevel} options={activityOptions.map(o => ({ value: o.value, label: o.title }))} />
-      <Muted>{activityOptions.find(o => o.value === level)?.description}. Multiplier ×{activityOptions.find(o => o.value === level)?.multiplier}.</Muted>
-      <Field label="Baseline kcal / day" value={baseline} onChangeText={setBaseline} keyboardType="number-pad" testID="input-baseline" hint={`Current planning target: ~${n(person.targetCalories)} kcal. An estimate, not a requirement.`} />
+      <Muted>Legacy/manual activity level and multiplier setting; retained for saved-data compatibility and do not control daily automatic targets.</Muted>
+      <Field label="Legacy baseline kcal / day" value={baseline} onChangeText={setBaseline} keyboardType="number-pad" testID="input-baseline" hint="Retained for saved-data compatibility only. Automatic calories and fat estimates use body weight and the selected day's planned activity instead." />
     </Card>
     <Card>
       <Eyebrow>Optional iron goal</Eyebrow>
@@ -69,9 +70,9 @@ function SettingsForm({ person }: { person: Person }) {
       <Muted>Source and date are user-provided and not verified by this app. Clearing the goal also clears them.</Muted>
     </Card>
     <Card>
-      <Eyebrow>Optional fat goal</Eyebrow>
-      <Muted>The workbook’s fat ranges depend on person groups, so none is inferred. Leave empty for none.</Muted>
-      <Field label="Fat goal (g / day)" value={fat} onChangeText={setFat} keyboardType="decimal-pad" placeholder="No goal" testID="input-fat-goal" />
+      <Eyebrow>Optional manual fat goal</Eyebrow>
+      <Muted>This saved personal goal is separate and does not override the automatic adult fat estimate. The workbook’s fat ranges depend on person groups, so none is inferred. Leave empty for none.</Muted>
+      <Field label="Manual fat goal (g / day)" value={fat} onChangeText={setFat} keyboardType="decimal-pad" placeholder="No goal" testID="input-fat-goal" />
       <Field label="Source note" value={fatSrc} onChangeText={setFatSrc} placeholder="Where this goal comes from" maxLength={300} testID="input-fat-source" />
       <Field label="Reviewed on (YYYY-MM-DD)" value={fatDate} onChangeText={setFatDate} placeholder="Optional" autoCapitalize="none" maxLength={10} testID="input-fat-reviewed" />
     </Card>
@@ -83,6 +84,7 @@ function SettingsForm({ person }: { person: Person }) {
 }
 
 export default function Settings() {
+  const router = useRouter();
   const { person, date } = usePlanner();
   return <Screen tabs>
     <Eyebrow>04 / Settings</Eyebrow>
@@ -92,6 +94,7 @@ export default function Settings() {
       <PlanningTargets person={person} date={date} testPrefix="settings-target" />
       <Muted>These use saved details. Save changes below to update them. Choose the day's planned activity in Planner.</Muted>
     </Card>
+    <Btn variant="ghost" label="Height history & CDC reference" icon="trending-up" testID="button-settings-height-chart" onPress={() => router.push('/height')} />
     <SettingsForm key={person.id} person={person} />
   </Screen>;
 }

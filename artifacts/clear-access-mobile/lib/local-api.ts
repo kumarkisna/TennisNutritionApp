@@ -17,9 +17,13 @@ import type {
   FoodInput,
   FoodSource,
   FoodUpdate,
+  HeightRecord,
+  HeightRecordInput,
+  HeightRecordUpdate,
   GetDayActivityParams,
   GetDailySummaryParams,
   ListFoodsParams,
+  ListHeightRecordsParams,
   ListMealEntriesParams,
   MealEntry,
   MealEntryInput,
@@ -50,9 +54,13 @@ export type {
   FoodInput,
   FoodSource,
   FoodUpdate,
+  HeightRecord,
+  HeightRecordInput,
+  HeightRecordUpdate,
   GetDayActivityParams,
   GetDailySummaryParams,
   ListFoodsParams,
+  ListHeightRecordsParams,
   ListMealEntriesParams,
   MealEntry,
   MealEntryInput,
@@ -73,6 +81,7 @@ const localStore = createLocalStore(AsyncStorage);
 
 export const getListPeopleQueryKey = () => ['listPeople'] as const;
 export const getListFoodsQueryKey = (params?: ListFoodsParams) => ['listFoods', params] as const;
+export const getListHeightRecordsQueryKey = (params?: ListHeightRecordsParams) => ['listHeightRecords', params] as const;
 export const getListMealEntriesQueryKey = (params?: ListMealEntriesParams) => ['listMealEntries', params] as const;
 export const getGetDailySummaryQueryKey = (params?: GetDailySummaryParams) => ['getDailySummary', params] as const;
 export const getGetDayActivityQueryKey = (params?: GetDayActivityParams) => ['getDayActivity', params] as const;
@@ -111,6 +120,7 @@ function useLocalMutation<TData, TVariables>(
 
 const PEOPLE_REFRESH = [
   getListPeopleQueryKey(),
+  ['listHeightRecords'],
   ['listMealEntries'],
   ['getDailySummary'],
   ['getDayActivity'],
@@ -121,6 +131,7 @@ const FOODS_REFRESH = [
   ['getDailySummary'],
 ];
 const ENTRIES_REFRESH = [['listMealEntries'], ['getDailySummary']];
+const HEIGHT_RECORDS_REFRESH = [['listHeightRecords']];
 
 export function useListPeople(options?: LocalQueryOptions<Person[]>) {
   return useLocalQuery(getListPeopleQueryKey(), () => localStore.listPeople(), options);
@@ -133,6 +144,20 @@ export function useUpdatePerson() {
 }
 export function useDeletePerson() {
   return useLocalMutation(({ id }: { id: number }) => localStore.deletePerson(id), PEOPLE_REFRESH);
+}
+
+export function useListHeightRecords(params: ListHeightRecordsParams & { personId: number }, options?: LocalQueryOptions<HeightRecord[]>) {
+  return useLocalQuery(getListHeightRecordsQueryKey(params), () => localStore.listHeightRecords(params), options);
+}
+export function useCreateHeightRecord() {
+  return useLocalMutation(({ data }: { data: HeightRecordInput }) => localStore.createHeightRecord(data), HEIGHT_RECORDS_REFRESH);
+}
+export function useUpdateHeightRecord() {
+  return useLocalMutation(({ id, data }: { id: number; data: HeightRecordUpdate }) =>
+    localStore.updateHeightRecord(id, data), HEIGHT_RECORDS_REFRESH);
+}
+export function useDeleteHeightRecord() {
+  return useLocalMutation(({ id }: { id: number }) => localStore.deleteHeightRecord(id), HEIGHT_RECORDS_REFRESH);
 }
 
 export function useListFoods(params?: ListFoodsParams, options?: LocalQueryOptions<Food[]>) {
@@ -168,7 +193,8 @@ export function useGetDayActivity(params: GetDayActivityParams, options?: LocalQ
   return useLocalQuery(getGetDayActivityQueryKey(params), () => localStore.getDayActivity(params), options);
 }
 export function useSaveDayActivity() {
-  return useLocalMutation(({ data }: { data: DayActivityInput }) => localStore.saveDayActivity(data), [['getDayActivity']]);
+  return useLocalMutation(({ data }: { data: DayActivityInput }) =>
+    localStore.saveDayActivity(data), [['getDayActivity'], ['getDailySummary']]);
 }
 
 // Retained only as a safe transition bridge for screens removing online discovery.

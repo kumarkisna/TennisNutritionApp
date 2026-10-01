@@ -6,10 +6,13 @@ A daily food planner with a standalone, device-local mobile app. The existing we
 
 - The mobile app must work independently using local device storage, without sign-in, server requests, or cloud synchronization.
 - **Why:** The requested mobile product is local-only, rather than a companion that depends on the existing web accounts.
-- Keep people, food records, meal plans, activity selections, and preferences on the device. Search the local food library, not an online discovery service.
+- Keep people, food records, meal plans, activity selections, preferences, and dated height measurements on the device. Search the local food library, not an online discovery service.
 - Do not automatically move or erase existing web-account data. Clearing mobile app storage removes the local records.
 - Preserve explicit storage errors instead of silently resetting or overwriting unreadable data.
 - AsyncStorage-backed queries and mutations must use React Query's `networkMode: 'always'`; its default online mode pauses even device-only saves when the network is unavailable.
+- Existing planner storage is migrated in place for height records and optional date-of-birth/reference-sex fields. Keep the established storage namespace and preserve old food, person, meal, and activity data.
+- Mobile nutrition targets use saved weight and the selected day's sport activity, not the retained legacy calorie baseline/multiplier. Calorie/fat estimates use disclosed adult planning assumptions; require an adult age, with date of birth taking precedence when supplied. Iron and any saved manual fat goal keep their own provenance and are not automatic targets.
+- Height charts bundle the actual CDC 2000 stature-for-age dataset locally. CDC comparisons require an explicit boys'/girls' reference selection and date of birth, and apply only at measured ages 2–20. Height history remains available for every saved measurement; never extrapolate growth percentiles or describe percentile curves as health requirements.
 
 ## Run & Operate
 
@@ -46,11 +49,11 @@ A daily food planner with a standalone, device-local mobile app. The existing we
 - Web sign-in is delegated to Clerk and Google's OAuth provider; this application never handles Google passwords.
 - The web public root page stays accessible while signed-out users can enter through the sign-in route. Signed-in users are redirected to the portal.
 - The API server mounts the Clerk proxy before body parsers so auth remains available in published builds.
-- Reference foods are seeded idempotently at API startup. Per-100 g values are approximate; users can add their own foods. The daily target is an editable baseline adjusted by an activity multiplier, not individualized medical advice.
+- Existing web/backend reference foods are seeded idempotently at API startup. Per-100 g values are approximate; users can add their own foods. That web planner's daily target remains an editable baseline adjusted by an activity multiplier, distinct from the mobile app's weight-and-day-activity estimates.
 
 ## Product
 
-The mobile app opens directly into the overview, with a day-by-day meal planner, local per-100 g food catalog, people profiles, and nutrition preferences. Everything is saved per device. The existing web app separately retains its Google sign-in and per-account data.
+The mobile app opens directly into the overview, with a day-by-day meal planner, local per-100 g food catalog, people profiles, nutrition preferences, and dated height tracking with CDC references. Everything is saved per device. The existing web app separately retains its Google sign-in and per-account data.
 
 ## User preferences
 

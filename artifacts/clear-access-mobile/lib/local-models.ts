@@ -52,6 +52,8 @@ export type Person = {
   isDefault: boolean;
   weightKg: number | null;
   ageYears: number | null;
+  dateOfBirth: string | null;
+  growthReferenceSex: 'male' | 'female' | null;
   ironGoalMg: number | null;
   ironGoalSource: string | null;
   ironGoalReviewedOn: string | null;
@@ -68,6 +70,8 @@ export type PersonInput = {
   name: string;
   weightKg?: number | null;
   ageYears?: number | null;
+  dateOfBirth?: string | null;
+  growthReferenceSex?: 'male' | 'female' | null;
   ironGoalMg?: number | null;
   ironGoalSource?: string | null;
   ironGoalReviewedOn?: string | null;
@@ -79,6 +83,19 @@ export type PersonInput = {
 };
 
 export type PersonUpdate = Partial<PersonInput>;
+
+export type HeightRecord = {
+  id: number;
+  personId: number;
+  date: string;
+  heightCm: number;
+};
+export type HeightRecordInput = {
+  personId: number;
+  date: string;
+  heightCm: number;
+};
+export type HeightRecordUpdate = { date?: string; heightCm?: number };
 
 export type Food = {
   id: number;
@@ -137,7 +154,7 @@ export type MealSummary = { meal: Meal; count: number; nutrition: Nutrition };
 export type DailySummary = {
   date: string;
   personId: number;
-  targetCalories: number;
+  targetCalories: number | null;
   totals: Nutrition;
   entryCount: number;
   meals: MealSummary[];
@@ -151,6 +168,7 @@ export type Preferences = {
 };
 
 export type ListFoodsParams = { search?: string };
+export type ListHeightRecordsParams = { personId?: number };
 export type DiscoverFoodsParams = { search: string };
 export type ListMealEntriesParams = { date: string; personId: number };
 export type GetDailySummaryParams = ListMealEntriesParams;

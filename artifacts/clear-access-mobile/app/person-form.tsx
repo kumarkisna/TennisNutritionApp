@@ -37,9 +37,10 @@ function PersonForm() {
     <Eyebrow>{editing ? 'Edit' : 'New'} person</Eyebrow>
     <Title>{editing ? `Edit ${editing.name}` : 'Add a person'}</Title>
     <Field label="Name" value={name} onChangeText={setName} maxLength={80} testID="input-manage-person-name" />
+    <Eyebrow>Legacy/manual energy settings</Eyebrow>
     <Chips testPrefix="select-manage-person-activity" value={level} onChange={setLevel} options={activityOptions.map(o => ({ value: o.value, label: o.title }))} />
-    <Muted>{activityOptions.find(o => o.value === level)?.description}</Muted>
-    <Field label="Baseline kcal / day" value={baseline} onChangeText={setBaseline} keyboardType="number-pad" testID="input-manage-person-baseline" />
+    <Muted>Legacy/manual activity level and multiplier retained for saved-data compatibility; they do not control daily automatic targets.</Muted>
+    <Field label="Legacy baseline kcal / day" value={baseline} onChangeText={setBaseline} keyboardType="number-pad" testID="input-manage-person-baseline" hint="Retained for saved-data compatibility only. Daily automatic calories and fat estimates use body weight and the planned activity for each date." />
     {problem ? <ErrorBox error={new Error(problem)} /> : null}
     {err ? <ErrorBox error={err} /> : null}
     <Btn label={editing ? 'Save person' : 'Create person'} icon="check" loading={create.isPending || update.isPending} onPress={() => void submit()} testID="button-save-person" />
