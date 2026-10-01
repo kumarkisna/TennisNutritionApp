@@ -5,3 +5,5 @@
 - [Wouter links in server-render tests](wouter-ssr-tests.md) — SSR tests that render a Link need a static location hook, not browser or memory-location hooks.
 - [Local backup validation boundary](local-backup-validation.md) — validate external backups strictly without tightening legacy storage hydration as a side effect.
 - [SVG preview event verification](svg-preview-events.md) — test rendered-element clicks; React component callbacks can survive in props but be discarded by native-to-web normalization.
+- [Native appearance overrides](native-appearance-overrides.md) — native reset contracts differ from older SDK examples; explicit app themes must also update native controls.
+- [Optional Expo desktop debugger](expo-devtools-startup.md) — a missing desktop DevTools library can be non-blocking when Metro bundling and the app preview work.

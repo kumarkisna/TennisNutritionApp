@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { PlanningTargets } from '@/components/PlanningTargets';
 import { LocalBackup } from '@/components/LocalBackup';
+import { ThemePicker } from '@/components/ThemePicker';
+import { useColors } from '@/hooks/useColors';
 import { Text } from 'react-native';
 import { useUpdatePerson, type ActivityLevelType, type Person, type PersonUpdate } from '@/lib/local-api';
 import { usePlanner } from '@/contexts/PlannerProvider';
@@ -12,6 +14,7 @@ import { activityOptions } from '@/lib/activity';
 const s = (v: number | string | null) => (v === null ? '' : String(v));
 
 function SettingsForm({ person }: { person: Person }) {
+  const c = useColors();
   const { refreshPeople } = usePlanner();
   const update = useUpdatePerson();
   const [weight, setWeight] = useState(s(person.weightKg));
@@ -57,7 +60,7 @@ function SettingsForm({ person }: { person: Person }) {
       <Eyebrow>Body details and legacy settings</Eyebrow>
       <Field label="Body weight (kg)" value={weight} onChangeText={setWeight} keyboardType="decimal-pad" placeholder="Not set" hint="Used to scale workbook carbohydrate and protein ranges. Clear to remove." testID="input-weight" />
       <Field label="Age (years)" value={age} onChangeText={setAge} keyboardType="number-pad" placeholder="Not set" hint="Used for calcium and adult-estimate eligibility only when no date of birth is saved. Unknown age is not assumed to be adult." testID="input-age" />
-      <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 11.5, color: '#3c575e' }}>Legacy/manual energy settings</Text>
+      <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 11.5, color: c.foreground }}>Legacy/manual energy settings</Text>
       <Chips testPrefix="select-activity-level" value={level} onChange={setLevel} options={activityOptions.map(o => ({ value: o.value, label: o.title }))} />
       <Muted>Legacy/manual activity level and multiplier setting; retained for saved-data compatibility and do not control daily automatic targets.</Muted>
       <Field label="Legacy baseline kcal / day" value={baseline} onChangeText={setBaseline} keyboardType="number-pad" testID="input-baseline" hint="Retained for saved-data compatibility only. Automatic calories and fat estimates use body weight and the selected day's planned activity instead." />
@@ -79,7 +82,7 @@ function SettingsForm({ person }: { person: Person }) {
     </Card>
     {problem ? <ErrorBox error={new Error(problem)} /> : null}
     {update.isError ? <ErrorBox error={update.error} onRetry={() => void save()} /> : null}
-    {saved ? <Text testID="status-settings-saved" style={{ fontFamily: 'Inter_700Bold', color: '#176d61' }}>Saved for {person.name}.</Text> : null}
+    {saved ? <Text testID="status-settings-saved" style={{ fontFamily: 'Inter_700Bold', color: c.primary }}>Saved for {person.name}.</Text> : null}
     <Btn label="Save settings" icon="check" loading={update.isPending} onPress={() => void save()} testID="button-save-settings" />
   </>;
 }
@@ -90,6 +93,7 @@ export default function Settings() {
   return <Screen tabs>
     <Eyebrow>04 / Settings</Eyebrow>
     <Title sub="Each person keeps their own details. Estimates are for planning only, never medical requirements.">{`${person.name}'s details.`}</Title>
+    <ThemePicker />
     <LocalBackup />
     <Card>
       <Eyebrow>Saved planning targets</Eyebrow>

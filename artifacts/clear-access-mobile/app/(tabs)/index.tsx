@@ -22,7 +22,7 @@ export default function Overview() {
   return <Screen tabs onRefresh={() => summary.refetch()} refreshing={summary.isRefetching}>
     <Eyebrow>01 / Daily overview</Eyebrow>
     <Title sub={`${dateLabel(date)} · ${person.name}'s own meals and daily target.`}>{`A clear day ahead, ${person.name}.`}</Title>
-    <Pressable testID="button-switch-person" onPress={() => { tap(); router.push('/people'); }} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: c.accent, borderColor: '#c6ded5', borderWidth: 1, borderRadius: 16, padding: 14 }}>
+    <Pressable testID="button-switch-person" onPress={() => { tap(); router.push('/people'); }} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: c.accent, borderColor: c.accentBorder, borderWidth: 1, borderRadius: 16, padding: 14 }}>
       <Feather name="users" size={18} color={c.primary} />
       <View style={{ flex: 1 }}><Eyebrow>Planning for</Eyebrow><Text style={{ fontFamily: F.bold, fontSize: 15, color: c.foreground }}>{person.name}</Text></View>
       <Text style={{ fontFamily: F.semi, fontSize: 12, color: c.primary }}>Manage people</Text>
@@ -34,7 +34,7 @@ export default function Overview() {
         <CaloriesMacros large light calories={total} protein={summary.data?.totals.protein ?? 0} carbs={summary.data?.totals.carbs ?? 0} fat={summary.data?.totals.fat ?? 0} testPrefix="total" />
         {targetCalories === null
           ? <Text style={{ fontFamily: F.regular, fontSize: 12, color: c.inkSoft }}>Adult calorie estimate unavailable for this person and date. See planning targets for the reason.</Text>
-          : <View style={{ height: 8, borderRadius: 4, backgroundColor: '#45606a', overflow: 'hidden' }}><View style={{ width: `${pct}%`, height: 8, backgroundColor: c.mint, borderRadius: 4 }} /></View>}
+          : <View style={{ height: 8, borderRadius: 4, backgroundColor: c.inkSecondary, overflow: 'hidden' }}><View style={{ width: `${pct}%`, height: 8, backgroundColor: c.mint, borderRadius: 4 }} /></View>}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           <Text style={{ fontFamily: F.regular, fontSize: 12, color: c.inkSoft }}>{summary.data?.entryCount ?? 0} portions planned</Text>
            <Text testID="value-overview-target" style={{ fontFamily: F.regular, fontSize: 12, color: c.inkSoft }}>{targetCalories === null ? 'Adult estimate unavailable' : `Calorie target ${n(targetCalories)} kcal`}</Text>

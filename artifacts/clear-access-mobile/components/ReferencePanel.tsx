@@ -52,7 +52,7 @@ export function ReferencePanel({ person, date, totals, summaryLoading, summaryEr
     <Eyebrow>Before you plan / activity references</Eyebrow>
     <Text style={{ fontFamily: F.bold, fontSize: 22, letterSpacing: -0.8, color: c.foreground }}>What is planned vs. expected</Text>
     <Muted>For {person.name} on this day. Workbook ranges are not clinical requirements. Energy and fat estimates are app-chosen adult planning heuristics; iron and any saved manual fat goal are kept separate.</Muted>
-    <Text style={{ fontFamily: F.bold, fontSize: 11.5, color: '#3c575e', marginTop: 4 }}>Activity you are planning</Text>
+    <Text style={{ fontFamily: F.bold, fontSize: 11.5, color: c.foreground, marginTop: 4 }}>Activity you are planning</Text>
       <Chips testPrefix="select-planned-activity" disabled={query.isLoading || query.isError || save.isPending} value={activity} onChange={v => void choose(v)} options={(Object.keys(activities) as DayActivityKind[]).map(k => ({ value: k, label: activities[k].short }))} />
     <Muted>{sel.label}: {sel.detail}</Muted>
     {query.isError ? <ErrorBox error={query.error} onRetry={() => query.refetch()} /> : null}

@@ -65,7 +65,7 @@ function Portion() {
             <CaloriesMacros calories={f.caloriesPer100g} protein={f.proteinPer100g} carbs={f.carbsPer100g} fat={f.fatPer100g} testPrefix={`portion-food-${f.id}`} /></Pressable>; })}
         </View>}
     </>}
-    <Text style={{ fontFamily: F.bold, fontSize: 11.5, color: '#3c575e' }}>Meal</Text>
+    <Text style={{ fontFamily: F.bold, fontSize: 11.5, color: c.foreground }}>Meal</Text>
     <Chips testPrefix="select-portion-meal" value={chosenMeal} onChange={setMeal} options={mealOptions} />
     <Field label="Portion in grams" value={gramsText} onChangeText={setGrams} keyboardType="decimal-pad" testID="input-portion-grams" />
     {food ? <Card>
@@ -79,7 +79,7 @@ function Portion() {
     {err ? <ErrorBox error={err} /> : null}
     <Btn label={entry ? 'Save portion' : 'Add to plan'} icon="check" loading={create.isPending || update.isPending} onPress={() => void submit()} testID="button-save-portion" />
     {entry ? (confirmDelete ? <Card tone="danger">
-      <Text style={{ fontFamily: F.bold, color: '#943d33', fontSize: 15 }}>Remove {entry.food.name} from {cap(entry.meal)}?</Text>
+      <Text style={{ fontFamily: F.bold, color: c.destructive, fontSize: 15 }}>Remove {entry.food.name} from {cap(entry.meal)}?</Text>
       {remove.isError ? <ErrorBox error={remove.error} /> : null}
       <Btn variant="danger" icon="trash-2" label="Yes, delete portion" loading={remove.isPending} testID="button-confirm-delete-portion" onPress={() => void del()} />
       <Btn variant="ghost" label="Keep it" testID="button-cancel-delete-portion" onPress={() => setConfirmDelete(false)} />

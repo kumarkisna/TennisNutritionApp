@@ -47,11 +47,11 @@ function People() {
     <Btn icon="plus" label="Add person" testID="button-add-person" onPress={() => router.push('/person-form')} />
     {confirming ? <Card tone="danger" style={{ gap: 12 }}>
       <View testID="panel-confirm-delete-person" accessibilityRole="alert" style={{ gap: 10 }}>
-        <Text style={{ fontFamily: F.bold, fontSize: 17, color: '#943d33' }}>Delete {confirming.name} and ALL their planned meals?</Text>
-        <Text style={{ fontFamily: F.regular, fontSize: 13.5, lineHeight: 20, color: '#743e39' }}>This permanently deletes this person and every meal entry in their plan, across all dates. It cannot be undone. Your shared foods and other people's plans remain.</Text>
+        <Text style={{ fontFamily: F.bold, fontSize: 17, color: c.destructive }}>Delete {confirming.name} and ALL their planned meals?</Text>
+        <Text style={{ fontFamily: F.regular, fontSize: 13.5, lineHeight: 20, color: c.destructive }}>This permanently deletes this person and every meal entry in their plan, across all dates. It cannot be undone. Your shared foods and other people's plans remain.</Text>
         <Pressable testID="checkbox-confirm-delete-person" accessibilityRole="checkbox" accessibilityState={{ checked: confirmed }} onPress={() => { tap(); setConfirmed(v => !v); }} style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start' }}>
-          <Feather name={confirmed ? 'check-square' : 'square'} size={22} color="#a6473a" />
-          <Text style={{ flex: 1, fontFamily: F.semi, fontSize: 13.5, color: '#743e39' }}>I understand all of {confirming.name}'s planned meals will be deleted.</Text>
+          <Feather name={confirmed ? 'check-square' : 'square'} size={22} color={c.destructive} />
+          <Text style={{ flex: 1, fontFamily: F.semi, fontSize: 13.5, color: c.destructive }}>I understand all of {confirming.name}'s planned meals will be deleted.</Text>
         </Pressable>
         {remove.isError ? <ErrorBox error={remove.error} /> : null}
         <Btn variant="danger" icon="trash-2" label="Delete person and meals" disabled={!confirmed} loading={remove.isPending} testID="button-confirm-delete-person" onPress={() => void del()} />

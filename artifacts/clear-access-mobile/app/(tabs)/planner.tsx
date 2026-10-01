@@ -30,7 +30,7 @@ export default function Planner() {
     <View testID="control-plan-date" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
       <IconBtn icon="chevron-left" label="Previous day" testID="button-previous-day" onPress={() => setDate(shiftDate(date, -1))} />
       <TextInput testID="input-plan-date" value={draft ?? date} onChangeText={setDraft} onBlur={commit} onSubmitEditing={commit} placeholder="YYYY-MM-DD" autoCapitalize="none" keyboardType="numbers-and-punctuation" maxLength={10}
-        style={{ flex: 1, minHeight: 42, borderRadius: 999, borderWidth: 1, borderColor: draft !== null && !isIsoDate(draft) ? c.destructive : c.input, backgroundColor: c.card, textAlign: 'center', fontFamily: F.bold, fontSize: 14, color: c.foreground }} />
+        style={{ flex: 1, minHeight: 42, borderRadius: 999, borderWidth: 1, borderColor: draft !== null && !isIsoDate(draft) ? c.destructiveBorder : c.input, backgroundColor: c.card, textAlign: 'center', fontFamily: F.bold, fontSize: 14, color: c.foreground }} />
       <IconBtn icon="chevron-right" label="Next day" testID="button-next-day" onPress={() => setDate(shiftDate(date, 1))} />
       {date !== today() ? <Btn small variant="ghost" label="Today" testID="button-today" onPress={() => setDate(today())} /> : null}
     </View>

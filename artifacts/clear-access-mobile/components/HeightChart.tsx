@@ -59,7 +59,7 @@ export default function HeightChart({ mode, records, person, today }: Props) {
   const plotWidth = width - MARGIN.left - MARGIN.right;
   const plotHeight = HEIGHT - MARGIN.top - MARGIN.bottom;
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const chartColors = { median: c.primary, edge: c.mutedForeground, measurement: c.coral };
+  const chartColors = { median: c.primary, edge: c.mutedForeground, measurement: c.chartMeasurement };
 
   const historyPlot = useMemo(() => getHistoryPlot(records), [records]);
   const chronological = historyPlot.points;

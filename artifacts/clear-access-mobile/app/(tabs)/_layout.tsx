@@ -1,4 +1,4 @@
-import { Platform, StyleSheet, View, useColorScheme } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { Tabs } from 'expo-router';
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
 import { isLiquidGlassAvailable } from 'expo-glass-effect';
@@ -9,7 +9,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 
 function NativeTabLayout() {
-  return <NativeTabs>
+  const c = useColors();
+  return <NativeTabs tintColor={c.primary} backgroundColor={c.card}>
     <NativeTabs.Trigger name="index"><NativeTabs.Trigger.Icon sf={{ default: 'house', selected: 'house.fill' }} /><NativeTabs.Trigger.Label>Overview</NativeTabs.Trigger.Label></NativeTabs.Trigger>
     <NativeTabs.Trigger name="planner"><NativeTabs.Trigger.Icon sf={{ default: 'calendar', selected: 'calendar' }} /><NativeTabs.Trigger.Label>Planner</NativeTabs.Trigger.Label></NativeTabs.Trigger>
     <NativeTabs.Trigger name="foods"><NativeTabs.Trigger.Icon sf={{ default: 'fork.knife', selected: 'fork.knife' }} /><NativeTabs.Trigger.Label>Foods</NativeTabs.Trigger.Label></NativeTabs.Trigger>
@@ -19,7 +20,7 @@ function NativeTabLayout() {
 
 function ClassicTabLayout() {
   const c = useColors();
-  const dark = useColorScheme() === 'dark';
+  const dark = c.isDark;
   const insets = useSafeAreaInsets();
   const ios = Platform.OS === 'ios';
   const web = Platform.OS === 'web';

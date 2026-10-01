@@ -59,7 +59,7 @@ export function SectionTitle({ kicker, children, right }: { kicker?: string; chi
 export function Card({ children, style, tone = 'card' }: { children: ReactNode; style?: ViewStyle; tone?: 'card' | 'ink' | 'mint' | 'danger' }) {
   const c = useColors();
   const bg = tone === 'ink' ? c.ink : tone === 'mint' ? c.accent : tone === 'danger' ? c.destructiveSoft : c.card;
-  const bd = tone === 'ink' ? c.ink : tone === 'mint' ? '#c6ded5' : tone === 'danger' ? '#efc8bf' : c.border;
+  const bd = tone === 'ink' ? c.ink : tone === 'mint' ? c.accentBorder : tone === 'danger' ? c.destructiveBorder : c.border;
   return <View style={[{ backgroundColor: bg, borderColor: bd, borderWidth: 1, borderRadius: 20, padding: 18, gap: 10 }, style]}>{children}</View>;
 }
 
@@ -69,7 +69,7 @@ export function Btn({ label, onPress, icon, variant = 'primary', disabled, loadi
   const fg = variant === 'primary' ? c.primaryForeground : variant === 'danger' ? c.destructive : c.foreground;
   const off = disabled || loading;
   return <Pressable testID={testID} accessibilityRole="button" disabled={off} onPress={() => { tap(); onPress(); }}
-    style={({ pressed }) => ({ backgroundColor: bg, borderRadius: 999, minHeight: small ? 38 : 48, paddingHorizontal: small ? 14 : 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: off ? 0.5 : pressed ? 0.8 : 1, borderWidth: variant === 'primary' ? 0 : 1, borderColor: variant === 'danger' ? '#efd0c6' : c.border, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
+    style={({ pressed }) => ({ backgroundColor: bg, borderRadius: 999, minHeight: small ? 38 : 48, paddingHorizontal: small ? 14 : 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: off ? 0.5 : pressed ? 0.8 : 1, borderWidth: variant === 'primary' ? 0 : 1, borderColor: variant === 'danger' ? c.destructiveBorder : c.border, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
     {loading ? <ActivityIndicator color={fg} size="small" /> : icon ? <Feather name={icon} size={small ? 14 : 16} color={fg} /> : null}
     <Text style={{ fontFamily: F.bold, fontSize: small ? 12 : 14, color: fg }}>{label}</Text>
   </Pressable>;
@@ -85,8 +85,8 @@ export function IconBtn({ icon, onPress, label, testID, color }: { icon: IconNam
 export function Field({ label, hint, ...props }: TextInputProps & { label: string; hint?: string }) {
   const c = useColors();
   return <View style={{ gap: 6 }}>
-    <Text style={{ fontFamily: F.bold, fontSize: 11.5, color: '#3c575e' }}>{label}</Text>
-    <TextInput placeholderTextColor={c.mutedForeground} {...props}
+    <Text style={{ fontFamily: F.bold, fontSize: 11.5, color: c.foreground }}>{label}</Text>
+    <TextInput keyboardAppearance={c.isDark ? 'dark' : 'light'} selectionColor={c.primary} placeholderTextColor={c.mutedForeground} {...props}
       style={[{ minHeight: 48, borderRadius: 12, borderWidth: 1, borderColor: c.input, backgroundColor: c.card, paddingHorizontal: 14, paddingVertical: 10, fontFamily: F.medium, fontSize: 15, color: c.foreground }, props.multiline ? { minHeight: 80, textAlignVertical: 'top' } : null]} />
     {hint ? <Muted>{hint}</Muted> : null}
   </View>;
@@ -113,15 +113,15 @@ export function LoadingBlock({ rows = 3, height = 76 }: { rows?: number; height?
 }
 export function ErrorBox({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   const c = useColors();
-  return <View accessibilityRole="alert" testID="status-api-error" style={{ backgroundColor: c.destructiveSoft, borderColor: '#efc8bf', borderWidth: 1, borderRadius: 14, padding: 14, gap: 10 }}>
-    <Text style={{ fontFamily: F.medium, fontSize: 13, lineHeight: 19, color: '#943d33' }}>{errorMessage(error)}</Text>
+  return <View accessibilityRole="alert" testID="status-api-error" style={{ backgroundColor: c.destructiveSoft, borderColor: c.destructiveBorder, borderWidth: 1, borderRadius: 14, padding: 14, gap: 10 }}>
+    <Text style={{ fontFamily: F.medium, fontSize: 13, lineHeight: 19, color: c.destructive }}>{errorMessage(error)}</Text>
     {onRetry ? <View style={{ alignSelf: 'flex-start' }}><Btn label="Try again" variant="danger" small icon="refresh-cw" onPress={onRetry} testID="button-retry-request" /></View> : null}
   </View>;
 }
 export function EmptyState({ icon, title, description, actionLabel, onAction }: { icon: IconName; title: string; description: string; actionLabel?: string; onAction?: () => void }) {
   const c = useColors();
-  return <View testID="status-empty" style={{ borderWidth: 1, borderStyle: 'dashed', borderColor: '#c9d7cb', backgroundColor: '#f3f7f0', borderRadius: 18, padding: 24, gap: 8, alignItems: 'flex-start' }}>
-    <View style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: '#dcebe0', alignItems: 'center', justifyContent: 'center' }}><Feather name={icon} size={19} color={c.primary} /></View>
+  return <View testID="status-empty" style={{ borderWidth: 1, borderStyle: 'dashed', borderColor: c.accentBorder, backgroundColor: c.secondary, borderRadius: 18, padding: 24, gap: 8, alignItems: 'flex-start' }}>
+    <View style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: c.accent, borderWidth: 1, borderColor: c.accentBorder, alignItems: 'center', justifyContent: 'center' }}><Feather name={icon} size={19} color={c.accentForeground} /></View>
     <Text style={{ fontFamily: F.bold, fontSize: 17, letterSpacing: -0.4, color: c.foreground, marginTop: 6 }}>{title}</Text>
     <Muted>{description}</Muted>
     {actionLabel && onAction ? <View style={{ marginTop: 8 }}><Btn label={actionLabel} onPress={onAction} testID="button-empty-action" /></View> : null}
@@ -132,7 +132,7 @@ export function CaloriesMacros({ calories, protein, carbs, fat, testPrefix, larg
   calories: number; protein: number; carbs: number; fat: number; testPrefix: string; large?: boolean; light?: boolean;
 }) {
   const c = useColors();
-  const text = light ? c.primaryForeground : c.foreground;
+  const text = light ? c.inkForeground : c.foreground;
   const quiet = light ? c.inkSoft : c.mutedForeground;
   const metrics = [
     { key: 'calories', value: calories, label: 'kcal', color: text, precision: 0 },
@@ -157,9 +157,9 @@ export function CaloriesMacros({ calories, protein, carbs, fat, testPrefix, larg
 export function NutritionGrid({ nutrition, light }: { nutrition: Pick<Nutrition, 'protein' | 'carbs' | 'fat' | 'fiber'>; light?: boolean }) {
   const c = useColors();
   return <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-    {(['protein', 'carbs', 'fat', 'fiber'] as const).map(k => <View key={k} style={{ flexGrow: 1, flexBasis: '45%', backgroundColor: light ? '#2a4a58' : c.secondary, borderRadius: 12, padding: 12 }}>
+    {(['protein', 'carbs', 'fat', 'fiber'] as const).map(k => <View key={k} style={{ flexGrow: 1, flexBasis: '45%', backgroundColor: light ? c.inkSecondary : c.secondary, borderRadius: 12, padding: 12 }}>
       <Text style={{ fontFamily: F.semi, fontSize: 10, letterSpacing: 1.2, textTransform: 'uppercase', color: light ? c.inkSoft : c.mutedForeground }}>{k}</Text>
-      <Text testID={`value-${k}`} style={{ fontFamily: F.bold, fontSize: 20, letterSpacing: -0.6, color: light ? c.primaryForeground : c.foreground }}>{n(nutrition[k], 1)}<Text style={{ fontSize: 12, fontFamily: F.medium }}> g</Text></Text>
+      <Text testID={`value-${k}`} style={{ fontFamily: F.bold, fontSize: 20, letterSpacing: -0.6, color: light ? c.inkForeground : c.foreground }}>{n(nutrition[k], 1)}<Text style={{ fontSize: 12, fontFamily: F.medium }}> g</Text></Text>
     </View>)}
   </View>;
 }
@@ -168,5 +168,6 @@ export function FiberNote() {
 }
 export const DISCLAIMER = 'Nutrition values are approximate, including community-submitted products. Verify labels when accuracy matters. Planning targets are estimates, not personalized medical advice.';
 export function Text0({ children }: { children: ReactNode }) {
-  return <Text style={{ fontFamily: F.bold, fontSize: 15, lineHeight: 21, color: '#943d33' }}>{children}</Text>;
+  const c = useColors();
+  return <Text style={{ fontFamily: F.bold, fontSize: 15, lineHeight: 21, color: c.destructive }}>{children}</Text>;
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
+import { useColors } from '@/hooks/useColors';
 import { Btn, Card, ErrorBox, Eyebrow, Muted } from './ui';
 import { usePlanner } from '@/contexts/PlannerProvider';
 import {
@@ -15,6 +16,7 @@ const totals = (preview: Preview) =>
   `${preview.people.length} people · ${preview.foods} foods · ${preview.entries} meals · ${preview.activities} activities · ${preview.heightRecords} height records`;
 
 export function LocalBackup() {
+  const c = useColors();
   const client = useQueryClient();
   const { selectPerson } = usePlanner();
   const [busy, setBusy] = useState(false);
@@ -82,12 +84,12 @@ export function LocalBackup() {
       {pending.incoming.people.map(person => <Muted key={person.id}>{person.name}: {person.entries} meals, {person.activities} activities, {person.heightRecords} height records; saved personal settings included.</Muted>)}
       <Muted>Currently on this device: {totals(pending.current)}</Muted>
       <Muted>People being replaced: {pending.current.people.map(person => person.name).join(', ')}.</Muted>
-      <Text style={{ fontFamily: 'Inter_700Bold', color: '#a84330' }}>Replace ALL local planner records with this backup? This does not merge records. Save a backup of the current records first if you want to keep them.</Text>
+      <Text style={{ fontFamily: 'Inter_700Bold', color: c.destructive }}>Replace ALL local planner records with this backup? This does not merge records. Save a backup of the current records first if you want to keep them.</Text>
       <Btn label="Replace all records & restore" icon="alert-triangle" variant="danger" loading={busy} testID="button-confirm-restore" onPress={() => void restore()} />
       <Btn label="Cancel — keep current records" variant="ghost" disabled={busy} testID="button-cancel-restore" onPress={() => { setPending(null); setError(null); }} />
     </View> : null}
     {busy && !pending ? <Muted>Preparing backup…</Muted> : null}
     {error ? <ErrorBox error={error} /> : null}
-    {notice ? <Text testID="status-backup" style={{ fontFamily: 'Inter_600SemiBold', color: '#176d61' }}>{notice}</Text> : null}
+    {notice ? <Text testID="status-backup" style={{ fontFamily: 'Inter_600SemiBold', color: c.primary }}>{notice}</Text> : null}
   </Card>;
 }
