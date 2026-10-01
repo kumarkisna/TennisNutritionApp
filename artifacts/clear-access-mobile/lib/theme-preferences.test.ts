@@ -27,10 +27,10 @@ function contrast(a: string, b: string) {
   return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05);
 }
 
-test('exactly 74 unique complete themes retain the original 20 and include the requested warm themes', () => {
-  assert.equal(themes.length, 74);
-  assert.equal(new Set(themes.map(theme => theme.id)).size, 74);
-  assert.equal(new Set(themes.map(theme => theme.name)).size, 74);
+test('exactly 76 unique complete themes retain the original 20 and include the requested warm themes', () => {
+  assert.equal(themes.length, 76);
+  assert.equal(new Set(themes.map(theme => theme.id)).size, 76);
+  assert.equal(new Set(themes.map(theme => theme.name)).size, 76);
   assert.deepEqual(themes.slice(0, 20).map(theme => theme.id), [
     'classic', 'forest', 'mint', 'ocean', 'sky', 'lavender', 'rose', 'peach', 'sunflower', 'terracotta',
     'midnight', 'charcoal', 'deep-forest', 'deep-ocean', 'amethyst', 'burgundy', 'espresso', 'graphite',
@@ -42,6 +42,8 @@ test('exactly 74 unique complete themes retain the original 20 and include the r
   assert.ok(themes.some(theme => theme.id === 'orange-dark' && theme.mode === 'dark'));
   assert.ok(themes.some(theme => theme.id === 'saffron' && theme.name === 'Saffron'));
   assert.ok(themes.some(theme => theme.id === 'sunrise' && theme.name === 'Sunrise'));
+  assert.ok(themes.some(theme => theme.id === 'saffron-dark' && theme.name === 'Saffron Dark' && theme.mode === 'dark'));
+  assert.ok(themes.some(theme => theme.id === 'sunrise-dark' && theme.name === 'Sunrise Dark' && theme.mode === 'dark'));
   const tokens = Object.keys(themes[0].palette).sort();
   for (const theme of themes) {
     assert.deepEqual(Object.keys(theme.palette).sort(), tokens);

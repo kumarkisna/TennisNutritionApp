@@ -60,4 +60,6 @@ export const extraDarkThemes: readonly DarkSpec[] = [
   ['neon-mint', 'Neon Mint', '#091a17', '#142d27', '#8dffd0', '#244138', '#17332b'],
   ['neon-lilac', 'Neon Lilac', '#1b1028', '#2e1e3c', '#e8b2ff', '#42304f', '#2e2142'],
   ['orange-dark', 'Orange Dark', '#22120b', '#352016', '#ffbb73', '#4a2d1e', '#382113'],
+  ['saffron-dark', 'Saffron Dark', '#231909', '#352713', '#ffd080', '#4b381d', '#382911'],
+  ['sunrise-dark', 'Sunrise Dark', '#281419', '#3c2429', '#ffba99', '#50353b', '#3b232a'],
 ];
