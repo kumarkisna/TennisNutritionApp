@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useListFoods, type Food } from '@/lib/local-api';
 import { useColors } from '@/hooks/useColors';
-import { Btn, Card, Chips, DISCLAIMER, EmptyState, ErrorBox, Eyebrow, F, LoadingBlock, Muted, Screen, Title } from '@/components/ui';
+import { Btn, CaloriesMacros, Card, Chips, DISCLAIMER, EmptyState, ErrorBox, Eyebrow, F, LoadingBlock, Muted, Screen, Title } from '@/components/ui';
 import { cap, n } from '@/lib/format';
 
 type Filter = 'all' | 'custom' | 'open_food_facts' | 'reference';
@@ -41,9 +41,9 @@ export default function Foods() {
         shown.map(f => <Card key={f.id} style={{ gap: 6 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
             <View style={{ flex: 1 }}><Text testID={`text-food-${f.id}`} style={{ fontFamily: F.bold, fontSize: 15, color: c.foreground }}>{f.name}</Text><Muted>{sourceLabel(f)}{f.brand ? ` · ${f.brand}` : ''}</Muted></View>
-            <Text style={{ fontFamily: F.bold, fontSize: 16, color: c.foreground }}>{n(f.caloriesPer100g)} <Text style={{ fontSize: 11, color: c.mutedForeground }}>kcal</Text></Text>
+            <CaloriesMacros calories={f.caloriesPer100g} protein={f.proteinPer100g} carbs={f.carbsPer100g} testPrefix={`food-${f.id}`} />
           </View>
-          <Muted>P {n(f.proteinPer100g, 1)} · C {n(f.carbsPer100g, 1)} · F {n(f.fatPer100g, 1)} · Fiber {f.fiberKnown ? `${n(f.fiberPer100g, 1)} g` : 'not reported'}</Muted>
+          <Muted>Fat {n(f.fatPer100g, 1)} g · Fiber {f.fiberKnown ? `${n(f.fiberPer100g, 1)} g` : 'not reported'}</Muted>
           <Muted>{minerals(f)}</Muted>
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
             {f.source === 'custom' ? <Btn small variant="ghost" icon="edit-2" label="Edit" testID={`button-edit-food-${f.id}`} onPress={() => router.push({ pathname: '/food-form', params: { id: String(f.id) } })} /> : null}

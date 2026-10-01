@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCreateMealEntry, useDeleteMealEntry, useListFoods, useListMealEntries, useUpdateMealEntry, type Food, type Meal } from '@/lib/local-api';
 import { usePlanner } from '@/contexts/PlannerProvider';
 import { useColors } from '@/hooks/useColors';
-import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, LoadingBlock, Muted, Screen, Title, success, tap, warn } from '@/components/ui';
+import { Btn, CaloriesMacros, Card, Chips, ErrorBox, Eyebrow, F, Field, LoadingBlock, Muted, Screen, Title, success, tap, warn } from '@/components/ui';
 import { cap, dateLabel, n } from '@/lib/format';
 
 const mealOptions: { value: Meal; label: string }[] = (['breakfast', 'lunch', 'dinner', 'snack'] as Meal[]).map(m => ({ value: m, label: cap(m) }));
@@ -62,7 +62,7 @@ function Portion() {
         <View style={{ borderWidth: 1, borderColor: c.border, borderRadius: 14, overflow: 'hidden', backgroundColor: c.card }}>
           {foods.data.slice(0, 40).map(f => { const on = selected?.id === f.id; return <Pressable key={f.id} testID={`button-select-food-${f.id}`} onPress={() => { tap(); setSelected(f); }} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8, padding: 13, borderBottomWidth: 1, borderBottomColor: c.border, backgroundColor: on ? c.accent : 'transparent' }}>
             <Text style={{ flex: 1, fontFamily: on ? F.bold : F.medium, fontSize: 14, color: on ? c.primary : c.foreground }}>{f.name}<Text style={{ fontFamily: F.regular, fontSize: 11, color: c.mutedForeground }}>  {f.source === 'open_food_facts' ? 'Saved' : cap(f.category)}</Text></Text>
-            <Text style={{ fontFamily: F.semi, fontSize: 13, color: c.foreground }}>{n(f.caloriesPer100g)} kcal</Text></Pressable>; })}
+            <CaloriesMacros calories={f.caloriesPer100g} protein={f.proteinPer100g} carbs={f.carbsPer100g} testPrefix={`portion-food-${f.id}`} /></Pressable>; })}
         </View>}
     </>}
     <Text style={{ fontFamily: F.bold, fontSize: 11.5, color: '#3c575e' }}>Meal</Text>
@@ -70,7 +70,10 @@ function Portion() {
     <Field label="Portion in grams" value={gramsText} onChangeText={setGrams} keyboardType="decimal-pad" testID="input-portion-grams" />
     {food ? <Card>
       <Eyebrow>{food.name} / {valid ? n(amount, 1) : '?'} g</Eyebrow>
-      {scaled ? <Text style={{ fontFamily: F.bold, fontSize: 22, color: c.foreground }}>{n(scaled.kcal)} kcal <Text style={{ fontSize: 12, fontFamily: F.medium, color: c.mutedForeground }}>P {n(scaled.p, 1)} · C {n(scaled.cb, 1)} · F {n(scaled.f, 1)} g</Text></Text> : <Muted>Enter 1 to 3,000 g to preview.</Muted>}
+      {scaled ? <>
+        <CaloriesMacros large calories={scaled.kcal} protein={scaled.p} carbs={scaled.cb} testPrefix="portion-preview" />
+        <Muted>Fat {n(scaled.f, 1)} g</Muted>
+      </> : <Muted>Enter 1 to 3,000 g to preview.</Muted>}
       <Muted>Calcium {food.calciumMgPer100g === null ? 'unknown' : `${n(food.calciumMgPer100g * (valid ? amount : 0) / 100, 1)} mg`} · Iron {food.ironMgPer100g === null ? 'unknown' : `${n(food.ironMgPer100g * (valid ? amount : 0) / 100, 2)} mg`}</Muted>
     </Card> : null}
     {problem ? <ErrorBox error={new Error(problem)} /> : null}

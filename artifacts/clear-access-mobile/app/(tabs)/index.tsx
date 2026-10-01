@@ -4,7 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import { useGetDailySummary, type Meal } from '@/lib/local-api';
 import { usePlanner } from '@/contexts/PlannerProvider';
 import { useColors } from '@/hooks/useColors';
-import { Btn, Card, DISCLAIMER, ErrorBox, Eyebrow, F, FiberNote, LoadingBlock, Muted, NutritionGrid, Screen, SectionTitle, Title, tap } from '@/components/ui';
+import { Btn, CaloriesMacros, Card, DISCLAIMER, ErrorBox, Eyebrow, F, FiberNote, LoadingBlock, Muted, NutritionGrid, Screen, SectionTitle, Title, tap } from '@/components/ui';
 import { cap, dateLabel, n } from '@/lib/format';
 
 const meals: Meal[] = ['breakfast', 'lunch', 'dinner', 'snack'];
@@ -27,16 +27,13 @@ export default function Overview() {
       <Feather name="chevron-right" size={16} color={c.primary} />
     </Pressable>
     <Card tone="ink" style={{ gap: 14 }}>
-      <Eyebrow light>This day's energy / planned</Eyebrow>
+      <Eyebrow light>Planned calories + macros</Eyebrow>
       {summary.isLoading ? <LoadingBlock rows={1} height={64} /> : summary.isError ? <ErrorBox error={summary.error} onRetry={() => summary.refetch()} /> : <>
-        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
-          <Text testID="value-total-calories" style={{ fontFamily: F.bold, fontSize: 56, letterSpacing: -3, color: c.primaryForeground, lineHeight: 60 }}>{n(total)}</Text>
-          <Text style={{ fontFamily: F.medium, fontSize: 13, color: c.inkSoft, paddingBottom: 8 }}>kcal planned</Text>
-        </View>
+        <CaloriesMacros large light calories={total} protein={summary.data?.totals.protein ?? 0} carbs={summary.data?.totals.carbs ?? 0} testPrefix="total" />
         <View style={{ height: 8, borderRadius: 4, backgroundColor: '#45606a', overflow: 'hidden' }}><View style={{ width: `${pct}%`, height: 8, backgroundColor: c.mint, borderRadius: 4 }} /></View>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           <Text style={{ fontFamily: F.regular, fontSize: 12, color: c.inkSoft }}>{summary.data?.entryCount ?? 0} portions planned</Text>
-          <Text testID="value-overview-target" style={{ fontFamily: F.regular, fontSize: 12, color: c.inkSoft }}>Target ~{n(person.targetCalories)} kcal</Text>
+           <Text testID="value-overview-target" style={{ fontFamily: F.regular, fontSize: 12, color: c.inkSoft }}>Calorie target ~{n(person.targetCalories)} kcal</Text>
         </View></>}
     </Card>
     <Btn label="Plan this day" icon="arrow-right" testID="link-overview-plan-day" onPress={() => { setDate(date); router.push('/planner'); }} />
@@ -52,7 +49,7 @@ export default function Overview() {
       return <Pressable key={meal} testID={`link-overview-meal-${meal}`} onPress={() => { tap(); setDate(date); router.push('/planner'); }} style={{ flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: c.card, borderColor: c.border, borderWidth: 1, borderRadius: 18, padding: 16 }}>
         <Text style={{ fontFamily: F.semi, fontSize: 11, color: c.primary }}>0{i + 1}</Text>
         <View style={{ flex: 1 }}><Text style={{ fontFamily: F.bold, fontSize: 15, color: c.foreground }}>{cap(meal)}</Text><Muted>{d?.count ?? 0} {d?.count === 1 ? 'portion' : 'portions'}</Muted></View>
-        <Text style={{ fontFamily: F.bold, fontSize: 17, color: c.foreground }}>{n(d?.nutrition.calories ?? 0)} <Text style={{ fontSize: 11, color: c.mutedForeground }}>kcal</Text></Text>
+        <CaloriesMacros calories={d?.nutrition.calories ?? 0} protein={d?.nutrition.protein ?? 0} carbs={d?.nutrition.carbs ?? 0} testPrefix={`overview-${meal}`} />
         <Feather name="chevron-right" size={16} color={c.mutedForeground} />
       </Pressable>;
     })}
