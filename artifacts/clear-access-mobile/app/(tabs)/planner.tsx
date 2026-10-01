@@ -5,6 +5,7 @@ import { useGetDailySummary, useListMealEntries, type Meal } from '@/lib/local-a
 import { usePlanner } from '@/contexts/PlannerProvider';
 import { useColors } from '@/hooks/useColors';
 import { ReferencePanel } from '@/components/ReferencePanel';
+import { PlanningTargets } from '@/components/PlanningTargets';
 import { Btn, CaloriesMacros, Card, DISCLAIMER, ErrorBox, Eyebrow, F, FiberNote, IconBtn, LoadingBlock, Muted, NutritionGrid, Screen, SectionTitle, Title, tap } from '@/components/ui';
 import { cap, dateLabel, isIsoDate, n, shiftDate, today } from '@/lib/format';
 
@@ -37,8 +38,12 @@ export default function Planner() {
 
     {summary.isLoading ? <LoadingBlock rows={1} height={94} /> : summary.data && !summary.isError ? <Card>
       <Eyebrow>Day totals / planned</Eyebrow>
-      <CaloriesMacros large calories={summary.data.totals.calories} protein={summary.data.totals.protein} carbs={summary.data.totals.carbs} testPrefix="planner-total" />
+      <CaloriesMacros large calories={summary.data.totals.calories} protein={summary.data.totals.protein} carbs={summary.data.totals.carbs} fat={summary.data.totals.fat} testPrefix="planner-total" />
     </Card> : null}
+    <Card>
+      <Eyebrow>Planning targets</Eyebrow>
+      <PlanningTargets person={person} date={date} testPrefix="planner-target" />
+    </Card>
     <ReferencePanel person={person} date={date} totals={summary.data?.totals} summaryLoading={summary.isLoading} summaryError={summary.isError} />
     {summary.isError ? <ErrorBox error={summary.error} onRetry={() => summary.refetch()} /> : null}
 
@@ -51,14 +56,14 @@ export default function Planner() {
            <View style={{ flex: 1 }}><Text style={{ fontFamily: F.bold, fontSize: 18, color: c.foreground }}>{cap(meal)}</Text><Muted>{list.length} {list.length === 1 ? 'portion' : 'portions'}</Muted></View>
           <Btn small icon="plus" label="Add" testID={`button-add-${meal}`} onPress={() => router.push({ pathname: '/portion', params: { meal } })} />
         </View>
-        {summary.isLoading ? <LoadingBlock rows={1} height={52} /> : !summary.isError && ms ? <CaloriesMacros calories={ms.nutrition.calories} protein={ms.nutrition.protein} carbs={ms.nutrition.carbs} testPrefix={`meal-${meal}`} /> : null}
+        {summary.isLoading ? <LoadingBlock rows={1} height={70} /> : !summary.isError && ms ? <CaloriesMacros calories={ms.nutrition.calories} protein={ms.nutrition.protein} carbs={ms.nutrition.carbs} fat={ms.nutrition.fat} testPrefix={`meal-${meal}`} /> : null}
         {list.length === 0 ? <Muted>Nothing planned for {meal} yet.</Muted> : list.map(e => <Pressable key={e.id} testID={`row-entry-${e.id}`} onPress={() => { tap(); router.push({ pathname: '/portion', params: { meal, entryId: String(e.id) } }); }}
           style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 10, gap: 2 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
             <Text style={{ flex: 1, fontFamily: F.semi, fontSize: 14, color: c.foreground }}>{e.food.name}</Text>
-            <CaloriesMacros calories={e.nutrition.calories} protein={e.nutrition.protein} carbs={e.nutrition.carbs} testPrefix={`entry-${e.id}`} />
+            <CaloriesMacros calories={e.nutrition.calories} protein={e.nutrition.protein} carbs={e.nutrition.carbs} fat={e.nutrition.fat} testPrefix={`entry-${e.id}`} />
           </View>
-          <Muted>{n(e.grams, 1)} g · Fat {n(e.nutrition.fat, 1)} g · tap to edit</Muted>
+          <Muted>{n(e.grams, 1)} g · tap to edit</Muted>
         </Pressable>)}
       </Card>;
     })}

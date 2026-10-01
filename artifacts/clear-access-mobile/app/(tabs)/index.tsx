@@ -6,6 +6,7 @@ import { usePlanner } from '@/contexts/PlannerProvider';
 import { useColors } from '@/hooks/useColors';
 import { Btn, CaloriesMacros, Card, DISCLAIMER, ErrorBox, Eyebrow, F, FiberNote, LoadingBlock, Muted, NutritionGrid, Screen, SectionTitle, Title, tap } from '@/components/ui';
 import { cap, dateLabel, n } from '@/lib/format';
+import { PlanningTargets } from '@/components/PlanningTargets';
 
 const meals: Meal[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 
@@ -29,7 +30,7 @@ export default function Overview() {
     <Card tone="ink" style={{ gap: 14 }}>
       <Eyebrow light>Planned calories + macros</Eyebrow>
       {summary.isLoading ? <LoadingBlock rows={1} height={64} /> : summary.isError ? <ErrorBox error={summary.error} onRetry={() => summary.refetch()} /> : <>
-        <CaloriesMacros large light calories={total} protein={summary.data?.totals.protein ?? 0} carbs={summary.data?.totals.carbs ?? 0} testPrefix="total" />
+        <CaloriesMacros large light calories={total} protein={summary.data?.totals.protein ?? 0} carbs={summary.data?.totals.carbs ?? 0} fat={summary.data?.totals.fat ?? 0} testPrefix="total" />
         <View style={{ height: 8, borderRadius: 4, backgroundColor: '#45606a', overflow: 'hidden' }}><View style={{ width: `${pct}%`, height: 8, backgroundColor: c.mint, borderRadius: 4 }} /></View>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           <Text style={{ fontFamily: F.regular, fontSize: 12, color: c.inkSoft }}>{summary.data?.entryCount ?? 0} portions planned</Text>
@@ -38,10 +39,11 @@ export default function Overview() {
     </Card>
     <Btn label="Plan this day" icon="arrow-right" testID="link-overview-plan-day" onPress={() => { setDate(date); router.push('/planner'); }} />
     <Card>
-      <Eyebrow>{person.name}'s planning target</Eyebrow>
-      <Text testID="value-target-calories" style={{ fontFamily: F.bold, fontSize: 34, letterSpacing: -1.6, color: c.foreground }}>{n(person.targetCalories)} <Text style={{ fontSize: 13, fontFamily: F.medium, color: c.mutedForeground }}>kcal / day</Text></Text>
+      <Eyebrow>{person.name}'s planning targets</Eyebrow>
+      <PlanningTargets person={person} date={date} />
       <Muted>{cap(person.activityLevel)} activity · {n(person.baselineCalories)} baseline × {person.activityMultiplier}</Muted>
-      <View style={{ alignSelf: 'flex-start' }}><Btn small variant="ghost" label="Adjust target" icon="arrow-right" testID="link-overview-settings" onPress={() => router.push('/settings')} /></View>
+      <View style={{ alignSelf: 'flex-start' }}><Btn small variant="ghost" label="Adjust details and goals" icon="arrow-right" testID="link-overview-settings" onPress={() => router.push('/settings')} /></View>
+      <View style={{ alignSelf: 'flex-start' }}><Btn small variant="ghost" label="Change this day's activity" testID="link-overview-target-activity" onPress={() => router.push('/planner')} /></View>
     </Card>
     <SectionTitle kicker="Day at a glance">The four moments</SectionTitle>
     {summary.isLoading ? <LoadingBlock rows={2} height={64} /> : summary.isError ? <ErrorBox error={summary.error} onRetry={() => summary.refetch()} /> : meals.map((meal, i) => {
@@ -49,7 +51,7 @@ export default function Overview() {
       return <Pressable key={meal} testID={`link-overview-meal-${meal}`} onPress={() => { tap(); setDate(date); router.push('/planner'); }} style={{ flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: c.card, borderColor: c.border, borderWidth: 1, borderRadius: 18, padding: 16 }}>
         <Text style={{ fontFamily: F.semi, fontSize: 11, color: c.primary }}>0{i + 1}</Text>
         <View style={{ flex: 1 }}><Text style={{ fontFamily: F.bold, fontSize: 15, color: c.foreground }}>{cap(meal)}</Text><Muted>{d?.count ?? 0} {d?.count === 1 ? 'portion' : 'portions'}</Muted></View>
-        <CaloriesMacros calories={d?.nutrition.calories ?? 0} protein={d?.nutrition.protein ?? 0} carbs={d?.nutrition.carbs ?? 0} testPrefix={`overview-${meal}`} />
+        <CaloriesMacros calories={d?.nutrition.calories ?? 0} protein={d?.nutrition.protein ?? 0} carbs={d?.nutrition.carbs ?? 0} fat={d?.nutrition.fat ?? 0} testPrefix={`overview-${meal}`} />
         <Feather name="chevron-right" size={16} color={c.mutedForeground} />
       </Pressable>;
     })}

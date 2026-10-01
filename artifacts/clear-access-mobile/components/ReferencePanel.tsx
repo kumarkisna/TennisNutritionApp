@@ -5,17 +5,7 @@ import { getGetDayActivityQueryKey, useGetDayActivity, useSaveDayActivity, type 
 import { useColors } from '@/hooks/useColors';
 import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Muted, success } from '@/components/ui';
 import { n, plannedValue } from '@/lib/format';
-
-// Source: the uploaded Sports Nutrition workbook, "Nutrition Master" sheet. Reference ranges, not clinical requirements.
-const activities: Record<DayActivityKind, { label: string; short: string; detail: string; carbs?: [number, number]; protein: [number, number] }> = {
-  rest: { label: 'Rest or ordinary day', short: 'Rest', detail: 'Basic nutrition; no numeric carbohydrate range in the workbook', protein: [0.8, 1] },
-  low_intensity: { label: 'Low-intensity sport', short: 'Low intensity', detail: 'Gentle training', protein: [0.8, 1] },
-  training_60: { label: 'Training up to 60 minutes', short: 'Up to 60 min', detail: 'Moderate to high intensity', carbs: [5, 6], protein: [0.8, 1] },
-  training_120: { label: 'Training 60–120 minutes', short: '60–120 min', detail: 'Moderate to high intensity, e.g. tennis', carbs: [7, 8], protein: [0.8, 1] },
-  endurance: { label: 'Endurance training 2–5 hours', short: 'Endurance 2–5 h', detail: 'Intense endurance exercise', carbs: [8, 10], protein: [1.2, 1.4] },
-  extreme: { label: 'Extreme training over 5 hours', short: 'Over 5 h', detail: 'Intense endurance exercise', carbs: [10, 10], protein: [1.2, 1.4] },
-  strength: { label: 'Strength or power training', short: 'Strength / power', detail: 'No numeric carbohydrate range for strength in the workbook', protein: [1.6, 1.7] },
-};
+import { sportsActivities as activities, formatWorkbookRange } from '@/lib/planning-targets';
 
 function provenance(source: string | null, reviewedOn: string | null) {
   if (!source && !reviewedOn) return 'No source or professional-review date recorded.';
@@ -54,10 +44,7 @@ export function ReferencePanel({ person, date, totals, summaryLoading, summaryEr
     } catch { /* error shown below */ }
   }
   function target(range?: [number, number]) {
-    if (!range) return 'Not specified in workbook';
-    if (weight === null) return 'Add body weight to calculate';
-    const [lo, hi] = range.map(v => v * weight);
-    return `${n(lo)}${lo === hi ? '' : `–${n(hi)}`} g / day`;
+    return formatWorkbookRange(range, weight);
   }
   const planned = (k: keyof Nutrition, u: string) => summaryError ? 'Unavailable' : summaryLoading || !totals ? 'Loading' : plannedValue(totals, k, u);
   const calcium: [number, number] | undefined = age === null || age < 12 ? undefined : age <= 18 ? [1000, 1200] : [800, 1000];

@@ -41,9 +41,9 @@ export default function Foods() {
         shown.map(f => <Card key={f.id} style={{ gap: 6 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
             <View style={{ flex: 1 }}><Text testID={`text-food-${f.id}`} style={{ fontFamily: F.bold, fontSize: 15, color: c.foreground }}>{f.name}</Text><Muted>{sourceLabel(f)}{f.brand ? ` · ${f.brand}` : ''}</Muted></View>
-            <CaloriesMacros calories={f.caloriesPer100g} protein={f.proteinPer100g} carbs={f.carbsPer100g} testPrefix={`food-${f.id}`} />
+            <CaloriesMacros calories={f.caloriesPer100g} protein={f.proteinPer100g} carbs={f.carbsPer100g} fat={f.fatPer100g} testPrefix={`food-${f.id}`} />
           </View>
-          <Muted>Fat {n(f.fatPer100g, 1)} g · Fiber {f.fiberKnown ? `${n(f.fiberPer100g, 1)} g` : 'not reported'}</Muted>
+          <Muted>Fiber {f.fiberKnown ? `${n(f.fiberPer100g, 1)} g` : 'not reported'}</Muted>
           <Muted>{minerals(f)}</Muted>
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
             {f.source === 'custom' ? <Btn small variant="ghost" icon="edit-2" label="Edit" testID={`button-edit-food-${f.id}`} onPress={() => router.push({ pathname: '/food-form', params: { id: String(f.id) } })} /> : null}

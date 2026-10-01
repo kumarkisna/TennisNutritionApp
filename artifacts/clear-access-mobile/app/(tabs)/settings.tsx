@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PlanningTargets } from '@/components/PlanningTargets';
 import { Text } from 'react-native';
 import { useUpdatePerson, type ActivityLevelType, type Person, type PersonUpdate } from '@/lib/local-api';
 import { usePlanner } from '@/contexts/PlannerProvider';
@@ -82,10 +83,15 @@ function SettingsForm({ person }: { person: Person }) {
 }
 
 export default function Settings() {
-  const { person } = usePlanner();
+  const { person, date } = usePlanner();
   return <Screen tabs>
     <Eyebrow>04 / Settings</Eyebrow>
     <Title sub="Each person keeps their own details. Estimates are for planning only, never medical requirements.">{`${person.name}'s details.`}</Title>
+    <Card>
+      <Eyebrow>Saved planning targets</Eyebrow>
+      <PlanningTargets person={person} date={date} testPrefix="settings-target" />
+      <Muted>These use saved details. Save changes below to update them. Choose the day's planned activity in Planner.</Muted>
+    </Card>
     <SettingsForm key={person.id} person={person} />
   </Screen>;
 }

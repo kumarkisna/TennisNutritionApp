@@ -128,30 +128,29 @@ export function EmptyState({ icon, title, description, actionLabel, onAction }: 
   </View>;
 }
 
-export function CaloriesMacros({ calories, protein, carbs, testPrefix, large = false, light = false }: {
-  calories: number; protein: number; carbs: number; testPrefix: string; large?: boolean; light?: boolean;
+export function CaloriesMacros({ calories, protein, carbs, fat, testPrefix, large = false, light = false }: {
+  calories: number; protein: number; carbs: number; fat: number; testPrefix: string; large?: boolean; light?: boolean;
 }) {
   const c = useColors();
   const text = light ? c.primaryForeground : c.foreground;
   const quiet = light ? c.inkSoft : c.mutedForeground;
-  if (large) return <View style={{ flexDirection: 'row', gap: 12 }}>
-    <View style={{ flex: 1, gap: 3 }}>
-      <Text testID={`value-${testPrefix}-calories`} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={{ fontFamily: F.bold, fontSize: 32, letterSpacing: -1, color: text }}>{n(calories)}</Text>
-      <Text style={{ fontFamily: F.medium, fontSize: 12, color: quiet }}>kcal</Text>
-    </View>
-    <View style={{ flex: 1, gap: 3 }}>
-      <Text testID={`value-${testPrefix}-protein`} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={{ fontFamily: F.bold, fontSize: 32, letterSpacing: -1, color: light ? c.mint : c.primary }}>{n(protein, 1)}</Text>
-      <Text style={{ fontFamily: F.medium, fontSize: 12, color: quiet }}>g protein</Text>
-    </View>
-    <View style={{ flex: 1, gap: 3 }}>
-      <Text testID={`value-${testPrefix}-carbs`} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={{ fontFamily: F.bold, fontSize: 32, letterSpacing: -1, color: light ? c.coral : c.primary }}>{n(carbs, 1)}</Text>
-      <Text style={{ fontFamily: F.medium, fontSize: 12, color: quiet }}>g carbs</Text>
-    </View>
+  const metrics = [
+    { key: 'calories', value: calories, label: 'kcal', color: text, precision: 0 },
+    { key: 'protein', value: protein, label: 'g protein', color: light ? c.mint : c.primary, precision: 1 },
+    { key: 'carbs', value: carbs, label: 'g carbs', color: light ? c.coral : c.primary, precision: 1 },
+    { key: 'fat', value: fat, label: 'g fat', color: text, precision: 1 },
+  ];
+  if (large) return <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+    {metrics.map(metric => <View key={metric.key} style={{ flexBasis: '45%', flexGrow: 1, gap: 3 }}>
+      <Text testID={`value-${testPrefix}-${metric.key}`} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={{ fontFamily: F.bold, fontSize: 32, letterSpacing: -1, color: metric.color }}>{n(metric.value, metric.precision)}</Text>
+      <Text style={{ fontFamily: F.medium, fontSize: 12, color: quiet }}>{metric.label}</Text>
+    </View>)}
   </View>;
   return <View style={{ alignItems: 'flex-end', gap: 3 }}>
     <Text testID={`value-${testPrefix}-calories`} style={{ fontFamily: F.bold, fontSize: 15, color: text }}>{n(calories)} kcal</Text>
     <Text testID={`value-${testPrefix}-protein`} style={{ fontFamily: F.semi, fontSize: 12, color: light ? c.mint : c.primary }}>{n(protein, 1)} g protein</Text>
     <Text testID={`value-${testPrefix}-carbs`} style={{ fontFamily: F.semi, fontSize: 12, color: light ? c.coral : c.primary }}>{n(carbs, 1)} g carbs</Text>
+    <Text testID={`value-${testPrefix}-fat`} style={{ fontFamily: F.semi, fontSize: 12, color: text }}>{n(fat, 1)} g fat</Text>
   </View>;
 }
 
