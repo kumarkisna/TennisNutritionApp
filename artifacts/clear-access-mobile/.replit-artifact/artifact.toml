@@ -1,0 +1,24 @@
+kind = "mobile"
+previewPath = "/clear-access-mobile/"
+title = "Clear Access — Mobile Food Planner"
+description = "Android and iPhone companion to the existing Clear Access food planner, sharing secure sign-in, people profiles, daily meal plans, food library, and sports nutrition comparisons."
+version = "1.0.0"
+id = "artifacts/clear-access-mobile"
+router = "expo-domain"
+
+[[services]]
+name = "expo"
+ensurePreviewReachable = "/status"
+paths = [ "/clear-access-mobile/" ]
+localPort = 24776
+
+[services.development]
+run = "pnpm --filter @workspace/clear-access-mobile run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/clear-access-mobile", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/clear-access-mobile", "run", "serve" ]
+
+[services.env]
+PORT = "24776"
+BASE_PATH = "/clear-access-mobile/"

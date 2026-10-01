@@ -1,0 +1,30 @@
+// Mirrors artifacts/google-signin/src/index.css workspace palette.
+const colors = {
+  light: {
+    text: '#183542',
+    tint: '#176d61',
+    background: '#f7f4ed',
+    foreground: '#183542',
+    card: '#fbfaf6',
+    cardForeground: '#183542',
+    primary: '#176d61',
+    primaryForeground: '#fbfaf6',
+    secondary: '#f1ede4',
+    secondaryForeground: '#183542',
+    muted: '#f1ede4',
+    mutedForeground: '#6d7a79',
+    accent: '#e8f3ed',
+    accentForeground: '#176d61',
+    destructive: '#a6473a',
+    destructiveForeground: '#fbfaf6',
+    destructiveSoft: '#fff0eb',
+    border: '#e0d9ce',
+    input: '#d9d2c5',
+    ink: '#183542',
+    inkSoft: '#b4cec5',
+    mint: '#8acdb4',
+    coral: '#ec8f76',
+  },
+  radius: 14,
+};
+export default colors;

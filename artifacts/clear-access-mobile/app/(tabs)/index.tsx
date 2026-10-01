@@ -1,0 +1,73 @@
+import { Pressable, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Feather } from '@expo/vector-icons';
+import { useGetDailySummary, type Meal } from '@/lib/local-api';
+import { usePlanner } from '@/contexts/PlannerProvider';
+import { useColors } from '@/hooks/useColors';
+import { Btn, Card, DISCLAIMER, ErrorBox, Eyebrow, F, FiberNote, LoadingBlock, Muted, NutritionGrid, Screen, SectionTitle, Title, tap } from '@/components/ui';
+import { cap, dateLabel, n } from '@/lib/format';
+
+const meals: Meal[] = ['breakfast', 'lunch', 'dinner', 'snack'];
+
+export default function Overview() {
+  const c = useColors();
+  const router = useRouter();
+  const { person, date, setDate } = usePlanner();
+  const summary = useGetDailySummary({ date, personId: person.id });
+  const total = summary.data?.totals.calories ?? 0;
+  const pct = Math.min(100, Math.max(0, (total / (summary.data?.targetCalories || person.targetCalories || 1)) * 100));
+
+  return <Screen tabs onRefresh={() => summary.refetch()} refreshing={summary.isRefetching}>
+    <Eyebrow>01 / Daily overview</Eyebrow>
+    <Title sub={`${dateLabel(date)} · ${person.name}'s own meals and daily target.`}>{`A clear day ahead, ${person.name}.`}</Title>
+    <Pressable testID="button-switch-person" onPress={() => { tap(); router.push('/people'); }} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: c.accent, borderColor: '#c6ded5', borderWidth: 1, borderRadius: 16, padding: 14 }}>
+      <Feather name="users" size={18} color={c.primary} />
+      <View style={{ flex: 1 }}><Eyebrow>Planning for</Eyebrow><Text style={{ fontFamily: F.bold, fontSize: 15, color: c.foreground }}>{person.name}</Text></View>
+      <Text style={{ fontFamily: F.semi, fontSize: 12, color: c.primary }}>Manage people</Text>
+      <Feather name="chevron-right" size={16} color={c.primary} />
+    </Pressable>
+    <Card tone="ink" style={{ gap: 14 }}>
+      <Eyebrow light>This day's energy / planned</Eyebrow>
+      {summary.isLoading ? <LoadingBlock rows={1} height={64} /> : summary.isError ? <ErrorBox error={summary.error} onRetry={() => summary.refetch()} /> : <>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
+          <Text testID="value-total-calories" style={{ fontFamily: F.bold, fontSize: 56, letterSpacing: -3, color: c.primaryForeground, lineHeight: 60 }}>{n(total)}</Text>
+          <Text style={{ fontFamily: F.medium, fontSize: 13, color: c.inkSoft, paddingBottom: 8 }}>kcal planned</Text>
+        </View>
+        <View style={{ height: 8, borderRadius: 4, backgroundColor: '#45606a', overflow: 'hidden' }}><View style={{ width: `${pct}%`, height: 8, backgroundColor: c.mint, borderRadius: 4 }} /></View>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+          <Text style={{ fontFamily: F.regular, fontSize: 12, color: c.inkSoft }}>{summary.data?.entryCount ?? 0} portions planned</Text>
+          <Text testID="value-overview-target" style={{ fontFamily: F.regular, fontSize: 12, color: c.inkSoft }}>Target ~{n(person.targetCalories)} kcal</Text>
+        </View></>}
+    </Card>
+    <Btn label="Plan this day" icon="arrow-right" testID="link-overview-plan-day" onPress={() => { setDate(date); router.push('/planner'); }} />
+    <Card>
+      <Eyebrow>{person.name}'s planning target</Eyebrow>
+      <Text testID="value-target-calories" style={{ fontFamily: F.bold, fontSize: 34, letterSpacing: -1.6, color: c.foreground }}>{n(person.targetCalories)} <Text style={{ fontSize: 13, fontFamily: F.medium, color: c.mutedForeground }}>kcal / day</Text></Text>
+      <Muted>{cap(person.activityLevel)} activity · {n(person.baselineCalories)} baseline × {person.activityMultiplier}</Muted>
+      <View style={{ alignSelf: 'flex-start' }}><Btn small variant="ghost" label="Adjust target" icon="arrow-right" testID="link-overview-settings" onPress={() => router.push('/settings')} /></View>
+    </Card>
+    <SectionTitle kicker="Day at a glance">The four moments</SectionTitle>
+    {summary.isLoading ? <LoadingBlock rows={2} height={64} /> : summary.isError ? <ErrorBox error={summary.error} onRetry={() => summary.refetch()} /> : meals.map((meal, i) => {
+      const d = summary.data?.meals.find(m => m.meal === meal);
+      return <Pressable key={meal} testID={`link-overview-meal-${meal}`} onPress={() => { tap(); setDate(date); router.push('/planner'); }} style={{ flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: c.card, borderColor: c.border, borderWidth: 1, borderRadius: 18, padding: 16 }}>
+        <Text style={{ fontFamily: F.semi, fontSize: 11, color: c.primary }}>0{i + 1}</Text>
+        <View style={{ flex: 1 }}><Text style={{ fontFamily: F.bold, fontSize: 15, color: c.foreground }}>{cap(meal)}</Text><Muted>{d?.count ?? 0} {d?.count === 1 ? 'portion' : 'portions'}</Muted></View>
+        <Text style={{ fontFamily: F.bold, fontSize: 17, color: c.foreground }}>{n(d?.nutrition.calories ?? 0)} <Text style={{ fontSize: 11, color: c.mutedForeground }}>kcal</Text></Text>
+        <Feather name="chevron-right" size={16} color={c.mutedForeground} />
+      </Pressable>;
+    })}
+    <SectionTitle kicker="Nutrition / total">More than a number</SectionTitle>
+    {summary.data ? <Card><NutritionGrid nutrition={summary.data.totals} /><FiberNote /></Card> : summary.isLoading ? <LoadingBlock rows={1} /> : null}
+    <Card tone="mint">
+      <Eyebrow>The food library</Eyebrow>
+      <Text style={{ fontFamily: F.bold, fontSize: 19, color: c.foreground }}>Know what goes in.</Text>
+      <Muted>Browse the food library saved on this device or add your own foods.</Muted>
+      <View style={{ alignSelf: 'flex-start' }}><Btn small label="Explore foods" icon="arrow-right" testID="link-overview-foods" onPress={() => router.push('/foods')} /></View>
+    </Card>
+    <Card>
+      <Eyebrow>On this device</Eyebrow>
+      <Text style={{ fontFamily: F.medium, fontSize: 13, color: c.foreground }}>Your planner and food library are stored locally on this device.</Text>
+    </Card>
+    <Muted>{DISCLAIMER}</Muted>
+  </Screen>;
+}
