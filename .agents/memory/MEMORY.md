@@ -6,4 +6,6 @@
 - [Local backup validation boundary](local-backup-validation.md) — validate external backups strictly without tightening legacy storage hydration as a side effect.
 - [SVG preview event verification](svg-preview-events.md) — test rendered-element clicks; React component callbacks can survive in props but be discarded by native-to-web normalization.
 - [Native appearance overrides](native-appearance-overrides.md) — native reset contracts differ from older SDK examples; explicit app themes must also update native controls.
-- [Optional Expo desktop debugger](expo-devtools-startup.md) — a missing desktop DevTools library can be non-blocking when Metro bundling and the app preview work.
+- [Expo startup readiness](expo-devtools-startup.md) — optional debugger errors and blank first frames can be non-blocking; verify meaningful app rendering before treating them as failures.
+- [Tennis nutrition boundary](tennis-nutrition-boundary.md) — schedules guide meal timing, not automatic personalised intake prescriptions or changes to daily references.
+- [Meal time defaults](meal-time-defaults.md) — editable suggestions, not optimal-intake advice; preserve assigned day times when future routine defaults change.

@@ -1,10 +1,14 @@
 import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useGetDailySummary, useListMealEntries, type Meal } from '@/lib/local-api';
+import { dietPhaseLabels } from '@/lib/tennis-planning';
+import { useGetDailySummary, useGetDayActivity, useListMealEntries, type Meal } from '@/lib/local-api';
 import { usePlanner } from '@/contexts/PlannerProvider';
 import { useColors } from '@/hooks/useColors';
+import { MealTimeControl } from '@/components/MealTimeControl';
+import { getMealTimes } from '@/lib/meal-scheduling';
 import { ReferencePanel } from '@/components/ReferencePanel';
+import { TennisPlanPanel } from '@/components/TennisPlanPanel';
 import { PlanningTargets } from '@/components/PlanningTargets';
 import { Btn, CaloriesMacros, Card, DISCLAIMER, ErrorBox, Eyebrow, F, FiberNote, IconBtn, LoadingBlock, Muted, NutritionGrid, Screen, SectionTitle, Title, tap } from '@/components/ui';
 import { cap, dateLabel, isIsoDate, n, shiftDate, today } from '@/lib/format';
@@ -18,13 +22,14 @@ export default function Planner() {
   const params = { personId: person.id, date };
   const summary = useGetDailySummary(params);
   const entries = useListMealEntries(params);
+  const day = useGetDayActivity(params);
   const [draft, setDraft] = useState<string | null>(null);
 
   function commit() {
     if (draft && isIsoDate(draft)) setDate(draft);
     setDraft(null);
   }
-  return <Screen tabs onRefresh={() => { summary.refetch(); entries.refetch(); }} refreshing={summary.isRefetching || entries.isRefetching}>
+  return <Screen tabs onRefresh={() => { summary.refetch(); entries.refetch(); day.refetch(); }} refreshing={summary.isRefetching || entries.isRefetching || day.isRefetching}>
     <Eyebrow>02 / Day planner</Eyebrow>
     <Title sub={`${dateLabel(date)} · ${person.name}'s plan.`}>Shape the day.</Title>
     <View testID="control-plan-date" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -40,6 +45,7 @@ export default function Planner() {
       <Eyebrow>Day totals / planned</Eyebrow>
       <CaloriesMacros large calories={summary.data.totals.calories} protein={summary.data.totals.protein} carbs={summary.data.totals.carbs} fat={summary.data.totals.fat} testPrefix="planner-total" />
     </Card> : null}
+    <TennisPlanPanel key={`${person.id}-${date}`} person={person} date={date} />
     <Card>
       <Eyebrow>Planning targets</Eyebrow>
       <PlanningTargets person={person} date={date} testPrefix="planner-target" />
@@ -48,6 +54,8 @@ export default function Planner() {
     {summary.isError ? <ErrorBox error={summary.error} onRetry={() => summary.refetch()} /> : null}
 
     <SectionTitle kicker="Meals">Planned portions</SectionTitle>
+    <Muted>Meal times are editable suggestions for this day — adjust for routine, appetite or training. Foods inherit their meal time; tennis-timed portions keep their own saved slot time, so changing a meal time does not retime them.</Muted>
+    {day.isError ? <ErrorBox error={day.error} onRetry={() => day.refetch()} /> : null}
     {entries.isLoading ? <LoadingBlock rows={3} /> : entries.isError ? <ErrorBox error={entries.error} onRetry={() => entries.refetch()} /> : meals.map(meal => {
       const list = (entries.data ?? []).filter(e => e.meal === meal);
       const ms = summary.data?.meals.find(m => m.meal === meal);
@@ -56,6 +64,7 @@ export default function Planner() {
            <View style={{ flex: 1 }}><Text style={{ fontFamily: F.bold, fontSize: 18, color: c.foreground }}>{cap(meal)}</Text><Muted>{list.length} {list.length === 1 ? 'portion' : 'portions'}</Muted></View>
           <Btn small icon="plus" label="Add" testID={`button-add-${meal}`} onPress={() => router.push({ pathname: '/portion', params: { meal } })} />
         </View>
+        {day.isError ? <Muted>Meal time unavailable.</Muted> : <MealTimeControl personId={person.id} date={date} meal={meal} time={getMealTimes(day.data?.mealTimes)[meal]} loading={day.isLoading} />}
         {summary.isLoading ? <LoadingBlock rows={1} height={70} /> : !summary.isError && ms ? <CaloriesMacros calories={ms.nutrition.calories} protein={ms.nutrition.protein} carbs={ms.nutrition.carbs} fat={ms.nutrition.fat} testPrefix={`meal-${meal}`} /> : null}
         {list.length === 0 ? <Muted>Nothing planned for {meal} yet.</Muted> : list.map(e => <Pressable key={e.id} testID={`row-entry-${e.id}`} onPress={() => { tap(); router.push({ pathname: '/portion', params: { meal, entryId: String(e.id) } }); }}
           style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 10, gap: 2 }}>
@@ -64,6 +73,7 @@ export default function Planner() {
             <CaloriesMacros calories={e.nutrition.calories} protein={e.nutrition.protein} carbs={e.nutrition.carbs} fat={e.nutrition.fat} testPrefix={`entry-${e.id}`} />
           </View>
           <Muted>{n(e.grams, 1)} g · tap to edit</Muted>
+          {(() => { const d = e.tennisDietId ? day.data?.tennis?.diets?.find(x => x.id === e.tennisDietId) : undefined; return d ? <Text testID={`badge-entry-timing-${e.id}`} style={{ fontFamily: F.bold, fontSize: 11.5, color: c.primary }}>{dietPhaseLabels[d.phase]} · {d.time}</Text> : null; })()}
         </Pressable>)}
       </Card>;
     })}

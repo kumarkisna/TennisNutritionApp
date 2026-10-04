@@ -137,6 +137,7 @@ export type MealEntry = {
   grams: number;
   food: Food;
   nutrition: Nutrition;
+  tennisDietId?: string;
 };
 
 export type MealEntryInput = {
@@ -145,11 +146,30 @@ export type MealEntryInput = {
   meal: Meal;
   foodId: number;
   grams: number;
+  tennisDietId?: string | null;
 };
-export type MealEntryUpdate = { meal?: Meal; grams?: number };
+export type MealEntryUpdate = { meal?: Meal; grams?: number; tennisDietId?: string | null };
 
-export type DayActivity = { date: string; personId: number; activityType: DayActivityType };
-export type DayActivityInput = DayActivity;
+export type TennisSession = {
+  kind: 'practice' | 'gym' | 'match';
+  startTime: string;
+  durationMinutes: number;
+  intensity: 'light' | 'moderate' | 'hard';
+};
+export type TennisPlan = {
+  mode: 'training' | 'tournament' | 'rest';
+  sessions: TennisSession[];
+  fuel: { before: string; during: string; between: string; after: string; hydration: string };
+  diets?: TennisDiet[];
+};
+export type TennisDiet = { id: string; phase: 'before' | 'during' | 'between' | 'after'; time: string };
+export type TennisDietInput = { date: string; personId: number; id?: string; phase: TennisDiet['phase']; time: string };
+export type TennisDietDeleteInput = { date: string; personId: number; id: string };
+export type TennisPlanInput = { date: string; personId: number; plan: TennisPlan | null };
+export type MealTimes = Record<Meal, string>;
+export type MealTimeInput = { date: string; personId: number; meal: Meal; time: string };
+export type DayActivity = { date: string; personId: number; activityType: DayActivityType; tennis?: TennisPlan; mealTimes?: MealTimes };
+export type DayActivityInput = Omit<DayActivity, 'tennis' | 'mealTimes'>;
 
 export type MealSummary = { meal: Meal; count: number; nutrition: Nutrition };
 export type DailySummary = {

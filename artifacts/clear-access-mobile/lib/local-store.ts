@@ -1,5 +1,7 @@
 import { referenceFoodSeed } from './reference-food-seed';
 import { calculatePlanningEstimates } from './planning-targets';
+import { isTennisPlan, isTennisDiet, tennisPlanProblem } from './tennis-planning';
+import { getMealTimes, isMealTimes } from './meal-scheduling';
 import {
   ActivityLevel,
   DayActivityType,
@@ -8,6 +10,11 @@ import {
   type ActivityLevel as ActivityLevelType,
   type DayActivity,
   type DayActivityInput,
+  type MealTimeInput,
+  type TennisPlanInput,
+  type TennisDietInput,
+  type TennisDietDeleteInput,
+  type TennisDiet,
   type DailySummary,
   type Food,
   type FoodInput,
@@ -49,7 +56,7 @@ export type AsyncKeyValueStorage = {
 };
 
 type StoredFood = Food & { referenceKey?: string };
-type StoredEntry = { id: number; date: string; personId: number; meal: MealEntryInput['meal']; grams: number; foodId: number };
+type StoredEntry = { id: number; date: string; personId: number; meal: MealEntryInput['meal']; grams: number; foodId: number; tennisDietId?: string };
 type StoredHeightRecord = HeightRecord;
 type StoreData = {
   version: number;
@@ -99,6 +106,10 @@ export function isValidCalendarDate(value: string): boolean {
 function todayDate(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+function hasTennisDiet(activities: DayActivity[], entry: { date: string; personId: number }, id: unknown): id is string {
+  return typeof id === 'string' && activities.some(activity =>
+    activity.date === entry.date && activity.personId === entry.personId && activity.tennis?.diets?.some(diet => diet.id === id));
 }
 
 function seedStore(): StoreData {
@@ -204,12 +215,19 @@ function validateStoredData(value: unknown): StoreData {
   for (const activity of activities) {
     if (!isRecord(activity) || !isValidCalendarDate(String(activity.date)) ||
       !personIds.has(activity.personId as number) ||
-      !DAY_ACTIVITIES.includes(activity.activityType as DayActivity['activityType'])) {
+      !DAY_ACTIVITIES.includes(activity.activityType as DayActivity['activityType']) ||
+      (activity.tennis !== undefined && !isTennisPlan(activity.tennis)) ||
+      (activity.mealTimes !== undefined && !isMealTimes(activity.mealTimes))) {
       fail('Local planner storage contains an invalid day activity. Your data was not changed.');
     }
     const key = `${activity.personId}:${activity.date}`;
     if (activityKeys.has(key)) fail('Local planner storage contains duplicate day activities. Your data was not changed.');
     activityKeys.add(key);
+  }
+  for (const entry of entries) {
+    if (entry.tennisDietId !== undefined && !hasTennisDiet(activities, entry, entry.tennisDietId)) {
+      fail('Local planner storage contains an invalid timed diet link. Your data was not changed.');
+    }
   }
   const heightRecordIds = new Set<number>();
   const heightRecordKeys = new Set<string>();
@@ -327,7 +345,7 @@ function validateBackupData(value: unknown): StoreData {
 
   const entryIds = new Set<number>();
   for (const entry of value.entries) {
-    if (!isRecord(entry) || !hasExactKeys(entry, ['id', 'date', 'personId', 'meal', 'grams', 'foodId']) ||
+    if (!isRecord(entry) || !hasExactKeys(entry, ['id', 'date', 'personId', 'meal', 'grams', 'foodId'], ['tennisDietId']) ||
       !Number.isSafeInteger(entry.id) || (entry.id as number) < 1 || entryIds.has(entry.id as number) ||
       typeof entry.date !== 'string' || !isValidCalendarDate(entry.date) ||
       !Number.isSafeInteger(entry.personId) || !peopleById.has(entry.personId as number) ||
@@ -340,15 +358,22 @@ function validateBackupData(value: unknown): StoreData {
 
   const activityKeys = new Set<string>();
   for (const activity of value.activities) {
-    if (!isRecord(activity) || !hasExactKeys(activity, ['date', 'personId', 'activityType']) ||
+    if (!isRecord(activity) || !hasExactKeys(activity, ['date', 'personId', 'activityType'], ['tennis', 'mealTimes']) ||
       typeof activity.date !== 'string' || !isValidCalendarDate(activity.date) ||
       !Number.isSafeInteger(activity.personId) || !peopleById.has(activity.personId as number) ||
-      !DAY_ACTIVITIES.includes(activity.activityType as DayActivity['activityType'])) {
+      !DAY_ACTIVITIES.includes(activity.activityType as DayActivity['activityType']) ||
+      (Object.hasOwn(activity, 'tennis') && !isTennisPlan(activity.tennis)) ||
+      (Object.hasOwn(activity, 'mealTimes') && !isMealTimes(activity.mealTimes))) {
       return invalid('day activity');
     }
     const key = `${activity.personId}:${activity.date}`;
     if (activityKeys.has(key)) return invalid('duplicate day activity');
     activityKeys.add(key);
+  }
+  for (const entry of value.entries) {
+    if (Object.hasOwn(entry, 'tennisDietId') && !hasTennisDiet(value.activities as DayActivity[], entry, entry.tennisDietId)) {
+      return invalid('timed diet link');
+    }
   }
 
   const heightRecordIds = new Set<number>();
@@ -441,6 +466,7 @@ function toMealEntry(data: StoreData, entry: StoredEntry): MealEntry {
     personId: entry.personId,
     meal: entry.meal,
     grams: entry.grams,
+    ...(entry.tennisDietId ? { tennisDietId: entry.tennisDietId } : {}),
     food: visibleFood,
     nutrition: foodNutrition(visibleFood, entry.grams),
   };
@@ -792,6 +818,7 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
         if (!isFiniteInRange(input.grams, 1, 3000)) fail('Portion must be between 1 and 3,000 grams.');
         const food = draft.foods.find(candidate => candidate.id === input.foodId);
         if (!food) fail('Food not found in your local catalog.');
+        if (input.tennisDietId != null && !hasTennisDiet(draft.activities, input, input.tennisDietId)) fail('This timed diet is unavailable for the selected person and date.');
         const entry: StoredEntry = {
           id: draft.nextEntryId++,
           date: input.date,
@@ -799,8 +826,15 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
           meal: input.meal,
           grams: input.grams,
           foodId: input.foodId,
+          ...(input.tennisDietId != null ? { tennisDietId: input.tennisDietId } : {}),
         };
         draft.entries.push(entry);
+        let activity = draft.activities.find(item => item.date === input.date && item.personId === input.personId);
+        if (!activity) {
+          activity = { date: input.date, personId: input.personId, activityType: 'rest' };
+          draft.activities.push(activity);
+        }
+        activity.mealTimes ??= getMealTimes();
         return toMealEntry(draft, entry);
       });
     },
@@ -815,6 +849,13 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
         if (input.grams !== undefined) {
           if (!isFiniteInRange(input.grams, 1, 3000)) fail('Portion must be between 1 and 3,000 grams.');
           entry.grams = input.grams;
+        }
+        if (input.tennisDietId !== undefined) {
+          if (input.tennisDietId === null) delete entry.tennisDietId;
+          else {
+            if (!hasTennisDiet(draft.activities, entry, input.tennisDietId)) fail('This timed diet is unavailable for this portion’s person and date.');
+            entry.tennisDietId = input.tennisDietId;
+          }
         }
         return toMealEntry(draft, entry);
       });
@@ -922,8 +963,82 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
         if (!DAY_ACTIVITIES.includes(input.activityType)) fail('Choose a valid planned activity.');
         const found = draft.activities.find(activity => activity.date === input.date && activity.personId === input.personId);
         if (found) found.activityType = input.activityType;
-        else draft.activities.push({ ...input });
-        return { ...input };
+        else draft.activities.push({ date: input.date, personId: input.personId, activityType: input.activityType });
+        return draft.activities.find(activity => activity.date === input.date && activity.personId === input.personId)!;
+      });
+    },
+    async saveMealTime(input: MealTimeInput): Promise<DayActivity> {
+      return transact(draft => {
+        if (!isValidCalendarDate(input.date)) fail('Choose a valid date.');
+        findPerson(draft, input.personId);
+        if (!MEALS.includes(input.meal)) fail('Choose a valid meal.');
+        const found = draft.activities.find(item => item.date === input.date && item.personId === input.personId);
+        const times = getMealTimes(found?.mealTimes);
+        times[input.meal] = input.time;
+        if (!isMealTimes(times)) fail('Enter a valid 24-hour HH:MM time, such as 08:00.');
+        if (found) found.mealTimes = times;
+        else draft.activities.push({ date: input.date, personId: input.personId, activityType: 'rest', mealTimes: times });
+        return draft.activities.find(item => item.date === input.date && item.personId === input.personId)!;
+      });
+    },
+    async saveTennisPlan(input: TennisPlanInput): Promise<DayActivity> {
+      return transact(draft => {
+        if (!isValidCalendarDate(input.date)) fail('Choose a valid date.');
+        findPerson(draft, input.personId);
+        if (input.plan !== null) {
+          const problem = tennisPlanProblem(input.plan);
+          if (problem) fail(problem);
+        }
+        let activity = draft.activities.find(item => item.date === input.date && item.personId === input.personId);
+        if (!activity) {
+          activity = { date: input.date, personId: input.personId, activityType: 'rest' };
+          draft.activities.push(activity);
+        }
+        if (input.plan === null) {
+          delete activity.tennis;
+          for (const entry of draft.entries) {
+            if (entry.date === input.date && entry.personId === input.personId) delete entry.tennisDietId;
+          }
+        } else {
+          const plan = clone(input.plan);
+          // Schedule editing has its own transaction. A stale session editor cannot erase timed foods.
+          if (activity.tennis?.diets) plan.diets = clone(activity.tennis.diets);
+          activity.tennis = plan;
+        }
+        return activity;
+      });
+    },
+    async saveTennisDiet(input: TennisDietInput): Promise<TennisDiet> {
+      return transact(draft => {
+        if (!isValidCalendarDate(input.date)) fail('Choose a valid date.');
+        findPerson(draft, input.personId);
+        const plan = draft.activities.find(activity => activity.date === input.date && activity.personId === input.personId)?.tennis;
+        if (!plan) fail('Save a tennis day plan before scheduling food.');
+        const diets = plan.diets ?? [];
+        const existing = input.id === undefined ? undefined : diets.find(diet => diet.id === input.id);
+        if (input.id !== undefined && !existing) fail('This timed diet no longer exists.');
+        if (!existing && diets.length >= 24) fail('Plan at most 24 timed diets in one day.');
+        let id = input.id ?? `diet-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+        if (!existing && diets.some(diet => diet.id === id)) fail('Could not create a unique timed diet. Please try again.');
+        const diet = { id, phase: input.phase, time: input.time };
+        if (!isTennisDiet(diet)) fail('Choose a stage and a valid 24-hour HH:MM time.');
+        if (existing) Object.assign(existing, diet);
+        else diets.push(diet);
+        plan.diets = diets;
+        return diet;
+      });
+    },
+    async deleteTennisDiet(input: TennisDietDeleteInput): Promise<void> {
+      return transact(draft => {
+        if (!isValidCalendarDate(input.date)) fail('Choose a valid date.');
+        findPerson(draft, input.personId);
+        const plan = draft.activities.find(activity => activity.date === input.date && activity.personId === input.personId)?.tennis;
+        if (!plan?.diets?.some(diet => diet.id === input.id)) fail('This timed diet no longer exists.');
+        plan.diets = plan.diets.filter(diet => diet.id !== input.id);
+        // Unschedule, never delete the user's food portions.
+        for (const entry of draft.entries) {
+          if (entry.personId === input.personId && entry.date === input.date && entry.tennisDietId === input.id) delete entry.tennisDietId;
+        }
       });
     },
     async exportForTests(): Promise<unknown> {

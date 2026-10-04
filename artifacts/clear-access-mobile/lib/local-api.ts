@@ -11,6 +11,10 @@ import type {
   DailySummary,
   DayActivity,
   DayActivityInput,
+  MealTimeInput,
+  TennisPlanInput,
+  TennisDietInput,
+  TennisDietDeleteInput,
   DiscoverFoodsParams,
   DiscoveredFood,
   Food,
@@ -46,6 +50,14 @@ export type {
   DailySummary,
   DayActivity,
   DayActivityInput,
+  MealTimes,
+  MealTimeInput,
+  TennisPlan,
+  TennisSession,
+  TennisPlanInput,
+  TennisDiet,
+  TennisDietInput,
+  TennisDietDeleteInput,
   DayActivityType as DayActivityKind,
   DiscoverFoodsParams,
   DiscoveredFood,
@@ -196,6 +208,22 @@ export function useGetDayActivity(params: GetDayActivityParams, options?: LocalQ
 export function useSaveDayActivity() {
   return useLocalMutation(({ data }: { data: DayActivityInput }) =>
     localStore.saveDayActivity(data), [['getDayActivity'], ['getDailySummary']]);
+}
+export function useSaveMealTime() {
+  return useLocalMutation(({ data }: { data: MealTimeInput }) =>
+    localStore.saveMealTime(data), [['getDayActivity']]);
+}
+export function useSaveTennisPlan() {
+  return useLocalMutation(({ data }: { data: TennisPlanInput }) =>
+    localStore.saveTennisPlan(data), [['getDayActivity'], ...ENTRIES_REFRESH]);
+}
+export function useSaveTennisDiet() {
+  return useLocalMutation(({ data }: { data: TennisDietInput }) =>
+    localStore.saveTennisDiet(data), [['getDayActivity'], ...ENTRIES_REFRESH]);
+}
+export function useDeleteTennisDiet() {
+  return useLocalMutation(({ data }: { data: TennisDietDeleteInput }) =>
+    localStore.deleteTennisDiet(data), [['getDayActivity'], ...ENTRIES_REFRESH]);
 }
 
 // Retained only as a safe transition bridge for screens removing online discovery.
