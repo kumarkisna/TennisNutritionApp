@@ -19,8 +19,12 @@ export function isTennisDiet(value: unknown): value is TennisDiet {
 export const timeMinutes = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3));
 
 export function tennisPlanProblem(value: unknown): string | null {
-  if (!record(value) || !exact(value, ['mode', 'sessions', 'fuel'], ['diets']) ||
+  if (!record(value) || !exact(value, ['mode', 'sessions', 'fuel'], ['diets', 'experienceRating']) ||
       typeof value.mode !== 'string' || !['training', 'tournament', 'rest'].includes(value.mode)) return 'Choose training, tournament, or rest.';
+  if (Object.hasOwn(value, 'experienceRating') &&
+      (typeof value.experienceRating !== 'number' || !Number.isInteger(value.experienceRating) || value.experienceRating < 0 || value.experienceRating > 10)) {
+    return 'An experience rating must be a whole-number score from 0 to 10.';
+  }
   if (!Array.isArray(value.sessions) || value.sessions.length > 12) return 'Plan at most 12 sessions in one day.';
   if (value.mode === 'rest' && value.sessions.length) return 'A rest day cannot contain tennis sessions.';
   if (value.mode !== 'rest' && !value.sessions.length) return 'Add at least one practice, gym session, or match.';

@@ -14,3 +14,9 @@ Copied portion amounts are reusable plans, not personalised nutrition prescripti
 **Why:** Different people can have different intake needs and reviewed goals. Sharing a food timetable does not establish that the source person's dietary amounts or goals suit the recipient.
 
 **How to apply:** Preserve the recipient's personal references and goals; explain that copied amounts can be adjusted. Follow the separate tennis nutrition boundary when deciding what may change.
+
+A 0–10 experience rating belongs to one person's whole tennis plan on one date. A copied plan does not carry the source date's rating, and an existing destination rating is preserved.
+
+**Why:** The score describes the user's experience of the source-day plan, not the destination day or its nutrition suitability.
+
+**How to apply:** Keep the score optional and per dated plan. Use it to filter the same person's local history without changing goals or nutrition references.

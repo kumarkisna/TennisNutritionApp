@@ -15,6 +15,8 @@ import {
   type MealTimeInput,
   type MealAlertInput,
   type TennisPlanInput,
+  type TennisPlanRatingInput,
+  type TennisPlanHistoryItem,
   type TennisDietInput,
   type TennisDietDeleteInput,
   type CopyTennisFoodPlanInput,
@@ -1041,8 +1043,27 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
           const plan = clone(input.plan);
           // Schedule editing has its own transaction. A stale session editor cannot erase timed foods.
           if (activity.tennis?.diets) plan.diets = clone(activity.tennis.diets);
+          // Editing sessions/notes must not silently discard an existing experience score.
+          if (plan.experienceRating === undefined && activity.tennis?.experienceRating !== undefined) {
+            plan.experienceRating = activity.tennis.experienceRating;
+          }
           activity.tennis = plan;
         }
+        return activity;
+      });
+    },
+    async saveTennisPlanRating(input: TennisPlanRatingInput): Promise<DayActivity> {
+      return transact(draft => {
+        if (!isValidCalendarDate(input.date)) fail('Choose a valid date.');
+        findPerson(draft, input.personId);
+        if (input.rating !== null &&
+            (!Number.isInteger(input.rating) || input.rating < 0 || input.rating > 10)) {
+          fail('Choose a whole-number experience rating from 0 to 10.');
+        }
+        const activity = draft.activities.find(day => day.date === input.date && day.personId === input.personId);
+        if (!activity?.tennis) fail('Save a tennis plan for this person and date before rating it.');
+        if (input.rating === null) delete activity.tennis.experienceRating;
+        else activity.tennis.experienceRating = input.rating;
         return activity;
       });
     },
@@ -1090,6 +1111,23 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
           }).sort((a, b) => b.date.localeCompare(a.date));
       });
     },
+    async listTennisPlanHistory(personId: number): Promise<TennisPlanHistoryItem[]> {
+      return read(current => {
+        findPerson(current, personId);
+        return current.activities.filter(day => day.personId === personId && day.tennis)
+          .map(day => {
+            const plan = day.tennis!;
+            const slotIds = new Set(plan.diets?.map(slot => slot.id) ?? []);
+            const foods = current.entries.filter(entry =>
+              entry.personId === personId && entry.date === day.date && entry.tennisDietId && slotIds.has(entry.tennisDietId)).length;
+            return {
+              date: day.date, rating: plan.experienceRating ?? null, tennisDayType: plan.mode,
+              activityType: day.activityType, sessions: plan.sessions.length,
+              slots: slotIds.size, foods,
+            };
+          }).sort((a, b) => b.date.localeCompare(a.date));
+      });
+    },
     async copyTennisFoodPlan(input: CopyTennisFoodPlanInput): Promise<CopyTennisFoodPlanResult> {
       return transact(draft => {
         if (!isValidCalendarDate(input.sourceDate) || !isValidCalendarDate(input.targetDate)) fail('Choose valid source and destination dates.');
@@ -1124,7 +1162,12 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
           return { ...slot, id };
         });
         // Existing practice/match sessions are independent of imported food times.
-        target.tennis = target.tennis ? { ...target.tennis, diets } : { ...clone(source), diets };
+        if (target.tennis) target.tennis = { ...target.tennis, diets };
+        else {
+          target.tennis = { ...clone(source), diets };
+          // A past experience score belongs to the source date, not the copied plan.
+          delete target.tennis.experienceRating;
+        }
         if (entries.length && !target.mealTimes) target.mealTimes = getMealTimes();
         for (const entry of entries) {
           draft.entries.push({

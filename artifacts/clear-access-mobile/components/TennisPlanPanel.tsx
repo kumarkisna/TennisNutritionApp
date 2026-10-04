@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Linking, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useGetDayActivity, useSaveTennisPlan, type Person, type TennisPlan, type TennisSession } from '@/lib/local-api';
+import { useGetDayActivity, useSaveTennisPlan, useSaveTennisPlanRating, type Person, type TennisPlan, type TennisSession } from '@/lib/local-api';
 import { emptyTennisPlan, fuelLabels, tennisFuelWindows, tennisPlanProblem, TENNIS_SOURCE_URL } from '@/lib/tennis-planning';
 import { useColors } from '@/hooks/useColors';
 import { getAgeOnDate } from '@/lib/planning-targets';
@@ -47,16 +47,26 @@ export function TennisPlanPanel({ person, date }: { person: Person; date: string
   const router = useRouter();
   const day = useGetDayActivity({ personId: person.id, date });
   const save = useSaveTennisPlan();
+  const rate = useSaveTennisPlanRating();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<unknown>(null);
   const [sourceError, setSourceError] = useState<unknown>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [ratingError, setRatingError] = useState<unknown>(null);
   const saving = save.isPending;
   const saved = day.data?.tennis;
   const age = person.dateOfBirth ? getAgeOnDate(person.dateOfBirth, date) : person.ageYears;
   const young = age === null || age < 18;
+
+  async function setRating(value: string) {
+    setRatingError(null);
+    try {
+      await rate.mutateAsync({ data: { personId: person.id, date, rating: value === 'unrated' ? null : Number(value) } });
+      success();
+    } catch (e) { setRatingError(e); warn(); }
+  }
 
   function open(plan: TennisPlan) { setDraft(toDraft(plan)); setProblem(null); setSaveError(null); setConfirmDelete(false); setNotice(null); }
   function patch(p: Partial<Draft>) { setDraft(d => (d ? { ...d, ...p } : d)); }
@@ -139,6 +149,24 @@ export function TennisPlanPanel({ person, date }: { person: Person; date: string
     </> : <>
       <Text testID="value-tennis-mode" style={{ fontFamily: F.bold, fontSize: 16, color: c.primary }}>{saved.mode === 'rest' ? 'Rest day' : saved.mode === 'tournament' ? 'Tournament day' : 'Training day'}</Text>
       {saved.mode !== 'rest' ? <Muted>Planned workload: <Text testID="value-tennis-workload" style={{ fontFamily: F.bold, color: c.foreground }}>{Math.floor(workload / 60)} h {workload % 60} min</Text> across {saved.sessions.length} {saved.sessions.length === 1 ? 'session' : 'sessions'}</Muted> : null}
+      <View testID="tennis-experience-rating" style={{ gap: 8, borderTopWidth: 1, borderTopColor: c.border, paddingTop: 12 }}>
+        <Eyebrow>Rate this day's plan</Eyebrow>
+        <Muted>Your experience of this whole plan on {date}. 0 is lowest; 10 is highest. You can change it later.</Muted>
+        <Chips
+          testPrefix="tennis-experience-rating"
+          value={saved.experienceRating === undefined ? 'unrated' : String(saved.experienceRating)}
+          onChange={setRating}
+          options={[
+            { value: 'unrated', label: 'Not rated' },
+            ...Array.from({ length: 11 }, (_, score) => ({ value: String(score), label: `${score}` })),
+          ]}
+          disabled={rate.isPending}
+        />
+        {saved.experienceRating !== undefined
+          ? <Text testID="value-tennis-experience-rating" style={{ fontFamily: F.bold, fontSize: 13, color: c.primary }}>Experience rating: {saved.experienceRating}/10</Text>
+          : null}
+        {ratingError ? <ErrorBox error={ratingError} /> : null}
+      </View>
       <TennisDietSchedule person={person} date={date} plan={saved} />
       {windows.map((w, i) => <View key={i} testID={`row-tennis-window-${i}`} style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 10, gap: 2 }}>
         <Text style={{ fontFamily: F.bold, fontSize: 12, color: c.primary }}>{w.time}</Text>

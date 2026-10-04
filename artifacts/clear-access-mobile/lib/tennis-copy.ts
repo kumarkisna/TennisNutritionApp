@@ -1,4 +1,30 @@
-import type { MealEntry, TennisPlan } from './local-models';
+import type { DayActivityType, MealEntry, TennisPlan, TennisPlanHistoryItem } from './local-models';
+
+export type TennisPlanHistoryFilter = {
+  before: string;
+  rating: 'any' | 'unrated' | number;
+  tennisDayType: 'any' | TennisPlan['mode'];
+  activityType: 'any' | DayActivityType;
+};
+
+export function followingCalendarDate(date: string): string {
+  const next = new Date(`${date}T00:00:00.000Z`);
+  next.setUTCDate(next.getUTCDate() + 1);
+  return next.toISOString().slice(0, 10);
+}
+
+export function filterTennisPlanHistory(
+  items: TennisPlanHistoryItem[],
+  filter: TennisPlanHistoryFilter,
+): TennisPlanHistoryItem[] {
+  return items.filter(item =>
+    item.date < filter.before &&
+    (filter.rating === 'any' ||
+      (filter.rating === 'unrated' ? item.rating === null : item.rating === filter.rating)) &&
+    (filter.tennisDayType === 'any' || item.tennisDayType === filter.tennisDayType) &&
+    (filter.activityType === 'any' || item.activityType === filter.activityType),
+  );
+}
 
 /** Both the preview and atomic copy use the same canonical, device-local snapshot. */
 export function getTennisFoodPlanFingerprint(plan: TennisPlan, entries: MealEntry[], personName: string): string {

@@ -161,6 +161,7 @@ export type TennisPlan = {
   sessions: TennisSession[];
   fuel: { before: string; during: string; between: string; after: string; hydration: string };
   diets?: TennisDiet[];
+  experienceRating?: number;
 };
 export type TennisDiet = { id: string; phase: 'before' | 'during' | 'between' | 'after'; time: string };
 export type TennisDietInput = { date: string; personId: number; id?: string; phase: TennisDiet['phase']; time: string };
@@ -173,6 +174,16 @@ export type CopyTennisFoodPlanInput = {
 export type CopyTennisFoodPlanResult = { personId: number; date: string; copiedSlots: number; copiedFoods: number };
 export type TennisFoodPlanDate = { date: string; slots: number; foods: number };
 export type TennisPlanInput = { date: string; personId: number; plan: TennisPlan | null };
+export type TennisPlanRatingInput = { date: string; personId: number; rating: number | null };
+export type TennisPlanHistoryItem = {
+  date: string;
+  rating: number | null;
+  tennisDayType: TennisPlan['mode'];
+  activityType: DayActivityType;
+  sessions: number;
+  slots: number;
+  foods: number;
+};
 export type MealTimes = Record<Meal, string>;
 export type MealTimeInput = { date: string; personId: number; meal: Meal; time: string };
 export type MealAlert = { id: string; minutesBefore: number; enabled: boolean };

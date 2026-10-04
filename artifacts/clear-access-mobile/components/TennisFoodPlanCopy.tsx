@@ -1,19 +1,37 @@
 import { useMemo, useRef, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
-  isValidCalendarDate, useCopyTennisFoodPlan, useGetDayActivity, useListMealEntries, useListPeople, useTennisFoodPlanDates,
-  type CopyTennisFoodPlanInput, type Person,
+  isValidCalendarDate, useCopyTennisFoodPlan, useGetDayActivity, useListMealEntries, useListPeople,
+  useTennisFoodPlanDates, useTennisPlanHistory,
+  type CopyTennisFoodPlanInput, type DayActivityKind, type Person, type TennisPlan, type TennisPlanHistoryItem,
 } from '@/lib/local-api';
-import { getTennisFoodPlanFingerprint } from '@/lib/tennis-copy';
+import { filterTennisPlanHistory, followingCalendarDate, getTennisFoodPlanFingerprint } from '@/lib/tennis-copy';
 import { dietPhaseLabels, timeMinutes } from '@/lib/tennis-planning';
+import { sportsActivities } from '@/lib/planning-targets';
 import { useOptionalPlanner } from '@/contexts/PlannerProvider';
 import { useColors } from '@/hooks/useColors';
-import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, LoadingBlock, Muted, success, warn } from '@/components/ui';
+import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, LoadingBlock, Muted, success, tap, warn } from '@/components/ui';
 import { n } from '@/lib/format';
 
 type Review = { input: CopyTennisFoodPlanInput; sourceName: string; targetName: string; slots: number; foods: number };
 type Done = { personId: number; date: string; label: string; slots: number; foods: number };
+type RatingFilter = 'any' | 'unrated' | `${number}`;
+type DayTypeFilter = 'any' | TennisPlan['mode'];
+type ActivityFilter = 'any' | DayActivityKind;
+
+const ratingFilters: { value: RatingFilter; label: string }[] = [
+  { value: 'any', label: 'Any' }, { value: 'unrated', label: 'Not rated' },
+  ...Array.from({ length: 11 }, (_, score) => ({ value: `${score}` as RatingFilter, label: `${score}/10` })),
+];
+const dayTypeFilters: { value: DayTypeFilter; label: string }[] = [
+  { value: 'any', label: 'Any' }, { value: 'training', label: 'Training' },
+  { value: 'tournament', label: 'Tournament' }, { value: 'rest', label: 'Rest' },
+];
+const activityFilters: { value: ActivityFilter; label: string }[] = [
+  { value: 'any', label: 'Any' },
+  ...(Object.keys(sportsActivities) as DayActivityKind[]).map(value => ({ value, label: sportsActivities[value].short })),
+];
 
 export function TennisFoodPlanCopy({ person, date }: { person: Person; date: string }) {
   const c = useColors();
@@ -27,6 +45,9 @@ export function TennisFoodPlanCopy({ person, date }: { person: Person; date: str
   const [sourceDate, setSourceDate] = useState(date);
   const [targetId, setTargetId] = useState<number | null>(null);
   const [targetDate, setTargetDate] = useState(date);
+  const [ratingFilter, setRatingFilter] = useState<RatingFilter>('any');
+  const [dayTypeFilter, setDayTypeFilter] = useState<DayTypeFilter>('any');
+  const [activityFilter, setActivityFilter] = useState<ActivityFilter>('any');
   const [review, setReview] = useState<Review | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [done, setDone] = useState<Done | null>(null);
@@ -46,7 +67,16 @@ export function TennisFoodPlanCopy({ person, date }: { person: Person; date: str
   const sameDay = srcOn && tgtOn && sourceId === effTargetId && sourceDate.trim() === targetDate.trim();
 
   const dates = useTennisFoodPlanDates(sourceId, { query: { enabled: open && !!source } });
+  const history = useTennisPlanHistory(sourceId, { query: { enabled: open && !!source } });
   const dateList = useMemo(() => [...(dates.data ?? [])].sort((a, b) => b.date.localeCompare(a.date)), [dates.data]);
+  const previousPlans = useMemo(() => filterTennisPlanHistory(history.data ?? [], {
+    before: tgtDateOk ? targetDate.trim() : '',
+    rating: ratingFilter === 'any' || ratingFilter === 'unrated' ? ratingFilter : Number(ratingFilter),
+    tennisDayType: dayTypeFilter,
+    activityType: activityFilter,
+  }), [
+    history.data, targetDate, ratingFilter, dayTypeFilter, activityFilter,
+  ]);
   const srcDay = useGetDayActivity({ personId: sourceId, date: sourceDate.trim() }, { query: { enabled: srcOn } });
   const srcEntries = useListMealEntries({ personId: sourceId, date: sourceDate.trim() }, { query: { enabled: srcOn } });
   const tgtDay = useGetDayActivity({ personId: effTargetId ?? 0, date: targetDate.trim() }, { query: { enabled: tgtOn } });
@@ -69,6 +99,13 @@ export function TennisFoodPlanCopy({ person, date }: { person: Person; date: str
     setSourceId(id); reset();
   }
   function pickSourceDate(v: string) { setSourceDate(v); reset(); }
+  function chooseHistoryPlan(item: TennisPlanHistoryItem) {
+    if (item.slots === 0) return;
+    setSourceDate(item.date);
+    setTargetDate(followingCalendarDate(item.date));
+    setTargetId(sourceId);
+    reset();
+  }
 
   function openReview() {
     if (!canReview || !source || !target || effTargetId === null || !plan) return;
@@ -88,7 +125,7 @@ export function TennisFoodPlanCopy({ person, date }: { person: Person; date: str
     const fresh = getTennisFoodPlanFingerprint(plan, srcEntries.data ?? [], source.name);
     if (fresh !== review.input.expectedSource) {
       setReview(null); warn();
-      setError(new Error('The source food timetable changed since you reviewed it. Your choices are kept; review the refreshed plan and confirm again.'));
+      setError(new Error('The source plan or food timetable changed since you reviewed it. Your choices are kept; review the refreshed plan and confirm again.'));
       return;
     }
     gate.current = true; setError(null);
@@ -109,6 +146,7 @@ export function TennisFoodPlanCopy({ person, date }: { person: Person; date: str
   }
 
   const label = { fontFamily: F.bold, fontSize: 15, color: c.foreground } as const;
+  const activityLabel = (value: DayActivityKind) => sportsActivities[value].short;
   const head = <View style={{ gap: 4 }}>
     <Eyebrow>Copy to another date or person</Eyebrow>
     <Text style={{ fontFamily: F.bold, fontSize: 17, letterSpacing: -0.4, color: c.foreground }}>Reuse a food timetable</Text>
@@ -130,6 +168,48 @@ export function TennisFoodPlanCopy({ person, date }: { person: Person; date: str
       {dates.isLoading ? <LoadingBlock rows={1} height={40} /> : dates.isError ? <ErrorBox error={dates.error} onRetry={() => dates.refetch()} /> : dateChips.length ? <Chips testPrefix="copy-source-date" value={sourceDate.trim()} onChange={pickSourceDate} options={dateChips.map(d => ({ value: d.date, label: d.date }))} disabled={pending} /> : <Muted>{source?.name ?? 'This person'} has no saved food timetables yet.</Muted>}
       <Field label="Source date (YYYY-MM-DD)" value={sourceDate} onChangeText={pickSourceDate} maxLength={10} autoCapitalize="none" keyboardType="numbers-and-punctuation" editable={!pending} testID="input-copy-source-date" hint={srcDateOk ? undefined : 'Enter a real calendar date.'} />
       {dateList.length ? <Muted>Dates with timed slots: {dateList.map(d => `${d.date} (${d.slots} ${d.slots === 1 ? 'slot' : 'slots'}, ${d.foods} ${d.foods === 1 ? 'food' : 'foods'})`).join(', ')}</Muted> : null}
+
+      <View testID="tennis-plan-history">
+      <Card style={{ gap: 10 }}>
+        <Eyebrow>Find a previous plan</Eyebrow>
+        <Muted>Plans before the destination date. Filters combine; choose a result to use it as the source and set the destination to the following day.</Muted>
+        {history.isLoading ? <LoadingBlock rows={1} height={56} /> : history.isError
+          ? <ErrorBox error={history.error} onRetry={() => history.refetch()} />
+          : <>
+            <Text style={label}>Experience rating · 0 is lowest, 10 highest</Text>
+            <Chips testPrefix="filter-plan-rating" value={ratingFilter} onChange={value => { setRatingFilter(value); reset(); }} options={ratingFilters} disabled={pending} />
+            <Text style={label}>Tennis day type</Text>
+            <Chips testPrefix="filter-tennis-day-type" value={dayTypeFilter} onChange={value => { setDayTypeFilter(value); reset(); }} options={dayTypeFilters} disabled={pending} />
+            <Text style={label}>Activity type</Text>
+            <Chips testPrefix="filter-plan-activity-type" value={activityFilter} onChange={value => { setActivityFilter(value); reset(); }} options={activityFilters} disabled={pending} />
+            <Text testID="history-plan-count" style={{ fontFamily: F.semi, fontSize: 13, color: c.foreground }}>
+              {previousPlans.length} matching previous {previousPlans.length === 1 ? 'plan' : 'plans'}
+            </Text>
+            {previousPlans.length === 0 ? <Muted>No previous plans match these filters. Choose a later destination date or change a filter.</Muted> :
+              previousPlans.map(item => {
+                const disabled = item.slots === 0 || pending;
+                return <Pressable
+                  key={item.date}
+                  testID={`history-plan-${item.date}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled, selected: sourceDate.trim() === item.date }}
+                  disabled={disabled}
+                  onPress={() => { tap(); chooseHistoryPlan(item); }}
+                  style={{ borderWidth: 1, borderColor: c.border, backgroundColor: c.secondary, borderRadius: 14, padding: 12, gap: 3, opacity: disabled ? 0.56 : 1 }}
+                >
+                  <Text style={{ fontFamily: F.bold, fontSize: 14, color: c.foreground }}>
+                    {item.date} · {item.tennisDayType === 'training' ? 'Training' : item.tennisDayType === 'tournament' ? 'Tournament' : 'Rest'}
+                  </Text>
+                  <Muted>Activity: {activityLabel(item.activityType)} · Rating: {item.rating === null ? 'Not rated' : `${item.rating}/10`}</Muted>
+                  <Muted>{item.sessions} {item.sessions === 1 ? 'session' : 'sessions'} · {item.slots} food {item.slots === 1 ? 'slot' : 'slots'} · {item.foods} attached {item.foods === 1 ? 'food' : 'foods'}</Muted>
+                  <Text style={{ fontFamily: F.semi, fontSize: 12, color: disabled ? c.mutedForeground : c.primary }}>
+                    {item.slots === 0 ? 'No timed food slots to copy' : 'Use this plan · copy to the following day'}
+                  </Text>
+                </Pressable>;
+              })}
+          </>}
+      </Card>
+      </View>
 
       <Text style={label}>To person (same or another)</Text>
       <Chips testPrefix="copy-target-person" value={String(effTargetId ?? '')} onChange={v => { setTargetId(Number(v)); reset(); }} options={all.map(p => ({ value: String(p.id), label: p.name }))} disabled={pending} />

@@ -14,6 +14,8 @@ import type {
   MealTimeInput,
   MealAlertInput,
   TennisPlanInput,
+  TennisPlanRatingInput,
+  TennisPlanHistoryItem,
   TennisDietInput,
   TennisDietDeleteInput,
   CopyTennisFoodPlanInput,
@@ -59,6 +61,8 @@ export type {
   TennisPlan,
   TennisSession,
   TennisPlanInput,
+  TennisPlanRatingInput,
+  TennisPlanHistoryItem,
   TennisDiet,
   TennisDietInput,
   TennisDietDeleteInput,
@@ -136,6 +140,7 @@ function useLocalMutation<TData, TVariables>(
       ));
       await queryClient.invalidateQueries({ queryKey: ['getMealReminderSource'] });
       await queryClient.invalidateQueries({ queryKey: ['listTennisFoodPlanDates'] });
+      await queryClient.invalidateQueries({ queryKey: ['listTennisPlanHistory'] });
     },
   });
 }
@@ -233,6 +238,10 @@ export function useSaveTennisPlan() {
   return useLocalMutation(({ data }: { data: TennisPlanInput }) =>
     localStore.saveTennisPlan(data), [['getDayActivity'], ...ENTRIES_REFRESH]);
 }
+export function useSaveTennisPlanRating() {
+  return useLocalMutation(({ data }: { data: TennisPlanRatingInput }) =>
+    localStore.saveTennisPlanRating(data), [['getDayActivity'], ['listTennisPlanHistory']]);
+}
 export function useSaveTennisDiet() {
   return useLocalMutation(({ data }: { data: TennisDietInput }) =>
     localStore.saveTennisDiet(data), [['getDayActivity'], ...ENTRIES_REFRESH]);
@@ -243,6 +252,9 @@ export function useDeleteTennisDiet() {
 }
 export function useTennisFoodPlanDates(personId: number, options?: LocalQueryOptions<import('./local-models').TennisFoodPlanDate[]>) {
   return useLocalQuery(['listTennisFoodPlanDates', personId], () => localStore.listTennisFoodPlanDates(personId), options);
+}
+export function useTennisPlanHistory(personId: number, options?: LocalQueryOptions<TennisPlanHistoryItem[]>) {
+  return useLocalQuery(['listTennisPlanHistory', personId], () => localStore.listTennisPlanHistory(personId), options);
 }
 export function useCopyTennisFoodPlan() {
   return useLocalMutation(({ data }: { data: CopyTennisFoodPlanInput }) =>
