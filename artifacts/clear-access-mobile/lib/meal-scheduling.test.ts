@@ -65,6 +65,7 @@ test('schedules stay isolated by person/date and concurrent edits preserve other
 test('tennis session/time/reference changes do not erase ordinary meal schedules and vice versa', async () => {
   const store = createLocalStore(new MemoryStorage());
   await store.saveMealTime({ date, personId, meal: 'breakfast', time: '09:00' });
+  await store.saveDayActivity({ date, personId, activityType: 'training_120' });
   await store.saveTennisPlan({ date, personId, plan: {
     ...emptyTennisPlan(), sessions: [{ kind: 'practice', startTime: '10:00', durationMinutes: 90, intensity: 'moderate' }],
   } });

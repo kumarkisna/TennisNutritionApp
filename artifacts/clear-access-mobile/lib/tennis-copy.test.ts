@@ -16,6 +16,8 @@ const sourceDate = '2026-10-04', targetDate = '2026-10-06', sourcePersonId = 1;
 async function setup() {
   const storage = new Storage(), store = createLocalStore(storage);
   const target = await store.createPerson({ name: 'Receiver', activityLevel: 'light', baselineCalories: 2000, ironGoalMg: 18, ironGoalSource: 'Test reference' });
+  await store.saveDayActivity({ personId: sourcePersonId, date: sourceDate, activityType: 'training_120' });
+  await store.saveDayActivity({ personId: target.id, date: targetDate, activityType: 'training_120' });
   await store.saveTennisPlan({ personId: sourcePersonId, date: sourceDate, plan: {
     ...emptyTennisPlan(), sessions: [{ kind: 'practice', startTime: '09:00', durationMinutes: 90, intensity: 'moderate' }],
   } });
@@ -79,6 +81,7 @@ test('preserves destination ordinary portions, training sessions, activity, cloc
 });
 test('source day selection is exact and another person may receive on the same date', async () => {
   const { store, input, target } = await setup();
+  await store.saveDayActivity({ personId: target.id, date: sourceDate, activityType: 'training_120' });
   await store.copyTennisFoodPlan({ ...input, targetDate: sourceDate });
   assert.equal((await store.listMealEntries({ personId: target.id, date: sourceDate })).length, 2);
   assert.equal((await store.listMealEntries({ personId: target.id, date: targetDate })).length, 0);
@@ -92,6 +95,15 @@ test('existing destination timetables and repeated copies are rejected without r
   await assert.rejects(store.copyTennisFoodPlan(input), /already has/);
   assert.equal(storage.values.get(LOCAL_STORAGE_KEY), before);
   assert.deepEqual(await store.exportForTests(), state);
+});
+
+test('copy refuses to add an active tennis plan to a Rest or ordinary destination', async () => {
+  const { store, input, target, storage } = await setup();
+  await store.saveDayActivity({ personId: target.id, date: targetDate, activityType: 'rest' });
+  const before = storage.values.get(LOCAL_STORAGE_KEY);
+  await assert.rejects(store.copyTennisFoodPlan(input), /Rest or ordinary day/);
+  assert.equal(storage.values.get(LOCAL_STORAGE_KEY), before);
+  assert.equal((await store.getDayActivity({ personId: target.id, date: targetDate })).tennis, undefined);
 });
 test('invalid dates, missing people, same-person same-date copy and absent source reject before writes', async () => {
   const { store, input, storage } = await setup();
@@ -113,6 +125,7 @@ test('same-person reuse copies to another date, preserves both days and creates 
   const retained = await store.createMealEntry({ ...targetParams, meal: 'snack', foodId: food.id, grams: 50 });
   await store.saveMealTime({ ...targetParams, meal: 'lunch', time: '14:00' });
   await store.saveMealAlerts({ ...targetParams, meal: 'lunch', alerts: [{ id: 'alert-reuse', minutesBefore: 15, enabled: true }] });
+  await store.saveDayActivity({ ...targetParams, activityType: 'training_120' });
   const ownPlan = { ...emptyTennisPlan(), sessions: [{ kind: 'practice' as const, startTime: '17:00', durationMinutes: 45, intensity: 'light' as const }] };
   await store.saveTennisPlan({ ...targetParams, plan: ownPlan });
   const targetBefore = await store.getDayActivity(targetParams), people = await store.listPeople();
@@ -143,6 +156,7 @@ test('same-person reuse is available with only one saved person', async () => {
   const { store, input, target } = await setup();
   await store.deletePerson(target.id);
   assert.equal((await store.listPeople()).length, 1);
+  await store.saveDayActivity({ personId: sourcePersonId, date: targetDate, activityType: 'training_120' });
   await store.copyTennisFoodPlan({ ...input, targetPersonId: sourcePersonId, expectedTargetName: 'Me' });
   assert.equal((await store.getDailySummary({ personId: sourcePersonId, date: targetDate })).entryCount, 2);
 });

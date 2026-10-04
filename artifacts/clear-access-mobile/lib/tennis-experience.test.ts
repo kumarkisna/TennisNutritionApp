@@ -21,6 +21,8 @@ function training() {
 
 test('whole-day ratings accept 0–10, can be cleared, survive plan edits, and restore from backup', async () => {
   const storage = new MemoryStorage(), store = createLocalStore(storage);
+  await store.saveDayActivity({ personId, date: dates[0], activityType: 'training_120' });
+  await store.saveDayActivity({ personId, date: dates[1], activityType: 'training_120' });
   await store.saveTennisPlan({ personId, date: dates[0], plan: training() });
   await store.saveTennisPlan({ personId, date: dates[1], plan: training() });
   await store.saveTennisPlanRating({ personId, date: dates[0], rating: 0 });
@@ -44,6 +46,7 @@ test('ratings require an existing plan and invalid scores are rejected in storag
   const storage = new MemoryStorage(), store = createLocalStore(storage);
   await assert.rejects(store.saveTennisPlanRating({ personId, date: dates[0], rating: 5 }), /Save a tennis plan/);
   await assert.rejects(store.saveTennisPlanRating({ personId: 99, date: dates[0], rating: 5 }), /not found/);
+  await store.saveDayActivity({ personId, date: dates[0], activityType: 'training_120' });
   await store.saveTennisPlan({ personId, date: dates[0], plan: training() });
   await store.saveTennisPlanRating({ personId, date: dates[0], rating: 7 });
   const backup = JSON.parse(await store.exportBackup());
@@ -68,6 +71,7 @@ test('history is scoped to one person/date and counts only foods linked to timed
   const food = (await store.listFoods())[0];
   await store.createMealEntry({ personId, date: dates[0], meal: 'breakfast', foodId: food.id, grams: 75, tennisDietId: slot.id });
   await store.createMealEntry({ personId, date: dates[0], meal: 'dinner', foodId: food.id, grams: 50 });
+  await store.saveDayActivity({ personId: other.id, date: dates[0], activityType: 'training_120' });
   await store.saveTennisPlan({ personId: other.id, date: dates[0], plan: training() });
   const rows = await store.listTennisPlanHistory(personId);
   assert.deepEqual(rows.map(row => [row.date, row.tennisDayType, row.activityType, row.sessions, row.slots, row.foods]), [
@@ -100,6 +104,7 @@ test('following dates advance across month ends, leap day, and year end', () => 
 test('copying never transfers the source score and preserves a destination score', async () => {
   const store = createLocalStore(new MemoryStorage());
   const target = await store.createPerson({ name: 'Receiver', activityLevel: 'light', baselineCalories: 2000 });
+  await store.saveDayActivity({ personId, date: dates[0], activityType: 'training_120' });
   await store.saveTennisPlan({ personId, date: dates[0], plan: training() });
   const slot = await store.saveTennisDiet({ personId, date: dates[0], phase: 'before', time: '08:00' });
   const food = (await store.listFoods())[0];
@@ -112,6 +117,7 @@ test('copying never transfers the source score and preserves a destination score
     expectedTargetName: target.name,
     expectedSource: getTennisFoodPlanFingerprint(source, entries, 'Me'),
   };
+  await store.saveDayActivity({ personId: target.id, date: dates[1], activityType: 'training_120' });
   await store.copyTennisFoodPlan(input);
   assert.equal((await store.getDayActivity({ personId: target.id, date: dates[1] })).tennis?.experienceRating, undefined);
   assert.equal((await store.getDayActivity({ personId, date: dates[0] })).tennis?.experienceRating, 9);

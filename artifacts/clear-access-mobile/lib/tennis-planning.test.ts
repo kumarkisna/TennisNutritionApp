@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 // @ts-ignore Node test modules belong to the direct regression runner.
 import test from 'node:test';
 import { createLocalStore, LOCAL_STORAGE_KEY } from './local-store';
-import { clockLabel, emptyTennisPlan, isTennisPlan, tennisDietChoiceFromFuelWindow, tennisFuelWindows, tennisPlanProblem } from './tennis-planning';
+import { clockLabel, emptyTennisPlan, isTennisPlan, tennisActivityPlanProblem, tennisDietChoiceFromFuelWindow, tennisFuelWindows, tennisPlanProblem } from './tennis-planning';
 import type { TennisPlan } from './local-models';
 
 class MemoryStorage {
@@ -116,8 +116,32 @@ test('clearing tennis removes only its metadata and existing legacy backups rema
   assert.equal((await store.getDayActivity({ date, personId: 1 })).tennis, undefined);
 });
 
+test('rest or ordinary day cannot be saved with tennis sessions, and activity cannot be switched to rest afterward', async () => {
+  const store = createLocalStore(new MemoryStorage());
+  const restPlan = emptyTennisPlan('rest');
+  assert.match(tennisActivityPlanProblem('rest', training()), /Rest or ordinary day/);
+  assert.equal(tennisActivityPlanProblem('training_120', training()), null);
+  assert.equal(tennisActivityPlanProblem('rest', restPlan), null);
+  assert.equal(tennisActivityPlanProblem('rest', null), null);
+
+  await assert.rejects(store.saveTennisPlan({ date, personId: 1, plan: training() }), /Rest or ordinary day/);
+  assert.equal((await store.getDayActivity({ date, personId: 1 })).tennis, undefined);
+  assert.equal((await store.getDayActivity({ date, personId: 1 })).activityType, 'rest');
+
+  await store.saveDayActivity({ date, personId: 1, activityType: 'training_120' });
+  await store.saveTennisPlan({ date, personId: 1, plan: training() });
+  await assert.rejects(store.saveDayActivity({ date, personId: 1, activityType: 'rest' }), /Rest or ordinary day/);
+  assert.equal((await store.getDayActivity({ date, personId: 1 })).activityType, 'training_120');
+
+  await store.saveTennisPlan({ date, personId: 1, plan: restPlan });
+  await store.saveDayActivity({ date, personId: 1, activityType: 'rest' });
+  assert.equal((await store.getDayActivity({ date, personId: 1 })).activityType, 'rest');
+  assert.equal((await store.getDayActivity({ date, personId: 1 })).tennis?.mode, 'rest');
+});
+
 test('failed writes and malformed backup tennis metadata preserve durable planner bytes', async () => {
   const storage = new MemoryStorage(), store = createLocalStore(storage);
+  await store.saveDayActivity({ date, personId: 1, activityType: 'training_120' });
   await store.saveTennisPlan({ date, personId: 1, plan: training() });
   const bytes = storage.values.get(LOCAL_STORAGE_KEY);
   storage.fail = true;
@@ -137,6 +161,7 @@ test('failed writes and malformed backup tennis metadata preserve durable planne
 test('deleted people cannot leave tennis plans behind and invalid owners/dates never save', async () => {
   const store = createLocalStore(new MemoryStorage());
   const player = await store.createPerson({ name: 'Test player', activityLevel: 'light', baselineCalories: 2000 });
+  await store.saveDayActivity({ date, personId: player.id, activityType: 'training_120' });
   await store.saveTennisPlan({ date, personId: player.id, plan: training() });
   await store.deletePerson(player.id);
   const state = await store.exportForTests() as { activities: { personId: number }[] };

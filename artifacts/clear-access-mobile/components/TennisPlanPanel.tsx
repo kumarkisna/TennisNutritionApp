@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Linking, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useGetDayActivity, useSaveTennisPlan, useSaveTennisPlanRating, type Person, type TennisPlan, type TennisSession } from '@/lib/local-api';
-import { emptyTennisPlan, fuelLabels, tennisFuelWindows, tennisPlanProblem, TENNIS_SOURCE_URL } from '@/lib/tennis-planning';
+import { emptyTennisPlan, fuelLabels, tennisFuelWindows, tennisPlanProblem, tennisActivityPlanProblem, TENNIS_SOURCE_URL } from '@/lib/tennis-planning';
 import { useColors } from '@/hooks/useColors';
 import { getAgeOnDate } from '@/lib/planning-targets';
 import { TennisFoodPlanCopy } from '@/components/TennisFoodPlanCopy';
@@ -57,6 +57,7 @@ export function TennisPlanPanel({ person, date }: { person: Person; date: string
   const [ratingError, setRatingError] = useState<unknown>(null);
   const saving = save.isPending;
   const saved = day.data?.tennis;
+  const savedActivityProblem = tennisActivityPlanProblem(day.data?.activityType ?? 'rest', saved);
   const age = person.dateOfBirth ? getAgeOnDate(person.dateOfBirth, date) : person.ageYears;
   const young = age === null || age < 18;
 
@@ -88,6 +89,8 @@ export function TennisPlanPanel({ person, date }: { person: Person; date: string
     if (!draft) return;
     const { plan, problem: p } = buildPlan(draft);
     if (!plan) { setProblem(p); warn(); return; }
+    const activityProblem = tennisActivityPlanProblem(day.data?.activityType ?? 'rest', plan);
+    if (activityProblem) { setProblem(activityProblem); warn(); return; }
     setProblem(null);
     void commit(plan, person.id, date);
   }
@@ -148,6 +151,7 @@ export function TennisPlanPanel({ person, date }: { person: Person; date: string
       <Btn icon="plus" label="Plan tennis day" testID="button-create-tennis-plan" onPress={() => open(emptyTennisPlan())} />
     </> : <>
       <Text testID="value-tennis-mode" style={{ fontFamily: F.bold, fontSize: 16, color: c.primary }}>{saved.mode === 'rest' ? 'Rest day' : saved.mode === 'tournament' ? 'Tournament day' : 'Training day'}</Text>
+      {savedActivityProblem ? <View testID="tennis-activity-mismatch"><ErrorBox error={new Error(savedActivityProblem)} /></View> : null}
       {saved.mode !== 'rest' ? <Muted>Planned workload: <Text testID="value-tennis-workload" style={{ fontFamily: F.bold, color: c.foreground }}>{Math.floor(workload / 60)} h {workload % 60} min</Text> across {saved.sessions.length} {saved.sessions.length === 1 ? 'session' : 'sessions'}</Muted> : null}
       <View testID="tennis-experience-rating" style={{ gap: 8, borderTopWidth: 1, borderTopColor: c.border, paddingTop: 12 }}>
         <Eyebrow>Rate this day's plan</Eyebrow>

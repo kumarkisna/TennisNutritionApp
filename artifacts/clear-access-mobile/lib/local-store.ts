@@ -1,6 +1,6 @@
 import { referenceFoodSeed } from './reference-food-seed';
 import { calculatePlanningEstimates } from './planning-targets';
-import { isTennisPlan, isTennisDiet, tennisPlanProblem } from './tennis-planning';
+import { isTennisPlan, isTennisDiet, tennisPlanProblem, tennisActivityPlanProblem } from './tennis-planning';
 import { getMealTimes, isMealTimes } from './meal-scheduling';
 import { isMealAlerts, type ReminderSource } from './meal-reminders';
 import { getTennisFoodPlanFingerprint } from './tennis-copy';
@@ -974,6 +974,8 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
         findPerson(draft, input.personId);
         if (!DAY_ACTIVITIES.includes(input.activityType)) fail('Choose a valid planned activity.');
         const found = draft.activities.find(activity => activity.date === input.date && activity.personId === input.personId);
+        const activityProblem = tennisActivityPlanProblem(input.activityType, found?.tennis);
+        if (activityProblem) fail(activityProblem);
         if (found) found.activityType = input.activityType;
         else draft.activities.push({ date: input.date, personId: input.personId, activityType: input.activityType });
         return draft.activities.find(activity => activity.date === input.date && activity.personId === input.personId)!;
@@ -1025,11 +1027,13 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
       return transact(draft => {
         if (!isValidCalendarDate(input.date)) fail('Choose a valid date.');
         findPerson(draft, input.personId);
+        let activity = draft.activities.find(item => item.date === input.date && item.personId === input.personId);
         if (input.plan !== null) {
           const problem = tennisPlanProblem(input.plan);
           if (problem) fail(problem);
+          const activityProblem = tennisActivityPlanProblem(activity?.activityType ?? 'rest', input.plan);
+          if (activityProblem) fail(activityProblem);
         }
-        let activity = draft.activities.find(item => item.date === input.date && item.personId === input.personId);
         if (!activity) {
           activity = { date: input.date, personId: input.personId, activityType: 'rest' };
           draft.activities.push(activity);
@@ -1147,6 +1151,10 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
         }
         let target = draft.activities.find(day => day.personId === targetPerson.id && day.date === input.targetDate);
         if (target?.tennis?.diets?.length) fail('The destination already has a tennis food timetable. Choose another date; nothing was overwritten.');
+        if (!target?.tennis) {
+          const activityProblem = tennisActivityPlanProblem(target?.activityType ?? 'rest', source);
+          if (activityProblem) fail(activityProblem);
+        }
         // No replacement or deletion: ordinary meals and all destination preferences survive.
         if (!target) {
           target = { date: input.targetDate, personId: targetPerson.id, activityType: 'rest' };

@@ -19,9 +19,13 @@ const date = '2026-10-04', personId = 1;
 const plan = (): TennisPlan => ({
   ...emptyTennisPlan(), sessions: [{ kind: 'practice', startTime: '09:00', durationMinutes: 90, intensity: 'moderate' }],
 });
+async function prepareActiveDay(store: ReturnType<typeof createLocalStore>) {
+  await store.saveDayActivity({ date, personId, activityType: 'training_120' });
+}
 
 test('scheduled diets attach actual portions and total them exactly once across phases', async () => {
   const storage = new MemoryStorage(), store = createLocalStore(storage);
+  await prepareActiveDay(store);
   await store.saveTennisPlan({ date, personId, plan: plan() });
   const food = (await store.listFoods())[0];
   let calories = 0;
@@ -47,6 +51,7 @@ test('scheduled diets attach actual portions and total them exactly once across 
 test('time and stage edits preserve food links; stale session editor does not erase schedules', async () => {
   const store = createLocalStore(new MemoryStorage());
   const stalePlan = plan();
+  await prepareActiveDay(store);
   await store.saveTennisPlan({ date, personId, plan: stalePlan });
   const slot = await store.saveTennisDiet({ date, personId, phase: 'before', time: '08:00' });
   const food = (await store.listFoods())[0];
@@ -83,6 +88,7 @@ test('removing a schedule or whole tennis plan unschedules but never removes foo
 test('assignment and reassignment reject stale slots, cross-person and cross-date links', async () => {
   const store = createLocalStore(new MemoryStorage());
   const other = await store.createPerson({ name: 'Test player', activityLevel: 'light', baselineCalories: 2000 });
+  await prepareActiveDay(store);
   await store.saveTennisPlan({ date, personId, plan: plan() });
   const first = await store.saveTennisDiet({ date, personId, phase: 'before', time: '08:00' });
   const second = await store.saveTennisDiet({ date, personId, phase: 'during', time: '09:45' });
@@ -100,6 +106,7 @@ test('assignment and reassignment reject stale slots, cross-person and cross-dat
 
 test('strict backup validation rejects malformed schedules and orphan links without modifying bytes', async () => {
   const storage = new MemoryStorage(), store = createLocalStore(storage);
+  await prepareActiveDay(store);
   await store.saveTennisPlan({ date, personId, plan: plan() });
   const slot = await store.saveTennisDiet({ date, personId, phase: 'after', time: '11:30' });
   const food = (await store.listFoods())[0];
@@ -121,6 +128,7 @@ test('strict backup validation rejects malformed schedules and orphan links with
 
 test('failed schedule writes leave schedules, portions and committed state unchanged', async () => {
   const storage = new MemoryStorage(), store = createLocalStore(storage);
+  await prepareActiveDay(store);
   await store.saveTennisPlan({ date, personId, plan: plan() });
   const slot = await store.saveTennisDiet({ date, personId, phase: 'before', time: '08:00' });
   const food = (await store.listFoods())[0];
@@ -137,6 +145,7 @@ test('failed schedule writes leave schedules, portions and committed state uncha
 test('invalid scheduled times, missing plans and schedule limits fail explicitly', async () => {
   const store = createLocalStore(new MemoryStorage());
   await assert.rejects(store.saveTennisDiet({ date, personId, phase: 'before', time: '08:00' }), /Save a tennis/);
+  await prepareActiveDay(store);
   await store.saveTennisPlan({ date, personId, plan: plan() });
   for (const time of ['8:00', '24:00', '09:60', 'bad']) await assert.rejects(store.saveTennisDiet({ date, personId, phase: 'before', time }), /HH:MM/);
   for (let i = 0; i < 24; i++) await store.saveTennisDiet({ date, personId, phase: 'before', time: '08:00' });

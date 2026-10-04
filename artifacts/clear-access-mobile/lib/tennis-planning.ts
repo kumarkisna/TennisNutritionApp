@@ -1,4 +1,4 @@
-import type { TennisPlan, TennisDiet } from './local-models';
+import type { DayActivityType, TennisPlan, TennisDiet } from './local-models';
 
 export const TENNIS_SOURCE_URL = 'https://www.usta.com/en/home/improve/tips-and-instruction/national/nutrition-for-tennis--eat-to-win-.html';
 export const fuelLabels = { before: 'Before play', during: 'During play', between: 'Between sessions / matches', after: 'Recovery', hydration: 'Hydration / conditions' } as const;
@@ -53,6 +53,13 @@ export function tennisPlanProblem(value: unknown): string | null {
   return null;
 }
 export const isTennisPlan = (value: unknown): value is TennisPlan => tennisPlanProblem(value) === null;
+
+export function tennisActivityPlanProblem(activityType: DayActivityType, plan: TennisPlan | null | undefined): string | null {
+  if (activityType === 'rest' && plan && plan.mode !== 'rest') {
+    return 'This day is set to Rest or ordinary day, but the tennis plan includes a practice, gym session or match. Change Activity you are planning to an active activity, or switch the tennis plan to Rest before saving. Nutrition references are not changed automatically.';
+  }
+  return null;
+}
 
 export function clockLabel(minutes: number): string {
   const day = Math.floor(minutes / 1440);
