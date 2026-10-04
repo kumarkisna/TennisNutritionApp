@@ -6,6 +6,7 @@ import { useGetDailySummary, useGetDayActivity, useListMealEntries, type Meal } 
 import { usePlanner } from '@/contexts/PlannerProvider';
 import { useColors } from '@/hooks/useColors';
 import { MealTimeControl } from '@/components/MealTimeControl';
+import { MealAlertsControl } from '@/components/MealAlertsControl';
 import { getMealTimes } from '@/lib/meal-scheduling';
 import { ReferencePanel } from '@/components/ReferencePanel';
 import { TennisPlanPanel } from '@/components/TennisPlanPanel';
@@ -65,6 +66,7 @@ export default function Planner() {
           <Btn small icon="plus" label="Add" testID={`button-add-${meal}`} onPress={() => router.push({ pathname: '/portion', params: { meal } })} />
         </View>
         {day.isError ? <Muted>Meal time unavailable.</Muted> : <MealTimeControl personId={person.id} date={date} meal={meal} time={getMealTimes(day.data?.mealTimes)[meal]} loading={day.isLoading} />}
+        <MealAlertsControl personId={person.id} date={date} meal={meal} mealTime={getMealTimes(day.data?.mealTimes)[meal]} alerts={day.data?.mealAlerts?.[meal]} loading={day.isLoading} error={day.isError} />
         {summary.isLoading ? <LoadingBlock rows={1} height={70} /> : !summary.isError && ms ? <CaloriesMacros calories={ms.nutrition.calories} protein={ms.nutrition.protein} carbs={ms.nutrition.carbs} fat={ms.nutrition.fat} testPrefix={`meal-${meal}`} /> : null}
         {list.length === 0 ? <Muted>Nothing planned for {meal} yet.</Muted> : list.map(e => <Pressable key={e.id} testID={`row-entry-${e.id}`} onPress={() => { tap(); router.push({ pathname: '/portion', params: { meal, entryId: String(e.id) } }); }}
           style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 10, gap: 2 }}>

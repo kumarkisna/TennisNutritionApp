@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { PlanningTargets } from '@/components/PlanningTargets';
+import { MealAlertSettings } from '@/components/MealAlertSettings';
 import { LocalBackup } from '@/components/LocalBackup';
 import { ThemePicker } from '@/components/ThemePicker';
 import { useColors } from '@/hooks/useColors';
@@ -94,6 +95,7 @@ export default function Settings() {
     <Eyebrow>04 / Settings</Eyebrow>
     <Title sub="Each person keeps their own details. Estimates are for planning only, never medical requirements.">{`${person.name}'s details.`}</Title>
     <ThemePicker />
+    <MealAlertSettings />
     <LocalBackup />
     <Card>
       <Eyebrow>Saved planning targets</Eyebrow>

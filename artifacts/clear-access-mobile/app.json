@@ -10,11 +10,11 @@
     "ios": {
       "supportsTablet": false
     },
-    "android": {},
+    "android": { "permissions": ["android.permission.SCHEDULE_EXACT_ALARM"] },
     "web": {
       "favicon": "./assets/images/icon.png"
     },
-    "plugins": ["expo-router"],
+    "plugins": ["expo-router", "expo-notifications"],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true

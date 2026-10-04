@@ -168,8 +168,10 @@ export type TennisDietDeleteInput = { date: string; personId: number; id: string
 export type TennisPlanInput = { date: string; personId: number; plan: TennisPlan | null };
 export type MealTimes = Record<Meal, string>;
 export type MealTimeInput = { date: string; personId: number; meal: Meal; time: string };
-export type DayActivity = { date: string; personId: number; activityType: DayActivityType; tennis?: TennisPlan; mealTimes?: MealTimes };
-export type DayActivityInput = Omit<DayActivity, 'tennis' | 'mealTimes'>;
+export type MealAlert = { id: string; minutesBefore: number; enabled: boolean };
+export type MealAlertInput = { date: string; personId: number; meal: Meal; alerts: MealAlert[] };
+export type DayActivity = { date: string; personId: number; activityType: DayActivityType; tennis?: TennisPlan; mealTimes?: MealTimes; mealAlerts?: Partial<Record<Meal, MealAlert[]>> };
+export type DayActivityInput = Omit<DayActivity, 'tennis' | 'mealTimes' | 'mealAlerts'>;
 
 export type MealSummary = { meal: Meal; count: number; nutrition: Nutrition };
 export type DailySummary = {

@@ -6,6 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { PlannerProvider } from '@/contexts/PlannerProvider';
+import { MealReminderProvider } from '@/contexts/MealReminderProvider';
 import { ThemeProvider } from '@/contexts/ThemeProvider';
 import { useColors } from '@/hooks/useColors';
 import { StatusBar } from 'expo-status-bar';
@@ -60,11 +61,13 @@ function ThemeReadyApp() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <PlannerProvider>
+          <MealReminderProvider>
           <GestureHandlerRootView style={{ flex: 1 }}>
             <KeyboardProvider>
               <RootLayoutNav />
             </KeyboardProvider>
           </GestureHandlerRootView>
+          </MealReminderProvider>
         </PlannerProvider>
       </QueryClientProvider>
     </ErrorBoundary>

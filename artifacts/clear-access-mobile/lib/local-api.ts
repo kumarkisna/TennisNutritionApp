@@ -12,6 +12,7 @@ import type {
   DayActivity,
   DayActivityInput,
   MealTimeInput,
+  MealAlertInput,
   TennisPlanInput,
   TennisDietInput,
   TennisDietDeleteInput,
@@ -52,6 +53,8 @@ export type {
   DayActivityInput,
   MealTimes,
   MealTimeInput,
+  MealAlert,
+  MealAlertInput,
   TennisPlan,
   TennisSession,
   TennisPlanInput,
@@ -89,7 +92,7 @@ export type {
 } from './local-models';
 export { createLocalStore, LOCAL_STORAGE_KEY, isValidCalendarDate } from './local-store';
 
-const localStore = createLocalStore(AsyncStorage);
+export const localStore = createLocalStore(AsyncStorage);
 
 export const exportLocalBackup = () => localStore.exportBackup();
 export const getListPeopleQueryKey = () => ['listPeople'] as const;
@@ -127,6 +130,7 @@ function useLocalMutation<TData, TVariables>(
       await Promise.all(invalidatePrefixes.map(queryKey =>
         queryClient.invalidateQueries({ queryKey }),
       ));
+      await queryClient.invalidateQueries({ queryKey: ['getMealReminderSource'] });
     },
   });
 }
@@ -212,6 +216,13 @@ export function useSaveDayActivity() {
 export function useSaveMealTime() {
   return useLocalMutation(({ data }: { data: MealTimeInput }) =>
     localStore.saveMealTime(data), [['getDayActivity']]);
+}
+export function useMealReminderSource() {
+  return useLocalQuery(['getMealReminderSource'], () => localStore.getMealReminderSource());
+}
+export function useSaveMealAlerts() {
+  return useLocalMutation(({ data }: { data: MealAlertInput }) =>
+    localStore.saveMealAlerts(data), [['getDayActivity']]);
 }
 export function useSaveTennisPlan() {
   return useLocalMutation(({ data }: { data: TennisPlanInput }) =>

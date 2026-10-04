@@ -2,6 +2,7 @@ import { referenceFoodSeed } from './reference-food-seed';
 import { calculatePlanningEstimates } from './planning-targets';
 import { isTennisPlan, isTennisDiet, tennisPlanProblem } from './tennis-planning';
 import { getMealTimes, isMealTimes } from './meal-scheduling';
+import { isMealAlerts, type ReminderSource } from './meal-reminders';
 import {
   ActivityLevel,
   DayActivityType,
@@ -11,6 +12,7 @@ import {
   type DayActivity,
   type DayActivityInput,
   type MealTimeInput,
+  type MealAlertInput,
   type TennisPlanInput,
   type TennisDietInput,
   type TennisDietDeleteInput,
@@ -69,6 +71,7 @@ type StoreData = {
   nextFoodId: number;
   nextEntryId: number;
   nextHeightRecordId: number;
+  mealAlertsEnabled?: boolean;
 };
 
 type BackupEnvelope = {
@@ -160,6 +163,7 @@ function validateStoredData(value: unknown): StoreData {
     fail(`Unsupported local planner storage version (${String(value.version)}). Your data was not changed.`);
   }
   const { people, foods, entries, activities, heightRecords, nextPersonId, nextFoodId, nextEntryId, nextHeightRecordId } = value;
+  if (value.mealAlertsEnabled !== undefined && typeof value.mealAlertsEnabled !== 'boolean') fail('Local reminder settings are invalid. Your data was not changed.');
   if (
     !Array.isArray(people) || !Array.isArray(foods) || !Array.isArray(entries) || !Array.isArray(activities) ||
     !Array.isArray(heightRecords) ||
@@ -217,7 +221,8 @@ function validateStoredData(value: unknown): StoreData {
       !personIds.has(activity.personId as number) ||
       !DAY_ACTIVITIES.includes(activity.activityType as DayActivity['activityType']) ||
       (activity.tennis !== undefined && !isTennisPlan(activity.tennis)) ||
-      (activity.mealTimes !== undefined && !isMealTimes(activity.mealTimes))) {
+      (activity.mealTimes !== undefined && !isMealTimes(activity.mealTimes)) ||
+      (activity.mealAlerts !== undefined && !isMealAlerts(activity.mealAlerts))) {
       fail('Local planner storage contains an invalid day activity. Your data was not changed.');
     }
     const key = `${activity.personId}:${activity.date}`;
@@ -263,7 +268,7 @@ function validateBackupData(value: unknown): StoreData {
   if (!isRecord(value) || !hasExactKeys(value, [
     'version', 'people', 'foods', 'entries', 'activities', 'heightRecords',
     'nextPersonId', 'nextFoodId', 'nextEntryId', 'nextHeightRecordId',
-  ]) || value.version !== STORE_VERSION ||
+  ], ['mealAlertsEnabled']) || (Object.hasOwn(value, 'mealAlertsEnabled') && typeof value.mealAlertsEnabled !== 'boolean') || value.version !== STORE_VERSION ||
     !Array.isArray(value.people) || !Array.isArray(value.foods) || !Array.isArray(value.entries) ||
     !Array.isArray(value.activities) || !Array.isArray(value.heightRecords)) {
     return invalid('data structure');
@@ -358,12 +363,13 @@ function validateBackupData(value: unknown): StoreData {
 
   const activityKeys = new Set<string>();
   for (const activity of value.activities) {
-    if (!isRecord(activity) || !hasExactKeys(activity, ['date', 'personId', 'activityType'], ['tennis', 'mealTimes']) ||
+    if (!isRecord(activity) || !hasExactKeys(activity, ['date', 'personId', 'activityType'], ['tennis', 'mealTimes', 'mealAlerts']) ||
       typeof activity.date !== 'string' || !isValidCalendarDate(activity.date) ||
       !Number.isSafeInteger(activity.personId) || !peopleById.has(activity.personId as number) ||
       !DAY_ACTIVITIES.includes(activity.activityType as DayActivity['activityType']) ||
       (Object.hasOwn(activity, 'tennis') && !isTennisPlan(activity.tennis)) ||
-      (Object.hasOwn(activity, 'mealTimes') && !isMealTimes(activity.mealTimes))) {
+      (Object.hasOwn(activity, 'mealTimes') && !isMealTimes(activity.mealTimes)) ||
+      (Object.hasOwn(activity, 'mealAlerts') && !isMealAlerts(activity.mealAlerts))) {
       return invalid('day activity');
     }
     const key = `${activity.personId}:${activity.date}`;
@@ -979,6 +985,34 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
         if (found) found.mealTimes = times;
         else draft.activities.push({ date: input.date, personId: input.personId, activityType: 'rest', mealTimes: times });
         return draft.activities.find(item => item.date === input.date && item.personId === input.personId)!;
+      });
+    },
+    async getMealReminderSource(): Promise<ReminderSource> {
+      return read(current => ({
+        enabled: current.mealAlertsEnabled ?? false,
+        people: current.people.map(({ id, name }) => ({ id, name })),
+        days: current.activities.map(({ date, personId, mealTimes, mealAlerts }) => ({ date, personId, mealTimes, mealAlerts })),
+      }));
+    },
+    async setMealAlertsEnabled(enabled: boolean): Promise<void> {
+      return transact(draft => {
+        if (typeof enabled !== 'boolean') fail('Choose on or off for meal alerts.');
+        draft.mealAlertsEnabled = enabled;
+      });
+    },
+    async saveMealAlerts(input: MealAlertInput): Promise<DayActivity> {
+      return transact(draft => {
+        if (!isValidCalendarDate(input.date)) fail('Choose a valid date.');
+        findPerson(draft, input.personId);
+        if (!MEALS.includes(input.meal) || !isMealAlerts({ [input.meal]: input.alerts })) fail('Use at most 8 valid alerts per meal, from 0 to 180 minutes before the meal.');
+        let day = draft.activities.find(item => item.date === input.date && item.personId === input.personId);
+        if (!day) {
+          day = { date: input.date, personId: input.personId, activityType: 'rest', mealTimes: getMealTimes() };
+          draft.activities.push(day);
+        }
+        day.mealAlerts = { ...day.mealAlerts, [input.meal]: clone(input.alerts) };
+        day.mealTimes ??= getMealTimes();
+        return day;
       });
     },
     async saveTennisPlan(input: TennisPlanInput): Promise<DayActivity> {
