@@ -59,7 +59,12 @@ export function clockLabel(minutes: number): string {
   const clock = ((minutes % 1440) + 1440) % 1440;
   return `${day < 0 ? 'Previous day ' : day > 0 ? 'Next day ' : ''}${String(Math.floor(clock / 60)).padStart(2, '0')}:${String(clock % 60).padStart(2, '0')}`;
 }
-export type TennisFuelWindow = { time: string; title: string; detail: string; phase: keyof TennisPlan['fuel'] };
+export type TennisFuelWindow = { time: string; title: string; detail: string; phase: TennisDiet['phase'] };
+
+export function tennisDietChoiceFromFuelWindow(window: TennisFuelWindow): Pick<TennisDiet, 'phase' | 'time'> | null {
+  const time = window.time.split('–')[0]?.trim();
+  return isClockTime(time) ? { phase: window.phase, time } : null;
+}
 
 // General planning examples based on USTA's timing guidance, not prescribed intakes.
 // Deliberately no calories, carbohydrate quantities, supplements, or fluid-volume targets.

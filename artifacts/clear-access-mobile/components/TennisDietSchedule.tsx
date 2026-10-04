@@ -2,15 +2,15 @@ import { useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useDeleteTennisDiet, useListMealEntries, useSaveTennisDiet, type Person, type TennisDiet, type TennisPlan } from '@/lib/local-api';
-import { dietPhaseLabels, isClockTime, timeMinutes } from '@/lib/tennis-planning';
+import { dietPhaseLabels, isClockTime, tennisDietChoiceFromFuelWindow, timeMinutes, type TennisFuelWindow } from '@/lib/tennis-planning';
 import { useColors } from '@/hooks/useColors';
 import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, LoadingBlock, Muted, success, tap, warn } from '@/components/ui';
 import { n } from '@/lib/format';
 
 const phaseOptions = (Object.keys(dietPhaseLabels) as TennisDiet['phase'][]).map(value => ({ value, label: dietPhaseLabels[value] }));
-type Editor = { id?: string; phase: TennisDiet['phase']; time: string };
+type Editor = { id?: string; phase: TennisDiet['phase']; time: string; suggestionTitle?: string };
 
-export function TennisDietSchedule({ person, date, plan }: { person: Person; date: string; plan: TennisPlan }) {
+export function TennisDietSchedule({ person, date, plan, suggestions }: { person: Person; date: string; plan: TennisPlan; suggestions: TennisFuelWindow[] }) {
   const c = useColors();
   const router = useRouter();
   const entries = useListMealEntries({ personId: person.id, date });
@@ -20,8 +20,13 @@ export function TennisDietSchedule({ person, date, plan }: { person: Person; dat
   const [problem, setProblem] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [showTimingOptions, setShowTimingOptions] = useState(false);
   const busy = save.isPending || del.isPending;
   const diets = useMemo(() => [...(plan.diets ?? [])].sort((a, b) => timeMinutes(a.time) - timeMinutes(b.time) || a.id.localeCompare(b.id)), [plan.diets]);
+  const timingOptions = useMemo(() => suggestions.flatMap((window, index) => {
+    const choice = tennisDietChoiceFromFuelWindow(window);
+    return choice ? [{ ...choice, window, index }] : [];
+  }), [suggestions]);
 
   async function submit() {
     if (!editor) return;
@@ -31,7 +36,7 @@ export function TennisDietSchedule({ person, date, plan }: { person: Person; dat
     setProblem(null); setError(null);
     try {
       await save.mutateAsync({ data: { personId: person.id, date, ...(editor.id ? { id: editor.id } : {}), phase: editor.phase, time } });
-      success(); setEditor(null);
+      success(); setEditor(null); setShowTimingOptions(false);
     } catch (e) { warn(); setError(e); }
   }
   async function remove(id: string) {
@@ -67,7 +72,7 @@ export function TennisDietSchedule({ person, date, plan }: { person: Person; dat
               <Btn variant="ghost" label="Keep it" disabled={busy} testID={`button-cancel-delete-diet-${d.id}`} onPress={() => setConfirmId(null)} />
             </Card> : <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
               <Btn small icon="plus" label="Add food" disabled={busy || editor !== null} testID={`button-add-diet-food-${d.id}`} onPress={() => router.push({ pathname: '/portion', params: { tennisDietId: d.id, meal: 'snack' } })} />
-              <Btn small variant="ghost" icon="clock" label="Edit" disabled={busy || editor !== null} testID={`button-edit-diet-${d.id}`} onPress={() => { setError(null); setProblem(null); setConfirmId(null); setEditor({ id: d.id, phase: d.phase, time: d.time }); }} />
+               <Btn small variant="ghost" icon="clock" label="Edit" disabled={busy || editor !== null} testID={`button-edit-diet-${d.id}`} onPress={() => { setError(null); setProblem(null); setConfirmId(null); setShowTimingOptions(false); setEditor({ id: d.id, phase: d.phase, time: d.time }); }} />
               <Btn small variant="danger" icon="trash-2" label="Delete" disabled={busy || editor !== null} testID={`button-delete-diet-${d.id}`} onPress={() => { setError(null); setConfirmId(d.id); }} />
             </View>}
           </View>
@@ -77,12 +82,38 @@ export function TennisDietSchedule({ person, date, plan }: { person: Person; dat
     {editor ? <Card tone="mint">
       <View testID="tennis-diet-editor" />
       <Text style={{ fontFamily: F.bold, fontSize: 15, color: c.foreground }}>{editor.id ? 'Edit food slot' : 'New food slot'}</Text>
-      <Chips testPrefix="tennis-diet-phase" value={editor.phase} onChange={v => setEditor(e => (e ? { ...e, phase: v } : e))} options={phaseOptions} disabled={busy} />
-      <Field label="Time (24h HH:MM)" value={editor.time} onChangeText={v => setEditor(e => (e ? { ...e, time: v } : e))} placeholder="12:30" maxLength={5} autoCapitalize="none" keyboardType="numbers-and-punctuation" editable={!busy} testID="input-tennis-diet-time" />
+      <Chips testPrefix="tennis-diet-phase" value={editor.phase} onChange={v => setEditor(e => (e ? { ...e, phase: v, suggestionTitle: undefined } : e))} options={phaseOptions} disabled={busy} />
+      {!editor.id && timingOptions.length > 0 ? <>
+        <Btn small variant="ghost" icon="clock" label={showTimingOptions ? 'Hide proposed sections' : 'Choose a proposed section'} disabled={busy} testID="button-toggle-tennis-diet-suggestions" onPress={() => setShowTimingOptions(value => !value)} />
+        {showTimingOptions ? <View testID="tennis-diet-suggestions" style={{ gap: 7 }}>
+          <Muted>Select a section to fill its phase and suggested time. Time ranges use their start time. You can change the time below before saving.</Muted>
+          {timingOptions.map(choice => <Pressable
+            key={`${choice.window.title}-${choice.window.time}-${choice.index}`}
+            accessibilityRole="button"
+            accessibilityLabel={`Use ${choice.window.title} at ${choice.time}`}
+            disabled={busy}
+            testID={`button-use-tennis-diet-suggestion-${choice.index}`}
+            onPress={() => {
+              tap();
+              setEditor(current => current ? { ...current, phase: choice.phase, time: choice.time, suggestionTitle: choice.window.title } : current);
+              setShowTimingOptions(false);
+            }}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: c.border, borderRadius: 12, padding: 10, backgroundColor: c.secondary }}
+          >
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={{ fontFamily: F.semi, fontSize: 13, color: c.foreground }}>{choice.window.title}</Text>
+              <Muted>{choice.window.time === choice.time ? `Suggested time ${choice.time}` : `${choice.window.time} · use ${choice.time}`}</Muted>
+            </View>
+            <Text style={{ fontFamily: F.bold, fontSize: 12, color: c.primary }}>Use</Text>
+          </Pressable>)}
+        </View> : null}
+      </> : null}
+      {editor.suggestionTitle ? <Muted>Selected: {editor.suggestionTitle}. Adjust the time below if needed.</Muted> : null}
+      <Field label="Time (24h HH:MM)" value={editor.time} onChangeText={v => setEditor(e => (e ? { ...e, time: v, suggestionTitle: undefined } : e))} placeholder="12:30" maxLength={5} autoCapitalize="none" keyboardType="numbers-and-punctuation" editable={!busy} testID="input-tennis-diet-time" />
       {problem ? <ErrorBox error={new Error(problem)} /> : null}
       <Btn icon="check" label="Save slot" loading={save.isPending} disabled={busy} testID="button-save-tennis-diet" onPress={() => void submit()} />
-      <Btn variant="ghost" label="Cancel" disabled={busy} testID="button-cancel-tennis-diet" onPress={() => { setEditor(null); setProblem(null); setError(null); }} />
-    </Card> : <Btn variant="ghost" icon="plus" label={diets.length >= 24 ? 'Maximum 24 slots' : 'Add food slot'} disabled={busy || diets.length >= 24} testID="button-add-tennis-diet" onPress={() => { setError(null); setProblem(null); setConfirmId(null); setEditor({ phase: 'before', time: '12:00' }); }} />}
+      <Btn variant="ghost" label="Cancel" disabled={busy} testID="button-cancel-tennis-diet" onPress={() => { setEditor(null); setShowTimingOptions(false); setProblem(null); setError(null); }} />
+    </Card> : <Btn variant="ghost" icon="plus" label={diets.length >= 24 ? 'Maximum 24 slots' : 'Add food slot'} disabled={busy || diets.length >= 24} testID="button-add-tennis-diet" onPress={() => { setError(null); setProblem(null); setConfirmId(null); setShowTimingOptions(false); setEditor({ phase: 'before', time: '12:00' }); }} />}
     {error ? <ErrorBox error={error} /> : null}
   </View>;
 }

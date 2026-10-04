@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 // @ts-ignore Node test modules belong to the direct regression runner.
 import test from 'node:test';
 import { createLocalStore, LOCAL_STORAGE_KEY } from './local-store';
-import { clockLabel, emptyTennisPlan, isTennisPlan, tennisFuelWindows, tennisPlanProblem } from './tennis-planning';
+import { clockLabel, emptyTennisPlan, isTennisPlan, tennisDietChoiceFromFuelWindow, tennisFuelWindows, tennisPlanProblem } from './tennis-planning';
 import type { TennisPlan } from './local-models';
 
 class MemoryStorage {
@@ -71,6 +71,17 @@ test('fuel windows follow expected time order and include between-match guidance
   assert.equal(clockLabel(-150), 'Previous day 21:30');
   assert.equal(clockLabel(1470), 'Next day 00:30');
   assert.throws(() => tennisFuelWindows(emptyTennisPlan()), /Add at least/);
+});
+
+test('proposed tennis windows can prefill editable food-slot phase and time without inventing cross-day times', () => {
+  const windows = tennisFuelWindows(tournament());
+  const prePlay = windows.find(window => window.title.startsWith('Pre-play meal'));
+  const match = windows.find(window => window.title.startsWith('Match 1'));
+  if (!prePlay || !match) throw new Error('Expected proposed pre-play and match windows.');
+  assert.deepEqual(tennisDietChoiceFromFuelWindow(prePlay), { phase: 'before', time: '06:00' });
+  assert.deepEqual(tennisDietChoiceFromFuelWindow(match), { phase: 'during', time: '09:00' });
+  assert.equal(tennisDietChoiceFromFuelWindow({ time: 'Previous day 21:30', title: 'Early start', detail: '', phase: 'before' }), null);
+  assert.equal(tennisDietChoiceFromFuelWindow({ time: 'Through the day', title: 'Rest & recovery', detail: '', phase: 'after' }), null);
 });
 
 test('tennis plans survive reload and backup restore, independently of people, dates and target references', async () => {
