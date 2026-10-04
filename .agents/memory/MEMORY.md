@@ -8,5 +8,6 @@
 - [Native appearance overrides](native-appearance-overrides.md) — native reset contracts differ from older SDK examples; explicit app themes must also update native controls.
 - [Expo startup readiness](expo-devtools-startup.md) — optional debugger errors and blank first frames can be non-blocking; verify meaningful app rendering before treating them as failures.
 - [Tennis nutrition boundary](tennis-nutrition-boundary.md) — schedules guide meal timing, not automatic personalised intake prescriptions or changes to daily references.
+- [Tennis plan sharing](tennis-plan-sharing.md) — copy to another local person or reuse for the same person on another date, with independent date choices.
 - [Meal time defaults](meal-time-defaults.md) — editable suggestions, not optimal-intake advice; preserve assigned day times when future routine defaults change.
 - [Local meal alerts](meal-alert-policy.md) — explicit opt-in; master-off must cancel native jobs, not just update preferences; disclose device delivery limits.

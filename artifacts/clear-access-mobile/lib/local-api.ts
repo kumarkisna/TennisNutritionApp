@@ -16,6 +16,7 @@ import type {
   TennisPlanInput,
   TennisDietInput,
   TennisDietDeleteInput,
+  CopyTennisFoodPlanInput,
   DiscoverFoodsParams,
   DiscoveredFood,
   Food,
@@ -61,6 +62,9 @@ export type {
   TennisDiet,
   TennisDietInput,
   TennisDietDeleteInput,
+  CopyTennisFoodPlanInput,
+  CopyTennisFoodPlanResult,
+  TennisFoodPlanDate,
   DayActivityType as DayActivityKind,
   DiscoverFoodsParams,
   DiscoveredFood,
@@ -131,6 +135,7 @@ function useLocalMutation<TData, TVariables>(
         queryClient.invalidateQueries({ queryKey }),
       ));
       await queryClient.invalidateQueries({ queryKey: ['getMealReminderSource'] });
+      await queryClient.invalidateQueries({ queryKey: ['listTennisFoodPlanDates'] });
     },
   });
 }
@@ -236,6 +241,13 @@ export function useDeleteTennisDiet() {
   return useLocalMutation(({ data }: { data: TennisDietDeleteInput }) =>
     localStore.deleteTennisDiet(data), [['getDayActivity'], ...ENTRIES_REFRESH]);
 }
+export function useTennisFoodPlanDates(personId: number, options?: LocalQueryOptions<import('./local-models').TennisFoodPlanDate[]>) {
+  return useLocalQuery(['listTennisFoodPlanDates', personId], () => localStore.listTennisFoodPlanDates(personId), options);
+}
+export function useCopyTennisFoodPlan() {
+  return useLocalMutation(({ data }: { data: CopyTennisFoodPlanInput }) =>
+    localStore.copyTennisFoodPlan(data), [['getDayActivity'], ...ENTRIES_REFRESH]);
+}
 
 // Retained only as a safe transition bridge for screens removing online discovery.
 // It intentionally performs no search, import, or network operation.
@@ -252,6 +264,7 @@ export function useImportFood() {
 
 export const LOCAL_PLANNER_QUERY_PREFIXES = [
   'listPeople', 'listFoods', 'listHeightRecords', 'listMealEntries', 'getDailySummary', 'getDayActivity',
+  'listTennisFoodPlanDates', 'getMealReminderSource',
 ] as const;
 
 export const previewLocalBackup = (serialized: string) => localStore.previewBackup(serialized);

@@ -5,6 +5,7 @@ import { useGetDayActivity, useSaveTennisPlan, type Person, type TennisPlan, typ
 import { emptyTennisPlan, fuelLabels, tennisFuelWindows, tennisPlanProblem, TENNIS_SOURCE_URL } from '@/lib/tennis-planning';
 import { useColors } from '@/hooks/useColors';
 import { getAgeOnDate } from '@/lib/planning-targets';
+import { TennisFoodPlanCopy } from '@/components/TennisFoodPlanCopy';
 import { TennisDietSchedule } from '@/components/TennisDietSchedule';
 import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, LoadingBlock, Muted, success, tap, warn } from '@/components/ui';
 
@@ -165,6 +166,7 @@ export function TennisPlanPanel({ person, date }: { person: Person; date: string
       </View>}
     </>}
     {!saved ? explain : null}
+    <TennisFoodPlanCopy person={person} date={date} />
     {young ? <View testID="tennis-young-warning"><Muted>Children and teenagers have individual energy and growth needs. Check targets and fueling with a qualified professional rather than relying on these timing examples.</Muted></View> : null}
     <Muted>Based on general USTA nutrition timing guidance. Works offline; the source opens only when you tap.</Muted>
     <View style={{ alignSelf: 'flex-start' }}><Btn small variant="ghost" icon="external-link" label="Open USTA source" testID="button-tennis-source" onPress={() => { tap(); setSourceError(null); Linking.openURL(TENNIS_SOURCE_URL).catch(() => setSourceError(new Error('Could not open the USTA source. An internet connection and a browser are needed to view the external page. Your saved tennis plan still works offline.'))); }} /></View>

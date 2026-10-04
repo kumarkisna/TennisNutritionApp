@@ -165,6 +165,13 @@ export type TennisPlan = {
 export type TennisDiet = { id: string; phase: 'before' | 'during' | 'between' | 'after'; time: string };
 export type TennisDietInput = { date: string; personId: number; id?: string; phase: TennisDiet['phase']; time: string };
 export type TennisDietDeleteInput = { date: string; personId: number; id: string };
+export type CopyTennisFoodPlanInput = {
+  sourcePersonId: number; sourceDate: string;
+  targetPersonId: number; targetDate: string;
+  expectedSource: string; expectedTargetName: string;
+};
+export type CopyTennisFoodPlanResult = { personId: number; date: string; copiedSlots: number; copiedFoods: number };
+export type TennisFoodPlanDate = { date: string; slots: number; foods: number };
 export type TennisPlanInput = { date: string; personId: number; plan: TennisPlan | null };
 export type MealTimes = Record<Meal, string>;
 export type MealTimeInput = { date: string; personId: number; meal: Meal; time: string };

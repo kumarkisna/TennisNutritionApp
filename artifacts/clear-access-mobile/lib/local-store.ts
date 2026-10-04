@@ -3,6 +3,7 @@ import { calculatePlanningEstimates } from './planning-targets';
 import { isTennisPlan, isTennisDiet, tennisPlanProblem } from './tennis-planning';
 import { getMealTimes, isMealTimes } from './meal-scheduling';
 import { isMealAlerts, type ReminderSource } from './meal-reminders';
+import { getTennisFoodPlanFingerprint } from './tennis-copy';
 import {
   ActivityLevel,
   DayActivityType,
@@ -16,6 +17,9 @@ import {
   type TennisPlanInput,
   type TennisDietInput,
   type TennisDietDeleteInput,
+  type CopyTennisFoodPlanInput,
+  type CopyTennisFoodPlanResult,
+  type TennisFoodPlanDate,
   type TennisDiet,
   type DailySummary,
   type Food,
@@ -1073,6 +1077,63 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
         for (const entry of draft.entries) {
           if (entry.personId === input.personId && entry.date === input.date && entry.tennisDietId === input.id) delete entry.tennisDietId;
         }
+      });
+    },
+    async listTennisFoodPlanDates(personId: number): Promise<TennisFoodPlanDate[]> {
+      return read(current => {
+        findPerson(current, personId);
+        return current.activities.filter(day => day.personId === personId && day.tennis?.diets?.length)
+          .map(day => {
+            const ids = new Set(day.tennis!.diets!.map(slot => slot.id));
+            return { date: day.date, slots: ids.size, foods: current.entries.filter(entry =>
+              entry.personId === personId && entry.date === day.date && entry.tennisDietId && ids.has(entry.tennisDietId)).length };
+          }).sort((a, b) => b.date.localeCompare(a.date));
+      });
+    },
+    async copyTennisFoodPlan(input: CopyTennisFoodPlanInput): Promise<CopyTennisFoodPlanResult> {
+      return transact(draft => {
+        if (!isValidCalendarDate(input.sourceDate) || !isValidCalendarDate(input.targetDate)) fail('Choose valid source and destination dates.');
+        const sourcePerson = findPerson(draft, input.sourcePersonId);
+        const targetPerson = findPerson(draft, input.targetPersonId);
+        if (sourcePerson.id === targetPerson.id && input.sourceDate === input.targetDate) {
+          fail('Choose a different destination date when copying for the same person.');
+        }
+        if (input.expectedTargetName !== targetPerson.name) fail('The destination person changed. Review your selection and try again.');
+        const source = draft.activities.find(day => day.personId === sourcePerson.id && day.date === input.sourceDate)?.tennis;
+        if (!source?.diets?.length) fail('The source date has no tennis food timetable. Choose another date.');
+        const sourceIds = new Set(source.diets.map(slot => slot.id));
+        const entries = draft.entries.filter(entry => entry.personId === sourcePerson.id &&
+          entry.date === input.sourceDate && entry.tennisDietId && sourceIds.has(entry.tennisDietId));
+        if (input.expectedSource !== getTennisFoodPlanFingerprint(source, entries.map(entry => toMealEntry(draft, entry)), sourcePerson.name)) {
+          fail('The source food plan changed. Refresh the preview and review it before copying.');
+        }
+        let target = draft.activities.find(day => day.personId === targetPerson.id && day.date === input.targetDate);
+        if (target?.tennis?.diets?.length) fail('The destination already has a tennis food timetable. Choose another date; nothing was overwritten.');
+        // No replacement or deletion: ordinary meals and all destination preferences survive.
+        if (!target) {
+          target = { date: input.targetDate, personId: targetPerson.id, activityType: 'rest' };
+          draft.activities.push(target);
+        }
+        const idMap = new Map<string, string>();
+        const used = new Set(sourceIds);
+        let sequence = 0;
+        const diets = source.diets.map(slot => {
+          let id: string;
+          do { id = `diet-copy-${targetPerson.id.toString(36)}-${input.targetDate}-${draft.nextEntryId.toString(36)}-${(sequence++).toString(36)}`; } while (used.has(id));
+          used.add(id); idMap.set(slot.id, id);
+          return { ...slot, id };
+        });
+        // Existing practice/match sessions are independent of imported food times.
+        target.tennis = target.tennis ? { ...target.tennis, diets } : { ...clone(source), diets };
+        if (entries.length && !target.mealTimes) target.mealTimes = getMealTimes();
+        for (const entry of entries) {
+          draft.entries.push({
+            id: draft.nextEntryId++, personId: targetPerson.id, date: input.targetDate,
+            meal: entry.meal, grams: entry.grams, foodId: entry.foodId,
+            tennisDietId: idMap.get(entry.tennisDietId!)!,
+          });
+        }
+        return { personId: targetPerson.id, date: input.targetDate, copiedSlots: diets.length, copiedFoods: entries.length };
       });
     },
     async exportForTests(): Promise<unknown> {

@@ -1,0 +1,188 @@
+// @ts-ignore Standalone Node runner.
+import assert from 'node:assert/strict';
+// @ts-ignore Standalone Node runner.
+import test from 'node:test';
+import { createLocalStore, LOCAL_STORAGE_KEY } from './local-store';
+import { emptyTennisPlan } from './tennis-planning';
+import { getTennisFoodPlanFingerprint } from './tennis-copy';
+import type { CopyTennisFoodPlanInput } from './local-models';
+
+class Storage {
+  values = new Map<string, string>(); fail = false;
+  async getItem(key: string) { return this.values.get(key) ?? null; }
+  async setItem(key: string, value: string) { if (this.fail) throw new Error('injected failure'); this.values.set(key, value); }
+}
+const sourceDate = '2026-10-04', targetDate = '2026-10-06', sourcePersonId = 1;
+async function setup() {
+  const storage = new Storage(), store = createLocalStore(storage);
+  const target = await store.createPerson({ name: 'Receiver', activityLevel: 'light', baselineCalories: 2000, ironGoalMg: 18, ironGoalSource: 'Test reference' });
+  await store.saveTennisPlan({ personId: sourcePersonId, date: sourceDate, plan: {
+    ...emptyTennisPlan(), sessions: [{ kind: 'practice', startTime: '09:00', durationMinutes: 90, intensity: 'moderate' }],
+  } });
+  const food = (await store.listFoods())[0];
+  for (const [phase, time, meal, grams] of [['before', '08:00', 'breakfast', 75], ['after', '11:00', 'lunch', 125]] as const) {
+    const slot = await store.saveTennisDiet({ personId: sourcePersonId, date: sourceDate, phase, time });
+    await store.createMealEntry({ personId: sourcePersonId, date: sourceDate, meal, foodId: food.id, grams, tennisDietId: slot.id });
+  }
+  await store.saveTennisDiet({ personId: sourcePersonId, date: sourceDate, phase: 'during', time: '09:45' });
+  await store.createMealEntry({ personId: sourcePersonId, date: sourceDate, meal: 'dinner', foodId: food.id, grams: 200 });
+  const input: CopyTennisFoodPlanInput = {
+    sourcePersonId, sourceDate, targetPersonId: target.id, targetDate, expectedTargetName: target.name,
+    expectedSource: getTennisFoodPlanFingerprint((await store.getDayActivity({ personId: sourcePersonId, date: sourceDate })).tennis!,
+      await store.listMealEntries({ personId: sourcePersonId, date: sourceDate }), 'Me'),
+  };
+  return { store, storage, target, food, input };
+}
+
+test('copies only linked foods and every timed slot, with new IDs, exact portions and once-only nutrition', async () => {
+  const { store, target, input, food } = await setup();
+  const sourceBefore = await store.getDayActivity({ personId: sourcePersonId, date: sourceDate });
+  const entriesBefore = await store.listMealEntries({ personId: sourcePersonId, date: sourceDate });
+  const peopleBefore = await store.listPeople();
+  const result = await store.copyTennisFoodPlan(input);
+  assert.deepEqual(result, { personId: target.id, date: targetDate, copiedSlots: 3, copiedFoods: 2 });
+  const day = await store.getDayActivity({ personId: target.id, date: targetDate });
+  const entries = await store.listMealEntries({ personId: target.id, date: targetDate });
+  assert.deepEqual(day.tennis?.sessions, sourceBefore.tennis?.sessions);
+  assert.deepEqual(day.tennis?.fuel, sourceBefore.tennis?.fuel);
+  assert.deepEqual(day.tennis?.diets?.map(({ phase, time }) => ({ phase, time })), sourceBefore.tennis?.diets?.map(({ phase, time }) => ({ phase, time })));
+  assert.equal(new Set(day.tennis?.diets?.map(slot => slot.id)).size, 3);
+  assert.ok(day.tennis?.diets?.every(slot => !sourceBefore.tennis?.diets?.some(old => old.id === slot.id)));
+  assert.deepEqual(entries.map(e => [e.meal, e.grams, e.food.id]), [['breakfast', 75, food.id], ['lunch', 125, food.id]]);
+  assert.ok(entries.every(e => !entriesBefore.some(old => old.id === e.id) && day.tennis?.diets?.some(slot => slot.id === e.tennisDietId)));
+  const summary = await store.getDailySummary({ personId: target.id, date: targetDate });
+  assert.equal(summary.entryCount, 2);
+  assert.equal(summary.totals.calories, Math.round(entries.reduce((sum, entry) => sum + entry.nutrition.calories, 0) * 10) / 10);
+  assert.deepEqual(await store.getDayActivity({ personId: sourcePersonId, date: sourceDate }), sourceBefore);
+  assert.deepEqual(await store.listMealEntries({ personId: sourcePersonId, date: sourceDate }), entriesBefore);
+  assert.deepEqual(await store.listPeople(), peopleBefore);
+});
+test('preserves destination ordinary portions, training sessions, activity, clocks, alerts and goals', async () => {
+  const { store, target, input, food } = await setup();
+  const params = { personId: target.id, date: targetDate };
+  await store.saveDayActivity({ ...params, activityType: 'adolescent_athletes' });
+  await store.saveMealTime({ ...params, meal: 'lunch', time: '14:00' });
+  await store.saveMealAlerts({ ...params, meal: 'lunch', alerts: [{ id: 'alert-existing', minutesBefore: 15, enabled: true }] });
+  const retained = await store.createMealEntry({ ...params, meal: 'dinner', foodId: food.id, grams: 50 });
+  const ownPlan = { ...emptyTennisPlan('tournament'), sessions: [{ kind: 'match' as const, startTime: '15:00', durationMinutes: 60, intensity: 'hard' as const }] };
+  await store.saveTennisPlan({ ...params, plan: ownPlan });
+  const before = await store.getDayActivity(params), people = await store.listPeople();
+  await store.copyTennisFoodPlan(input);
+  const after = await store.getDayActivity(params);
+  assert.equal(after.activityType, before.activityType);
+  assert.deepEqual(after.mealTimes, before.mealTimes); assert.deepEqual(after.mealAlerts, before.mealAlerts);
+  assert.deepEqual(after.tennis?.sessions, ownPlan.sessions); assert.deepEqual(after.tennis?.fuel, ownPlan.fuel);
+  assert.equal(after.tennis?.mode, 'tournament');
+  assert.deepEqual((await store.listMealEntries(params)).find(e => e.id === retained.id), retained);
+  assert.equal((await store.getDailySummary(params)).entryCount, 3);
+  assert.deepEqual(await store.listPeople(), people);
+});
+test('source day selection is exact and another person may receive on the same date', async () => {
+  const { store, input, target } = await setup();
+  await store.copyTennisFoodPlan({ ...input, targetDate: sourceDate });
+  assert.equal((await store.listMealEntries({ personId: target.id, date: sourceDate })).length, 2);
+  assert.equal((await store.listMealEntries({ personId: target.id, date: targetDate })).length, 0);
+  assert.deepEqual(await store.listTennisFoodPlanDates(sourcePersonId), [{ date: sourceDate, slots: 3, foods: 2 }]);
+  assert.deepEqual(await store.listTennisFoodPlanDates(target.id), [{ date: sourceDate, slots: 3, foods: 2 }]);
+});
+test('existing destination timetables and repeated copies are rejected without replacing anything', async () => {
+  const { store, input, storage } = await setup();
+  await store.copyTennisFoodPlan(input);
+  const before = storage.values.get(LOCAL_STORAGE_KEY), state = await store.exportForTests();
+  await assert.rejects(store.copyTennisFoodPlan(input), /already has/);
+  assert.equal(storage.values.get(LOCAL_STORAGE_KEY), before);
+  assert.deepEqual(await store.exportForTests(), state);
+});
+test('invalid dates, missing people, same-person same-date copy and absent source reject before writes', async () => {
+  const { store, input, storage } = await setup();
+  const before = storage.values.get(LOCAL_STORAGE_KEY);
+  for (const change of [
+    { sourceDate: '2026-02-30' }, { targetDate: 'not-a-date' }, { sourcePersonId: 999 }, { targetPersonId: 999 },
+    { targetPersonId: sourcePersonId, targetDate: sourceDate, expectedTargetName: 'Me' }, { sourceDate: '2026-10-03' }, { expectedTargetName: 'Wrong person' },
+  ]) {
+    await assert.rejects(store.copyTennisFoodPlan({ ...input, ...change }));
+    assert.equal(storage.values.get(LOCAL_STORAGE_KEY), before);
+  }
+});
+test('same-person reuse copies to another date, preserves both days and creates independent portions', async () => {
+  const { store, storage, input, food } = await setup();
+  const sourceParams = { personId: sourcePersonId, date: sourceDate };
+  const targetParams = { personId: sourcePersonId, date: targetDate };
+  const sourceDay = await store.getDayActivity(sourceParams);
+  const sourceEntries = await store.listMealEntries(sourceParams);
+  const retained = await store.createMealEntry({ ...targetParams, meal: 'snack', foodId: food.id, grams: 50 });
+  await store.saveMealTime({ ...targetParams, meal: 'lunch', time: '14:00' });
+  await store.saveMealAlerts({ ...targetParams, meal: 'lunch', alerts: [{ id: 'alert-reuse', minutesBefore: 15, enabled: true }] });
+  const ownPlan = { ...emptyTennisPlan(), sessions: [{ kind: 'practice' as const, startTime: '17:00', durationMinutes: 45, intensity: 'light' as const }] };
+  await store.saveTennisPlan({ ...targetParams, plan: ownPlan });
+  const targetBefore = await store.getDayActivity(targetParams), people = await store.listPeople();
+  const selfInput = { ...input, targetPersonId: sourcePersonId, expectedTargetName: 'Me' };
+  assert.deepEqual(await store.copyTennisFoodPlan(selfInput), { ...targetParams, copiedSlots: 3, copiedFoods: 2 });
+  const copiedDay = await store.getDayActivity(targetParams), copiedEntries = await store.listMealEntries(targetParams);
+  assert.deepEqual(copiedDay.tennis?.sessions, ownPlan.sessions);
+  assert.deepEqual(copiedDay.mealTimes, targetBefore.mealTimes);
+  assert.deepEqual(copiedDay.mealAlerts, targetBefore.mealAlerts);
+  assert.deepEqual(copiedEntries.find(e => e.id === retained.id), retained);
+  assert.equal(copiedEntries.length, 3);
+  assert.ok(copiedDay.tennis?.diets?.every(slot => !sourceDay.tennis?.diets?.some(old => old.id === slot.id)));
+  const copiedPortion = copiedEntries.find(e => e.tennisDietId)!;
+  assert.ok(!sourceEntries.some(e => e.id === copiedPortion.id));
+  await store.updateMealEntry(copiedPortion.id, { grams: 90 });
+  assert.deepEqual(await store.listMealEntries(sourceParams), sourceEntries);
+  assert.deepEqual(await store.getDayActivity(sourceParams), sourceDay);
+  assert.deepEqual(await store.listPeople(), people);
+  await assert.rejects(store.copyTennisFoodPlan(selfInput), /already has/);
+  const reloaded = createLocalStore(storage);
+  assert.deepEqual(await reloaded.getDayActivity(targetParams), copiedDay);
+  assert.equal((await reloaded.listMealEntries(targetParams)).find(e => e.id === copiedPortion.id)?.grams, 90);
+  const restored = createLocalStore(new Storage());
+  await restored.restoreBackup(await store.exportBackup());
+  assert.deepEqual(await restored.listMealEntries(targetParams), await store.listMealEntries(targetParams));
+});
+test('same-person reuse is available with only one saved person', async () => {
+  const { store, input, target } = await setup();
+  await store.deletePerson(target.id);
+  assert.equal((await store.listPeople()).length, 1);
+  await store.copyTennisFoodPlan({ ...input, targetPersonId: sourcePersonId, expectedTargetName: 'Me' });
+  assert.equal((await store.getDailySummary({ personId: sourcePersonId, date: targetDate })).entryCount, 2);
+});
+test('a changed source preview, including food metadata, never silently copies new contents', async () => {
+  const { store, input, storage } = await setup();
+  const entries = await store.listMealEntries({ personId: sourcePersonId, date: sourceDate });
+  await store.updateMealEntry(entries[0].id, { grams: 99 });
+  const before = storage.values.get(LOCAL_STORAGE_KEY);
+  await assert.rejects(store.copyTennisFoodPlan(input), /source food plan changed/);
+  assert.equal(storage.values.get(LOCAL_STORAGE_KEY), before);
+  const custom = await store.createFood({
+    name: 'Custom test food', category: entries[0].food.category,
+    caloriesPer100g: 120, proteinPer100g: 3, carbsPer100g: 20, fatPer100g: 2, fiberPer100g: 1,
+  });
+  await store.createMealEntry({ personId: sourcePersonId, date: sourceDate, foodId: custom.id, grams: 50, meal: 'snack', tennisDietId: entries[0].tennisDietId });
+  const latest = { ...input, expectedSource: getTennisFoodPlanFingerprint((await store.getDayActivity({ personId: sourcePersonId, date: sourceDate })).tennis!,
+    await store.listMealEntries({ personId: sourcePersonId, date: sourceDate }), 'Me') };
+  await store.updateFood(custom.id, { name: 'Changed test food', caloriesPer100g: 140 });
+  const changedBytes = storage.values.get(LOCAL_STORAGE_KEY);
+  await assert.rejects(store.copyTennisFoodPlan(latest), /changed/);
+  assert.equal(storage.values.get(LOCAL_STORAGE_KEY), changedBytes);
+});
+test('failed persistence is atomic, including entry IDs, and a retry survives reload and backup', async () => {
+  const { store, storage, input } = await setup();
+  const before = await store.exportForTests(), bytes = storage.values.get(LOCAL_STORAGE_KEY);
+  storage.fail = true;
+  await assert.rejects(store.copyTennisFoodPlan(input), /not applied/);
+  assert.deepEqual(await store.exportForTests(), before); assert.equal(storage.values.get(LOCAL_STORAGE_KEY), bytes);
+  storage.fail = false;
+  await store.copyTennisFoodPlan(input);
+  const reloaded = createLocalStore(storage);
+  assert.deepEqual(await reloaded.exportForTests(), await store.exportForTests());
+  const restored = createLocalStore(new Storage());
+  await restored.restoreBackup(await store.exportBackup());
+  assert.deepEqual(await restored.exportForTests(), await store.exportForTests());
+});
+test('overlapping copies to one destination commit only once', async () => {
+  const { store, input, target } = await setup();
+  const results = await Promise.allSettled([store.copyTennisFoodPlan(input), store.copyTennisFoodPlan(input)]);
+  assert.equal(results.filter(r => r.status === 'fulfilled').length, 1);
+  assert.equal(results.filter(r => r.status === 'rejected').length, 1);
+  assert.equal((await store.getDailySummary({ personId: target.id, date: targetDate })).entryCount, 2);
+});
