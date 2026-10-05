@@ -9,8 +9,7 @@ const person = {
   baselineCalories: 1800,
   activityMultiplier: 1.2,
   weightKg: 70,
-  ageYears: 30,
-  dateOfBirth: null,
+  dateOfBirth: '1995-06-15',
   fatGoalG: 60,
 };
 const date = '2025-06-15';
@@ -36,7 +35,7 @@ test('app-chosen kcal/kg activity heuristics and 30% energy fat formula are used
 });
 
 test('adolescent athletes use 2 g/kg/day for both protein endpoints with no adult energy fallback', () => {
-  const adolescent = { ...person, ageYears: 16, weightKg: 50 };
+  const adolescent = { ...person, dateOfBirth: '2009-06-16', weightKg: 50 };
   assert.deepEqual(sportsActivities.adolescent_athletes.protein, [2, 2]);
   const targets = getPlanningTargets(adolescent, 'adolescent_athletes', date);
   assert.equal(targets.protein, '100 g / day');
@@ -61,23 +60,23 @@ test('estimates change with activity and saved body weight, not baseline or manu
   assert.equal(legacyEstimate.fat, 70);
 });
 
-test('DOB takes precedence and adult eligibility changes on the selected-date birthday', () => {
-  const birthday = { ...person, ageYears: 50, dateOfBirth: '2007-06-16' };
+test('DOB determines age and adult eligibility changes on the selected-date birthday', () => {
+  const birthday = { ...person, dateOfBirth: '2007-06-16' };
   const beforeBirthday = calculatePlanningEstimates(birthday, 'rest', '2025-06-15');
   const onBirthday = calculatePlanningEstimates(birthday, 'rest', '2025-06-16');
   assert.equal(beforeBirthday.calories, null);
   assert.match(beforeBirthday.unavailableReason ?? '', /under 18/);
   assert.equal(onBirthday.calories, 2100);
   assert.equal(onBirthday.unavailableReason, null);
-  const afterBirthday = calculatePlanningEstimates({ ...person, dateOfBirth: '2007-06-14', ageYears: 12 }, 'rest', date);
+  const afterBirthday = calculatePlanningEstimates({ ...person, dateOfBirth: '2007-06-14' }, 'rest', date);
   assert.equal(afterBirthday.calories, 2100);
 });
 
-test('unknown age, missing weight, invalid date, and under-18 status never fall back to legacy targets', () => {
-  const unknownAge = calculatePlanningEstimates({ ...person, ageYears: null }, 'rest', date);
+test('missing DOB, missing weight, invalid date, and under-18 status never use legacy targets', () => {
+  const unknownAge = calculatePlanningEstimates({ ...person, dateOfBirth: null }, 'rest', date);
   assert.equal(unknownAge.calories, null);
-  assert.match(unknownAge.unavailableReason ?? '', /date of birth or age/);
-  const minor = calculatePlanningEstimates({ ...person, ageYears: 17 }, 'rest', date);
+  assert.match(unknownAge.unavailableReason ?? '', /date of birth/);
+  const minor = calculatePlanningEstimates({ ...person, dateOfBirth: '2008-06-16' }, 'rest', date);
   assert.equal(minor.fat, null);
   assert.match(minor.unavailableReason ?? '', /under 18/);
   const noWeight = calculatePlanningEstimates({ ...person, weightKg: null }, 'rest', date);
@@ -101,10 +100,9 @@ test('planning targets retain workbook ranges and identify the ISSN general-fitn
   assert.match(getPlanningTargets(person, 'rest', date).carbs, /ISSN general-fitness reference/);
 });
 
-test('missing weight and age are stated explicitly for adult estimates and scaled references', () => {
-  const targets = getPlanningTargets({ ...person, weightKg: null, ageYears: null, fatGoalG: null }, 'rest', date);
-  assert.match(targets.calories, /Adult estimates are unavailable/);
-  assert.match(targets.calories, /Body weight is also needed/);
+test('missing weight is stated explicitly for adult estimates and scaled references', () => {
+  const targets = getPlanningTargets({ ...person, weightKg: null, fatGoalG: null }, 'rest', date);
+  assert.match(targets.calories, /Adult estimates are unavailable until body weight is saved/);
   assert.equal(targets.protein, 'Add body weight to calculate');
   assert.equal(targets.carbs, 'Add body weight to calculate (ISSN general-fitness reference)');
   assert.match(targets.fat, /Adult estimates are unavailable/);

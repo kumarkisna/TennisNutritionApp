@@ -14,3 +14,4 @@
 - [Meal time defaults](meal-time-defaults.md) — editable suggestions, not optimal-intake advice; preserve assigned day times when future routine defaults change.
 - [Local meal alerts](meal-alert-policy.md) — explicit opt-in; master-off must cancel native jobs, not just update preferences; disclose device delivery limits.
 - [Mobile test runner](mobile-test-runner.md) — run mobile regression tests from the app directory so process.cwd()-based source checks resolve correctly.
+- [Date-of-birth age semantics](date-of-birth-age.md) — age is derived from optional DOB; clear stored ages when DOB is absent, and use the planner date for date-specific estimates.

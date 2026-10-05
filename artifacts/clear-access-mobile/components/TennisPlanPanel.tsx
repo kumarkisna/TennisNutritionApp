@@ -58,7 +58,7 @@ export function TennisPlanPanel({ person, date }: { person: Person; date: string
   const saving = save.isPending;
   const saved = day.data?.tennis;
   const savedActivityProblem = tennisActivityPlanProblem(day.data?.activityType ?? 'rest', saved);
-  const age = person.dateOfBirth ? getAgeOnDate(person.dateOfBirth, date) : person.ageYears;
+  const age = person.dateOfBirth ? getAgeOnDate(person.dateOfBirth, date) : null;
   const young = age === null || age < 18;
 
   async function setRating(value: string) {

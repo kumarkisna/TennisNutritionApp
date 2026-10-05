@@ -8,6 +8,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createLocalStore, type AsyncKeyValueStorage } from './local-store';
 import type { PersonInput } from './local-models';
+import { getAgeOnDate } from './planning-targets';
+import { today } from './format';
 
 class MemoryStorage implements AsyncKeyValueStorage {
   values = new Map<string, string>();
@@ -51,7 +53,7 @@ test('adolescent athlete activity survives reload and local backup restore', asy
   const athlete = await store.createPerson({
     name: 'Adolescent athlete',
     weightKg: 50,
-    ageYears: 16,
+    dateOfBirth: '2004-03-04',
     activityLevel: 'moderate',
     baselineCalories: 2000,
   });
@@ -126,7 +128,7 @@ test('migrates v1 data in-place without losing people, foods, entries, activitie
   assert.equal((await migratedStore.getDayActivity({ date: '2020-03-04', personId: custom.id })).activityType, 'strength');
   assert.equal((await migratedStore.listHeightRecords()).length, 0);
   const migrated = JSON.parse(storage.values.get('clear-access-mobile:planner:v1')!);
-  assert.equal(migrated.version, 3);
+  assert.equal(migrated.version, 4);
   assert.equal(migrated.nextPersonId, current.nextPersonId);
   assert.equal(migrated.nextFoodId, current.nextFoodId);
   assert.equal(migrated.nextEntryId, current.nextEntryId);
@@ -163,7 +165,7 @@ test('migrates v2 local data and old backups with no nutrition goal while preser
   const migratedPeople = await migratedStore.listPeople();
   assert.equal(migratedPeople.find(candidate => candidate.id === person.id)?.nutritionGoal, null);
   const migrated = JSON.parse(storage.values.get('clear-access-mobile:planner:v1')!);
-  assert.equal(migrated.version, 3);
+  assert.equal(migrated.version, 4);
   assert.deepEqual(migrated.foods, current.foods);
   assert.deepEqual(migrated.entries, current.entries);
   assert.deepEqual(migrated.activities, current.activities);
@@ -176,13 +178,56 @@ test('migrates v2 local data and old backups with no nutrition goal while preser
   assert.equal((await restoredStore.listMealEntries({ date: '2020-03-04', personId: person.id })).length, 1);
 });
 
+test('migrates v3 local data and backups by clearing ages without DOB and recalculating DOB ages', async () => {
+  const storage = new MemoryStorage();
+  const source = createLocalStore(storage);
+  const noDob = await source.createPerson(baselinePerson('Legacy age without DOB'));
+  const withDob = await source.createPerson({
+    ...baselinePerson('Legacy age with DOB'),
+    dateOfBirth: '2000-01-01',
+  });
+  const current = await source.exportForTests() as Record<string, unknown>;
+  const legacyPeople = (current.people as Array<Record<string, unknown>>).map(person => ({
+    ...person,
+    ageYears: person.dateOfBirth === null ? 16 : 99,
+  }));
+  const versionThree = { ...current, version: 3, people: legacyPeople };
+
+  storage.values.set('clear-access-mobile:planner:v1', JSON.stringify(versionThree));
+  const migratedStore = createLocalStore(storage);
+  const migratedPeople = await migratedStore.listPeople();
+  assert.equal(migratedPeople.find(person => person.id === noDob.id)?.ageYears, null);
+  assert.equal(migratedPeople.find(person => person.id === withDob.id)?.ageYears, getAgeOnDate('2000-01-01', today()));
+  assert.equal(JSON.parse(storage.values.get('clear-access-mobile:planner:v1')!).version, 4);
+
+  const oldBackup = JSON.parse(await source.exportBackup());
+  oldBackup.data = versionThree;
+  const restoredStore = createLocalStore(new MemoryStorage());
+  await restoredStore.restoreBackup(JSON.stringify(oldBackup));
+  const restoredPeople = await restoredStore.listPeople();
+  assert.equal(restoredPeople.find(person => person.id === noDob.id)?.ageYears, null);
+  assert.equal(restoredPeople.find(person => person.id === withDob.id)?.ageYears, getAgeOnDate('2000-01-01', today()));
+});
+
+test('calculates age from DOB on person creation and clears it when DOB is removed', async () => {
+  const store = createLocalStore(new MemoryStorage());
+  const dateOfBirth = '2000-01-01';
+  const person = await store.createPerson({
+    ...baselinePerson('Automatic age'),
+    dateOfBirth,
+  });
+  assert.equal(person.ageYears, getAgeOnDate(dateOfBirth, today()));
+  const updated = await store.updatePerson(person.id, { dateOfBirth: null });
+  assert.equal(updated.ageYears, null);
+});
+
 test('tracks a weight-loss goal without changing daily activity-based calorie references', async () => {
   const storage = new MemoryStorage();
   const store = createLocalStore(storage);
   const person = await store.createPerson({
     ...baselinePerson('Weight goal owner'),
     weightKg: 68,
-    ageYears: 32,
+    dateOfBirth: '1988-03-04',
   });
   const params = { personId: person.id, date: '2020-03-04' };
   await store.saveDayActivity({ ...params, activityType: 'training_60' });
@@ -263,8 +308,8 @@ test('daily summary derives weight-and-activity calories and responds to person 
   assert.equal((await store.getDailySummary({ date, personId: adult.id })).targetCalories, 3600);
 
   const noAge = await store.createPerson({ ...baselinePerson('Summary no age'), weightKg: 70 });
-  const noWeight = await store.createPerson({ ...baselinePerson('Summary no weight'), ageYears: 25 });
-  const under18 = await store.createPerson({ ...baselinePerson('Summary under eighteen'), weightKg: 70, ageYears: 17 });
+  const noWeight = await store.createPerson({ ...baselinePerson('Summary no weight'), dateOfBirth: '1995-01-01' });
+  const under18 = await store.createPerson({ ...baselinePerson('Summary under eighteen'), weightKg: 70, dateOfBirth: '2005-01-02' });
   assert.equal((await store.getDailySummary({ date, personId: noAge.id })).targetCalories, null);
   assert.equal((await store.getDailySummary({ date, personId: noWeight.id })).targetCalories, null);
   assert.equal((await store.getDailySummary({ date, personId: under18.id })).targetCalories, null);
@@ -462,14 +507,13 @@ test('backup round-trips all people, preferences, goals, height records, foods, 
   const defaultPerson = (await source.listPeople())[0];
   await source.updatePerson(defaultPerson.id, {
     weightKg: 68,
-    ageYears: 34,
+    dateOfBirth: '1992-01-01',
     activityLevel: 'light',
     baselineCalories: 2150,
   });
   const alice = await source.createPerson({
     ...baselinePerson('Backup Alice'),
     weightKg: 62.5,
-    ageYears: 31,
     dateOfBirth: '1994-04-12',
     growthReferenceSex: 'female',
     ironGoalMg: 18,
@@ -485,7 +529,6 @@ test('backup round-trips all people, preferences, goals, height records, foods, 
   const bob = await source.createPerson({
     ...baselinePerson('Backup Bob'),
     weightKg: 79,
-    ageYears: 42,
     activityLevel: 'very_active',
     baselineCalories: 2400,
   });

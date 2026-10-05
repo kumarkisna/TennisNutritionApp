@@ -60,7 +60,7 @@ export function getAgeOnDate(dateOfBirth: string, date: string) {
 }
 
 export function calculatePlanningEstimates(
-  person: Pick<Person, 'weightKg' | 'ageYears' | 'dateOfBirth'>,
+  person: Pick<Person, 'weightKg' | 'dateOfBirth'>,
   activity: DayActivityKind,
   date: string,
 ): { calories: number | null; fat: number | null; unavailableReason: string | null } {
@@ -71,11 +71,11 @@ export function calculatePlanningEstimates(
   if (coefficient === null) {
     return { calories: null, fat: null, unavailableReason: 'No calorie or fat estimate is supplied for Adolescent athletes; adult activity formulas are not applied.' };
   }
-  const age = person.dateOfBirth !== null ? getAgeOnDate(person.dateOfBirth, date) : person.ageYears;
+  const age = person.dateOfBirth === null ? null : getAgeOnDate(person.dateOfBirth, date);
   if (person.dateOfBirth !== null && age === null) {
-    return { calories: null, fat: null, unavailableReason: 'The saved date of birth is invalid or after the selected date; it takes precedence over saved age.' };
+    return { calories: null, fat: null, unavailableReason: 'The saved date of birth is invalid or after the selected date.' };
   }
-  if (age === null || age === undefined) {
+  if (age === null) {
     const weightMissing = person.weightKg === null || !Number.isFinite(person.weightKg) || person.weightKg <= 0;
     return {
       calories: null,
@@ -94,7 +94,7 @@ export function calculatePlanningEstimates(
 }
 
 export function getPlanningTargets(
-  person: Pick<Person, 'weightKg' | 'ageYears' | 'dateOfBirth' | 'fatGoalG'>,
+  person: Pick<Person, 'weightKg' | 'dateOfBirth' | 'fatGoalG'>,
   activity: DayActivityKind,
   date: string,
 ) {

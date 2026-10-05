@@ -34,7 +34,7 @@ export function ReferencePanel({ person, date, totals, summaryLoading, summaryEr
   const activity = query.data?.activityType ?? 'rest';
   const sel = activities[activity];
   const weight = person.weightKg;
-  const age = person.dateOfBirth === null ? person.ageYears : getAgeOnDate(person.dateOfBirth, date);
+  const age = person.dateOfBirth === null ? null : getAgeOnDate(person.dateOfBirth, date);
   const targets = getPlanningTargets(person, activity, date);
   const estimates = calculatePlanningEstimates(person, activity, date);
 

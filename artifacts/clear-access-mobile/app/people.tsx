@@ -7,9 +7,8 @@ import { usePlanner } from '@/contexts/PlannerProvider';
 import { useColors } from '@/hooks/useColors';
 import { Btn, Card, ErrorBox, Eyebrow, F, Muted, Screen, Title, success, warn, tap } from '@/components/ui';
 import { PersonPlannerExportButton, PersonPlannerImport } from '@/components/PersonPlannerTransfer';
-import { n } from '@/lib/format';
+import { n, today } from '@/lib/format';
 import { getAgeOnDate } from '@/lib/planning-targets';
-import { today } from '@/lib/format';
 
 function People() {
   const c = useColors();
