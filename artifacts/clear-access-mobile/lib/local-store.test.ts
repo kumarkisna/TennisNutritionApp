@@ -301,7 +301,7 @@ test('enforces custom-food protections, clears nullable goal metadata, and repor
   });
   const reference = (await store.listFoods())[0];
   await assert.rejects(store.updateFood(reference.id, { name: 'Changed reference' }), /only custom foods/i);
-  await assert.rejects(store.deleteFood(reference.id), /only custom foods/i);
+  await assert.rejects(store.deleteFood(reference.id), /only custom or saved foods/i);
   const date = '2026-09-29';
   await store.createMealEntry({ date, personId: person.id, meal: 'breakfast', foodId: custom.id, grams: 100 });
   await store.createMealEntry({ date, personId: person.id, meal: 'lunch', foodId: reference.id, grams: 100 });
@@ -314,7 +314,40 @@ test('enforces custom-food protections, clears nullable goal metadata, and repor
   await store.deleteMealEntry(1);
   await store.deleteMealEntry(2);
   await store.deleteFood(custom.id);
-  await assert.rejects(store.deleteFood(reference.id), /only custom foods/i);
+  await assert.rejects(store.deleteFood(reference.id), /only custom or saved foods/i);
+});
+
+test('saved food entries can be deleted from the library, but references and meal-linked foods are protected', async () => {
+  const store = createLocalStore(new MemoryStorage());
+  const [person] = await store.listPeople();
+  const library = JSON.parse(await store.exportFoodLibrary());
+  library.foods = [{
+    ...library.foods[0],
+    id: 9999,
+    name: 'Saved food deletion test',
+    brand: 'Test brand',
+    source: 'open_food_facts',
+    sourceUrl: 'https://world.openfoodfacts.org/product/123',
+  }];
+  await store.importFoodLibrary(JSON.stringify(library));
+
+  const saved = (await store.listFoods()).find(food => food.name === 'Saved food deletion test');
+  if (!saved) throw new Error('Imported saved food was not found.');
+  const entry = await store.createMealEntry({
+    date: '2026-10-05',
+    personId: person.id,
+    meal: 'breakfast',
+    foodId: saved.id,
+    grams: 100,
+  });
+  await assert.rejects(store.deleteFood(saved.id), /planned meals/i);
+  await store.deleteMealEntry(entry.id);
+  await store.deleteFood(saved.id);
+  assert.equal((await store.listFoods()).some(food => food.id === saved.id), false);
+
+  const reference = (await store.listFoods()).find(food => food.source === 'reference');
+  if (!reference) throw new Error('The reference foods were not loaded.');
+  await assert.rejects(store.deleteFood(reference.id), /only custom or saved foods/i);
 });
 
 test('a rejected storage write leaves the committed in-memory state untouched', async () => {

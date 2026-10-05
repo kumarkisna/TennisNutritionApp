@@ -126,13 +126,22 @@ async function pickJsonFile(): Promise<{ name: string; serialized: string } | nu
   const result = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true, multiple: false });
   if (result.canceled) return null;
   const asset = result.assets[0];
-  const { File } = await import('expo-file-system');
-  const file = new File(asset.uri);
+  if (!asset) return null;
+  const FileSystem = await import('expo-file-system/legacy');
   try {
-    checkSize(asset.size ?? file.size);
-    return { name: asset.name, serialized: await file.text() };
+    let size = asset.size;
+    if (size === undefined || size < 0) {
+      const info = await FileSystem.getInfoAsync(asset.uri);
+      if (!info.exists) throw new Error('The selected file is no longer available. Choose it again.');
+      size = info.size;
+    }
+    checkSize(size);
+    return { name: asset.name, serialized: await FileSystem.readAsStringAsync(asset.uri) };
   } finally {
-    if (file.exists) file.delete();
+    const cacheDirectory = FileSystem.cacheDirectory;
+    if (cacheDirectory && asset.uri.startsWith(cacheDirectory)) {
+      await FileSystem.deleteAsync(asset.uri, { idempotent: true }).catch(() => {});
+    }
   }
 }
 

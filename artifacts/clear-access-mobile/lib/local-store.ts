@@ -876,7 +876,7 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
     async deleteFood(id: number): Promise<void> {
       return transact(draft => {
         const food = draft.foods.find(candidate => candidate.id === id);
-        if (!food || food.source !== 'custom') fail('Only custom foods can be deleted.');
+        if (!food || food.source === 'reference') fail('Only custom or saved foods can be deleted.');
         if (draft.entries.some(entry => entry.foodId === id)) {
           fail('Remove this food from your planned meals before deleting it.');
         }
