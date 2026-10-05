@@ -1,0 +1,126 @@
+import type { Meal, MealEntry, MealTimes, TennisDiet } from './local-models';
+import { dietPhaseLabels } from './tennis-planning';
+
+export type PlannedDietItem = {
+  entryId: number;
+  time: string;
+  meal: Meal;
+  phase: TennisDiet['phase'] | null;
+  foodName: string;
+  grams: number;
+};
+
+const mealOrder: Record<Meal, number> = {
+  breakfast: 0,
+  lunch: 1,
+  dinner: 2,
+  snack: 3,
+};
+
+export function sortPlannedDiet(
+  entries: MealEntry[],
+  mealTimes: MealTimes,
+  tennisDiets: TennisDiet[] = [],
+): PlannedDietItem[] {
+  const slotById = new Map(tennisDiets.map(slot => [slot.id, slot]));
+  return entries.map(entry => {
+    const slot = entry.tennisDietId ? slotById.get(entry.tennisDietId) : undefined;
+    if (entry.tennisDietId && !slot) {
+      throw new Error('A planned food has a missing tennis time slot. Refresh the day before printing.');
+    }
+    return {
+      entryId: entry.id,
+      time: slot?.time ?? mealTimes[entry.meal],
+      meal: entry.meal,
+      phase: slot?.phase ?? null,
+      foodName: entry.food.name,
+      grams: entry.grams,
+    };
+  }).sort((a, b) =>
+    a.time.localeCompare(b.time) ||
+    mealOrder[a.meal] - mealOrder[b.meal] ||
+    a.foodName.localeCompare(b.foodName) ||
+    a.entryId - b.entryId,
+  );
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, char => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  })[char]!);
+}
+
+function titleCase(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+export function buildPlannedDietHtml({
+  personName,
+  date,
+  entries,
+  mealTimes,
+  tennisDiets = [],
+}: {
+  personName: string;
+  date: string;
+  entries: MealEntry[];
+  mealTimes: MealTimes;
+  tennisDiets?: TennisDiet[];
+}): string {
+  const items = sortPlannedDiet(entries, mealTimes, tennisDiets);
+  const rows = items.map(item => {
+    const section = item.phase ? `${dietPhaseLabels[item.phase]} · ` : '';
+    const portion = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(item.grams);
+    return `<tr>
+      <td class="time">${escapeHtml(item.time)}</td>
+      <td>${escapeHtml(section + titleCase(item.meal))}</td>
+      <td>${escapeHtml(item.foodName)}</td>
+      <td class="portion">${escapeHtml(portion)} g</td>
+    </tr>`;
+  }).join('');
+
+  return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Planned diet — ${escapeHtml(personName)} — ${escapeHtml(date)}</title>
+    <style>
+      @page { size: portrait; margin: 16mm; }
+      * { box-sizing: border-box; }
+      body { margin: 0; color: #183542; font-family: Arial, Helvetica, sans-serif; font-size: 12pt; }
+      h1 { margin: 0 0 20px; font-size: 24pt; }
+      .details { display: flex; gap: 36px; margin-bottom: 24px; }
+      .detail { display: grid; gap: 4px; }
+      .label { color: #52635f; font-size: 9pt; text-transform: uppercase; letter-spacing: 1px; }
+      .value { font-size: 13pt; font-weight: 700; }
+      table { width: 100%; border-collapse: collapse; }
+      thead { display: table-header-group; }
+      th { background: #eef3ef; color: #183542; text-align: left; font-size: 9pt; text-transform: uppercase; letter-spacing: .6px; }
+      th, td { border-bottom: 1px solid #d8e0dc; padding: 10px 8px; vertical-align: top; }
+      tr { break-inside: avoid; }
+      .time, .portion { white-space: nowrap; font-weight: 700; }
+      .empty { margin: 0; border: 1px solid #d8e0dc; border-radius: 8px; padding: 16px; color: #52635f; }
+      .note { margin-top: 24px; color: #52635f; font-size: 9pt; }
+    </style>
+  </head>
+  <body>
+    <h1>Planned diet</h1>
+    <section class="details">
+      <div class="detail"><span class="label">Person</span><span class="value">${escapeHtml(personName)}</span></div>
+      <div class="detail"><span class="label">Date</span><span class="value">${escapeHtml(date)}</span></div>
+    </section>
+    ${items.length
+      ? `<table>
+          <thead><tr><th>Time</th><th>Meal / food slot</th><th>Planned food</th><th>Portion</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`
+      : '<p class="empty">No foods planned for this date.</p>'}
+    <p class="note">Times and portions reflect the plan saved for this person and date.</p>
+  </body>
+</html>`;
+}

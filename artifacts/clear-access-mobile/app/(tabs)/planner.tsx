@@ -7,6 +7,7 @@ import { usePlanner } from '@/contexts/PlannerProvider';
 import { useColors } from '@/hooks/useColors';
 import { MealTimeControl } from '@/components/MealTimeControl';
 import { MealAlertsControl } from '@/components/MealAlertsControl';
+import { PrintDayPlanButton } from '@/components/PrintDayPlanButton';
 import { getMealTimes } from '@/lib/meal-scheduling';
 import { ReferencePanel } from '@/components/ReferencePanel';
 import { TennisPlanPanel } from '@/components/TennisPlanPanel';
@@ -41,6 +42,14 @@ export default function Planner() {
       {date !== today() ? <Btn small variant="ghost" label="Today" testID="button-today" onPress={() => setDate(today())} /> : null}
     </View>
     <Pressable testID="button-planner-person" onPress={() => { tap(); router.push('/people'); }}><Muted>Planning for <Text style={{ fontFamily: F.bold, color: c.primary }}>{person.name}</Text> · tap to switch person</Muted></Pressable>
+    <PrintDayPlanButton
+      personName={person.name}
+      date={date}
+      entries={entries.data ?? []}
+      mealTimes={getMealTimes(day.data?.mealTimes)}
+      tennisDiets={day.data?.tennis?.diets ?? []}
+      disabled={!entries.isSuccess || !day.isSuccess || entries.isFetching || day.isFetching}
+    />
 
     {summary.isLoading ? <LoadingBlock rows={1} height={94} /> : summary.data && !summary.isError ? <Card>
       <Eyebrow>Day totals / planned</Eyebrow>
