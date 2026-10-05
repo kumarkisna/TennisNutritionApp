@@ -45,6 +45,8 @@ export default function Planner() {
     <PrintDayPlanButton
       personName={person.name}
       date={date}
+      activityType={day.data?.activityType ?? 'rest'}
+      tennisPlan={day.data?.tennis}
       entries={entries.data ?? []}
       mealTimes={getMealTimes(day.data?.mealTimes)}
       tennisDiets={day.data?.tennis?.diets ?? []}

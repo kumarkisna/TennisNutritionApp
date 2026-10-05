@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 // @ts-ignore Node test modules belong to the direct regression runner.
 import test from 'node:test';
-import type { MealEntry } from './local-models';
+import type { MealEntry, TennisPlan } from './local-models';
 import { buildPlannedDietHtml, sortPlannedDiet } from './print-plan';
 
 const mealTimes = { breakfast: '08:00', lunch: '13:00', dinner: '19:00', snack: '16:00' };
@@ -38,6 +38,7 @@ test('print HTML includes the person, date, portions, and safely escaped names',
   const html = buildPlannedDietHtml({
     personName: 'A & <B>',
     date: '2026-10-05',
+    activityType: 'training_120',
     entries: [entry(1, 'breakfast', 'Oats <fresh>')],
     mealTimes,
   });
@@ -47,11 +48,40 @@ test('print HTML includes the person, date, portions, and safely escaped names',
   assert.match(html, /Oats &lt;fresh&gt;/);
   assert.match(html, /125 g/);
   assert.match(html, /08:00/);
+  assert.match(html, /Training 60–120 minutes/);
+  assert.match(html, /Tennis plan type<\/span><span class="value">Not set/);
+  assert.match(html, /Plan experience<\/span><span class="value">Not rated/);
+});
+
+test('print HTML includes tennis plan type, sorted sessions, intensity, and rating', () => {
+  const tennisPlan: TennisPlan = {
+    mode: 'training',
+    sessions: [
+      { kind: 'gym', startTime: '15:00', durationMinutes: 45, intensity: 'light' },
+      { kind: 'practice', startTime: '09:00', durationMinutes: 90, intensity: 'hard' },
+    ],
+    fuel: { before: '', during: '', between: '', after: '', hydration: '' },
+    experienceRating: 8,
+  };
+  const html = buildPlannedDietHtml({
+    personName: 'Me',
+    date: '2026-10-05',
+    activityType: 'training_60',
+    tennisPlan,
+    entries: [],
+    mealTimes,
+  });
+
+  assert.match(html, /Tennis plan type<\/span><span class="value">Training/);
+  assert.match(html, /Plan experience<\/span><span class="value">8\/10/);
+  assert.ok(html.indexOf('09:00') < html.indexOf('15:00'));
+  assert.match(html, /Practice[\s\S]*1 h 30 min[\s\S]*Hard/);
+  assert.match(html, /Gym[\s\S]*45 min[\s\S]*Light/);
 });
 
 test('empty plans print a clear empty state and missing linked slots fail explicitly', () => {
   const emptyHtml = buildPlannedDietHtml({
-    personName: 'Me', date: '2026-10-05', entries: [], mealTimes,
+    personName: 'Me', date: '2026-10-05', activityType: 'rest', entries: [], mealTimes,
   });
   assert.match(emptyHtml, /No foods planned for this date/);
   assert.throws(

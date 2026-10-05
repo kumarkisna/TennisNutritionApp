@@ -1,4 +1,5 @@
-import type { Meal, MealEntry, MealTimes, TennisDiet } from './local-models';
+import type { DayActivityType, Meal, MealEntry, MealTimes, TennisDiet, TennisPlan } from './local-models';
+import { sportsActivities } from './planning-targets';
 import { dietPhaseLabels } from './tennis-planning';
 
 export type PlannedDietItem = {
@@ -16,6 +17,33 @@ const mealOrder: Record<Meal, number> = {
   dinner: 2,
   snack: 3,
 };
+
+const tennisModeLabels: Record<TennisPlan['mode'], string> = {
+  training: 'Training',
+  tournament: 'Tournament',
+  rest: 'Rest',
+};
+
+const sessionKindLabels: Record<TennisPlan['sessions'][number]['kind'], string> = {
+  practice: 'Practice',
+  gym: 'Gym',
+  match: 'Match',
+};
+
+const intensityLabels: Record<TennisPlan['sessions'][number]['intensity'], string> = {
+  light: 'Light',
+  moderate: 'Moderate',
+  hard: 'Hard',
+};
+
+function durationLabel(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return [
+    hours ? `${hours} h` : '',
+    remainingMinutes ? `${remainingMinutes} min` : '',
+  ].filter(Boolean).join(' ') || '0 min';
+}
 
 export function sortPlannedDiet(
   entries: MealEntry[],
@@ -61,17 +89,31 @@ function titleCase(value: string): string {
 export function buildPlannedDietHtml({
   personName,
   date,
+  activityType,
+  tennisPlan,
   entries,
   mealTimes,
   tennisDiets = [],
 }: {
   personName: string;
   date: string;
+  activityType: DayActivityType;
+  tennisPlan?: TennisPlan;
   entries: MealEntry[];
   mealTimes: MealTimes;
   tennisDiets?: TennisDiet[];
 }): string {
   const items = sortPlannedDiet(entries, mealTimes, tennisDiets);
+  const sessionRows = tennisPlan?.sessions
+    .slice()
+    .sort((a, b) => a.startTime.localeCompare(b.startTime))
+    .map(session => `<li>
+      <strong>${escapeHtml(session.startTime)}</strong>
+      · ${escapeHtml(sessionKindLabels[session.kind])}
+      · ${escapeHtml(durationLabel(session.durationMinutes))}
+      · ${escapeHtml(intensityLabels[session.intensity])}
+    </li>`)
+    .join('');
   const rows = items.map(item => {
     const section = item.phase ? `${dietPhaseLabels[item.phase]} · ` : '';
     const portion = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(item.grams);
@@ -94,7 +136,7 @@ export function buildPlannedDietHtml({
       * { box-sizing: border-box; }
       body { margin: 0; color: #183542; font-family: Arial, Helvetica, sans-serif; font-size: 12pt; }
       h1 { margin: 0 0 20px; font-size: 24pt; }
-      .details { display: flex; gap: 36px; margin-bottom: 24px; }
+      .details { display: flex; flex-wrap: wrap; gap: 16px 36px; margin-bottom: 24px; }
       .detail { display: grid; gap: 4px; }
       .label { color: #52635f; font-size: 9pt; text-transform: uppercase; letter-spacing: 1px; }
       .value { font-size: 13pt; font-weight: 700; }
@@ -106,6 +148,9 @@ export function buildPlannedDietHtml({
       .time, .portion { white-space: nowrap; font-weight: 700; }
       .empty { margin: 0; border: 1px solid #d8e0dc; border-radius: 8px; padding: 16px; color: #52635f; }
       .note { margin-top: 24px; color: #52635f; font-size: 9pt; }
+      h2 { margin: 24px 0 8px; font-size: 14pt; }
+      .sessions { margin: 0; padding-left: 20px; }
+      .sessions li { margin: 4px 0; }
     </style>
   </head>
   <body>
@@ -113,6 +158,17 @@ export function buildPlannedDietHtml({
     <section class="details">
       <div class="detail"><span class="label">Person</span><span class="value">${escapeHtml(personName)}</span></div>
       <div class="detail"><span class="label">Date</span><span class="value">${escapeHtml(date)}</span></div>
+      <div class="detail"><span class="label">Activity type</span><span class="value">${escapeHtml(sportsActivities[activityType].label)}</span></div>
+      <div class="detail"><span class="label">Tennis plan type</span><span class="value">${tennisPlan ? escapeHtml(tennisModeLabels[tennisPlan.mode]) : 'Not set'}</span></div>
+      <div class="detail"><span class="label">Plan experience</span><span class="value">${tennisPlan?.experienceRating === undefined ? 'Not rated' : `${tennisPlan.experienceRating}/10`}</span></div>
+    </section>
+    <section>
+      <h2>Tennis sessions</h2>
+      ${tennisPlan
+        ? sessionRows
+          ? `<ul class="sessions">${sessionRows}</ul>`
+          : '<p class="empty">No sessions scheduled.</p>'
+        : '<p class="empty">No tennis plan saved.</p>'}
     </section>
     ${items.length
       ? `<table>
