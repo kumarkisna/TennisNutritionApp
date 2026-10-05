@@ -2,6 +2,11 @@
 
 A daily food planner with a standalone, device-local mobile app. The existing web planner and backend are retained separately.
 
+## Pinned links
+
+- Published web app: [https://website-with-google-sign-in.replit.app](https://website-with-google-sign-in.replit.app)
+- Mobile planner web route: [https://website-with-google-sign-in.replit.app/clear-access-mobile/](https://website-with-google-sign-in.replit.app/clear-access-mobile/)
+
 ## Mobile product direction
 
 - The mobile app must work independently using local device storage, without sign-in, server requests, or cloud synchronization.
