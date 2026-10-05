@@ -4,6 +4,7 @@ import { PlanningTargets } from '@/components/PlanningTargets';
 import { MealAlertSettings } from '@/components/MealAlertSettings';
 import { LocalBackup } from '@/components/LocalBackup';
 import { ThemePicker } from '@/components/ThemePicker';
+import { NutritionGoalSelector } from '@/components/NutritionGoalSelector';
 import { useColors } from '@/hooks/useColors';
 import { Text } from 'react-native';
 import { useUpdatePerson, type ActivityLevelType, type Person, type PersonUpdate } from '@/lib/local-api';
@@ -20,6 +21,7 @@ function SettingsForm({ person }: { person: Person }) {
   const update = useUpdatePerson();
   const [weight, setWeight] = useState(s(person.weightKg));
   const [age, setAge] = useState(s(person.ageYears));
+  const [nutritionGoal, setNutritionGoal] = useState(person.nutritionGoal);
   const [level, setLevel] = useState<ActivityLevelType>(person.activityLevel);
   const [baseline, setBaseline] = useState(String(person.baselineCalories));
   const [iron, setIron] = useState(s(person.ironGoalMg));
@@ -47,6 +49,7 @@ function SettingsForm({ person }: { person: Person }) {
     setProblem(null);
     const data: PersonUpdate = {
       weightKg: w, ageYears: a, activityLevel: level, baselineCalories: b,
+      nutritionGoal,
       ironGoalMg: i, ironGoalSource: i === null ? null : ironSrc.trim() || null, ironGoalReviewedOn: i === null ? null : ironDate.trim() || null,
       fatGoalG: f, fatGoalSource: f === null ? null : fatSrc.trim() || null, fatGoalReviewedOn: f === null ? null : fatDate.trim() || null,
     };
@@ -66,6 +69,7 @@ function SettingsForm({ person }: { person: Person }) {
       <Muted>Legacy/manual activity level and multiplier setting; retained for saved-data compatibility and do not control daily automatic targets.</Muted>
       <Field label="Legacy baseline kcal / day" value={baseline} onChangeText={setBaseline} keyboardType="number-pad" testID="input-baseline" hint="Retained for saved-data compatibility only. Automatic calories and fat estimates use body weight and the selected day's planned activity instead." />
     </Card>
+    <NutritionGoalSelector value={nutritionGoal} onChange={setNutritionGoal} testPrefix="select-settings-nutrition-goal" />
     <Card>
       <Eyebrow>Optional iron goal</Eyebrow>
       <Muted>Only enter a goal you have chosen yourself or reviewed with a qualified professional. The app does not suggest one. Leave empty for none.</Muted>

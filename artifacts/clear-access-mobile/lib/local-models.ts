@@ -6,6 +6,11 @@ export const ActivityLevel = {
 } as const;
 export type ActivityLevel = typeof ActivityLevel[keyof typeof ActivityLevel];
 
+export const NutritionGoal = {
+  weight_loss: 'weight_loss',
+} as const;
+export type NutritionGoal = typeof NutritionGoal[keyof typeof NutritionGoal];
+
 export const FoodCategory = {
   grains: 'grains',
   protein: 'protein',
@@ -55,6 +60,7 @@ export type Person = {
   ageYears: number | null;
   dateOfBirth: string | null;
   growthReferenceSex: 'male' | 'female' | null;
+  nutritionGoal: NutritionGoal | null;
   ironGoalMg: number | null;
   ironGoalSource: string | null;
   ironGoalReviewedOn: string | null;
@@ -73,6 +79,7 @@ export type PersonInput = {
   ageYears?: number | null;
   dateOfBirth?: string | null;
   growthReferenceSex?: 'male' | 'female' | null;
+  nutritionGoal?: NutritionGoal | null;
   ironGoalMg?: number | null;
   ironGoalSource?: string | null;
   ironGoalReviewedOn?: string | null;

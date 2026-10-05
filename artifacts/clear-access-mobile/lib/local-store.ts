@@ -9,7 +9,9 @@ import {
   DayActivityType,
   FoodCategory,
   Meal,
+  NutritionGoal,
   type ActivityLevel as ActivityLevelType,
+  type NutritionGoal as NutritionGoalType,
   type DayActivity,
   type DayActivityInput,
   type MealTimeInput,
@@ -46,10 +48,11 @@ import {
 } from './local-models';
 
 export const LOCAL_STORAGE_KEY = 'clear-access-mobile:planner:v1';
-const STORE_VERSION = 2;
+const STORE_VERSION = 3;
 const MEALS = Object.values(Meal);
 const ACTIVITY_LEVELS = Object.values(ActivityLevel);
 const DAY_ACTIVITIES = Object.values(DayActivityType);
+const NUTRITION_GOALS = Object.values(NutritionGoal);
 const CATEGORIES = Object.values(FoodCategory);
 const MULTIPLIERS: Record<ActivityLevelType, number> = {
   sedentary: 1,
@@ -179,6 +182,7 @@ function seedStore(): StoreData {
     ageYears: null,
     dateOfBirth: null,
     growthReferenceSex: null,
+    nutritionGoal: null,
     ironGoalMg: null,
     ironGoalSource: null,
     ironGoalReviewedOn: null,
@@ -228,6 +232,7 @@ function validateStoredData(value: unknown): StoreData {
        !(person.dateOfBirth === null || (typeof person.dateOfBirth === 'string' &&
          isValidCalendarDate(person.dateOfBirth) && person.dateOfBirth <= todayDate())) ||
        !(person.growthReferenceSex === null || person.growthReferenceSex === 'male' || person.growthReferenceSex === 'female') ||
+       !(person.nutritionGoal === null || NUTRITION_GOALS.includes(person.nutritionGoal as NutritionGoalType)) ||
       !ACTIVITY_LEVELS.includes(person.activityLevel as ActivityLevelType) ||
       !Number.isInteger(person.baselineCalories) ||
       !isFiniteInRange(person.activityMultiplier, 1, 1.35) ||
@@ -312,6 +317,13 @@ function validateStoredData(value: unknown): StoreData {
 
 function validateBackupData(value: unknown): StoreData {
   const invalid = (kind: string): never => fail(`Backup contains an invalid ${kind}.`);
+  if (isRecord(value) && value.version === 2 && Array.isArray(value.people)) {
+    return validateBackupData({
+      ...value,
+      version: STORE_VERSION,
+      people: value.people.map(person => isRecord(person) ? { ...person, nutritionGoal: null } : person),
+    });
+  }
   if (!isRecord(value) || !hasExactKeys(value, [
     'version', 'people', 'foods', 'entries', 'activities', 'heightRecords',
     'nextPersonId', 'nextFoodId', 'nextEntryId', 'nextHeightRecordId',
@@ -331,6 +343,7 @@ function validateBackupData(value: unknown): StoreData {
   for (const person of value.people) {
     if (!isRecord(person) || !hasExactKeys(person, [
       'id', 'name', 'isDefault', 'weightKg', 'ageYears', 'dateOfBirth', 'growthReferenceSex',
+      'nutritionGoal',
       'ironGoalMg', 'ironGoalSource', 'ironGoalReviewedOn', 'fatGoalG', 'fatGoalSource',
       'fatGoalReviewedOn', 'activityLevel', 'baselineCalories', 'activityMultiplier', 'targetCalories',
     ]) || !Number.isSafeInteger(person.id) || (person.id as number) < 1 ||
@@ -341,6 +354,7 @@ function validateBackupData(value: unknown): StoreData {
       !(person.dateOfBirth === null || (typeof person.dateOfBirth === 'string' &&
         isValidCalendarDate(person.dateOfBirth) && person.dateOfBirth <= todayDate())) ||
       !(person.growthReferenceSex === null || person.growthReferenceSex === 'male' || person.growthReferenceSex === 'female') ||
+      !(person.nutritionGoal === null || NUTRITION_GOALS.includes(person.nutritionGoal as NutritionGoalType)) ||
       !(person.ironGoalMg === null || isFiniteInRange(person.ironGoalMg, Number.EPSILON, 100)) ||
       !(person.fatGoalG === null || isFiniteInRange(person.fatGoalG, Number.EPSILON, 500)) ||
       !(person.ironGoalSource === null || (typeof person.ironGoalSource === 'string' && person.ironGoalSource.length <= 300)) ||
@@ -469,11 +483,23 @@ function migrateVersionOne(value: unknown): StoreData {
       ...person,
       dateOfBirth: person.dateOfBirth === undefined ? null : person.dateOfBirth,
       growthReferenceSex: person.growthReferenceSex === undefined ? null : person.growthReferenceSex,
+      nutritionGoal: person.nutritionGoal === undefined ? null : person.nutritionGoal,
     } : person),
     heightRecords: [],
     nextHeightRecordId: 1,
   };
   return validateStoredData(migrated);
+}
+
+function migrateVersionTwo(value: unknown): StoreData {
+  if (!isRecord(value) || value.version !== 2 || !Array.isArray(value.people)) {
+    fail('Local planner storage is corrupted. Your data was not changed.');
+  }
+  return validateStoredData({
+    ...value,
+    version: STORE_VERSION,
+    people: value.people.map(person => isRecord(person) ? { ...person, nutritionGoal: null } : person),
+  });
 }
 
 function clone<T>(value: T): T {
@@ -587,6 +613,10 @@ function validatePersonInput(input: PersonInput | PersonUpdate, existing?: Perso
     result.growthReferenceSex !== 'male' && result.growthReferenceSex !== 'female') {
     fail('Choose a valid growth reference sex.');
   }
+  const nutritionGoal = result.nutritionGoal ?? null;
+  if (nutritionGoal !== null && !NUTRITION_GOALS.includes(nutritionGoal as NutritionGoalType)) {
+    fail('Choose a valid nutrition goal.');
+  }
   const normalized: Record<string, unknown> = { ...result };
   for (const prefix of ['iron', 'fat'] as const) {
     const amountKey = prefix === 'iron' ? 'ironGoalMg' : 'fatGoalG';
@@ -621,6 +651,7 @@ function validatePersonInput(input: PersonInput | PersonUpdate, existing?: Perso
     ageYears: normalized.ageYears as number | null ?? null,
     dateOfBirth: normalized.dateOfBirth as string | null ?? null,
     growthReferenceSex: normalized.growthReferenceSex as Person['growthReferenceSex'] ?? null,
+    nutritionGoal: nutritionGoal as NutritionGoalType | null,
     ironGoalMg: normalized.ironGoalMg as number | null ?? null,
     ironGoalSource: normalized.ironGoalSource as string | null ?? null,
     ironGoalReviewedOn: normalized.ironGoalReviewedOn as string | null ?? null,
@@ -708,6 +739,16 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
         const migrated = migrateVersionOne(parsed);
         try {
           // Keep the v1 bytes until the complete, validated replacement is durable.
+          await storage.setItem(storageKey, JSON.stringify(migrated));
+        } catch (error) {
+          throw new Error(`Could not migrate local planner data; the change was not applied: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        data = migrated;
+        return migrated;
+      }
+      if (isRecord(parsed) && parsed.version === 2) {
+        const migrated = migrateVersionTwo(parsed);
+        try {
           await storage.setItem(storageKey, JSON.stringify(migrated));
         } catch (error) {
           throw new Error(`Could not migrate local planner data; the change was not applied: ${error instanceof Error ? error.message : String(error)}`);
@@ -1151,6 +1192,7 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
           ageYears: sourcePerson.ageYears,
           dateOfBirth: sourcePerson.dateOfBirth,
           growthReferenceSex: sourcePerson.growthReferenceSex,
+          nutritionGoal: sourcePerson.nutritionGoal,
           ironGoalMg: sourcePerson.ironGoalMg,
           ironGoalSource: sourcePerson.ironGoalSource,
           ironGoalReviewedOn: sourcePerson.ironGoalReviewedOn,

@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCreatePerson, useUpdatePerson, type ActivityLevelType, type PersonInput } from '@/lib/local-api';
 import { useOptionalPlanner } from '@/contexts/PlannerProvider';
 import { Btn, Chips, ErrorBox, Eyebrow, Field, Muted, Screen, Title, success, warn } from '@/components/ui';
+import { NutritionGoalSelector } from '@/components/NutritionGoalSelector';
 import { activityOptions } from '@/lib/activity';
 import { parseOptional } from '@/lib/format';
 
@@ -17,6 +18,7 @@ function PersonForm() {
   const [name, setName] = useState(editing?.name ?? '');
   const [weight, setWeight] = useState(editing?.weightKg == null ? '' : String(editing.weightKg));
   const [age, setAge] = useState(editing?.ageYears == null ? '' : String(editing.ageYears));
+  const [nutritionGoal, setNutritionGoal] = useState(editing?.nutritionGoal ?? null);
   const [level, setLevel] = useState<ActivityLevelType>(editing?.activityLevel ?? 'moderate');
   const [baseline, setBaseline] = useState(String(editing?.baselineCalories ?? 1800));
   const [problem, setProblem] = useState<string | null>(null);
@@ -36,7 +38,7 @@ function PersonForm() {
       setProblem('Age must be a whole number from 1 to 120, or empty.'); warn(); return;
     }
     setProblem(null);
-    const data: PersonInput = { name: cleaned, weightKg, ageYears, activityLevel: level, baselineCalories: kcal };
+    const data: PersonInput = { name: cleaned, weightKg, ageYears, nutritionGoal, activityLevel: level, baselineCalories: kcal };
     try {
       if (editing) await update.mutateAsync({ id: editing.id, data });
       else { const created = await create.mutateAsync({ data }); planner?.selectPerson(created.id); }
@@ -51,6 +53,7 @@ function PersonForm() {
     <Eyebrow>Body details</Eyebrow>
     <Field label="Body weight (kg)" value={weight} onChangeText={setWeight} keyboardType="decimal-pad" placeholder="Not set" hint="Used to scale workbook carbohydrate and protein ranges. Clear to remove." testID="input-manage-person-weight" />
     <Field label="Age (years)" value={age} onChangeText={setAge} keyboardType="number-pad" placeholder="Not set" hint="Used for calcium and adult-estimate eligibility only when no date of birth is saved. Unknown age is not assumed to be adult." testID="input-manage-person-age" />
+    <NutritionGoalSelector value={nutritionGoal} onChange={setNutritionGoal} testPrefix="select-manage-person-nutrition-goal" />
     <Eyebrow>Legacy/manual energy settings</Eyebrow>
     <Chips testPrefix="select-manage-person-activity" value={level} onChange={setLevel} options={activityOptions.map(o => ({ value: o.value, label: o.title }))} />
     <Muted>Legacy/manual activity level and multiplier retained for saved-data compatibility; they do not control daily automatic targets.</Muted>
