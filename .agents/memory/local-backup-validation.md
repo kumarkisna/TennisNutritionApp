@@ -26,3 +26,9 @@ On Android, every export must offer saving to a chosen device folder as well as 
 **Why:** The user reported that share-only export forced them to use another app when they wanted a local copy.
 
 **How to apply:** Write exports with Android's Storage Access Framework, keep sharing as a separate choice, and report cancellation without claiming the file was saved.
+
+Android imports should use the system document picker’s per-file access, copy the selected item to app cache, and read it through an Expo file API that supports document URIs. Do not request broad shared-storage permission.
+
+**Why:** Android’s document picker grants access to the selected URI; broad storage access is unnecessary and is not a substitute for reading through a URI-compatible API.
+
+**How to apply:** Keep the cache copy available through parsing, then remove only the temporary app-cache file. Confirm provider-specific behavior on a physical Android device.
