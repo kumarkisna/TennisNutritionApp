@@ -86,6 +86,24 @@ type BackupEnvelope = {
   createdAt: string;
   data: StoreData;
 };
+type FoodLibraryEnvelope = {
+  format: 'clear-access-food-library';
+  version: 1;
+  exportedAt: string;
+  foods: Food[];
+};
+export type FoodLibraryImportPreview = {
+  exportedAt: string;
+  currentCount: number;
+  incomingCount: number;
+  newCount: number;
+  duplicateCount: number;
+};
+export type FoodLibraryImportResult = {
+  incomingCount: number;
+  imported: number;
+  skippedDuplicates: number;
+};
 function fail(message: string): never {
   throw new Error(message);
 }
@@ -442,6 +460,23 @@ function clone<T>(value: T): T {
 function publicFood(food: StoredFood): Food {
   const { referenceKey: _referenceKey, ...result } = food;
   return result;
+}
+function foodFingerprint(food: Food): string {
+  return JSON.stringify([
+    food.name.trim().toLocaleLowerCase(),
+    food.brand?.trim().toLocaleLowerCase() ?? null,
+    food.sourceUrl ?? null,
+    food.category,
+    food.source,
+    food.caloriesPer100g,
+    food.proteinPer100g,
+    food.carbsPer100g,
+    food.fatPer100g,
+    food.fiberPer100g,
+    food.fiberKnown,
+    food.calciumMgPer100g,
+    food.ironMgPer100g,
+  ]);
 }
 function foodNutrition(food: Food, grams: number): Nutrition {
   const portion = grams / 100;
@@ -935,6 +970,71 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
       writeQueue = pending.then(() => undefined, () => undefined);
       return pending;
     },
+    async exportFoodLibrary(): Promise<string> {
+      const pending = writeQueue.then(async () => {
+        const current = await load();
+        const envelope: FoodLibraryEnvelope = {
+          format: 'clear-access-food-library',
+          version: 1,
+          exportedAt: new Date().toISOString(),
+          foods: current.foods
+            .map(publicFood)
+            .sort((left, right) => left.name.localeCompare(right.name) || left.id - right.id),
+        };
+        const serialized = JSON.stringify(envelope, null, 2);
+        parseFoodLibrary(serialized);
+        return serialized;
+      });
+      writeQueue = pending.then(() => undefined, () => undefined);
+      return pending;
+    },
+    async previewFoodLibraryImport(serialized: string): Promise<FoodLibraryImportPreview> {
+      const incoming = parseFoodLibrary(serialized);
+      await writeQueue;
+      const current = await load();
+      const fingerprints = new Set(current.foods.map(food => foodFingerprint(publicFood(food))));
+      let duplicateCount = 0;
+      let newCount = 0;
+      for (const food of incoming.foods) {
+        const fingerprint = foodFingerprint(food);
+        if (fingerprints.has(fingerprint)) {
+          duplicateCount += 1;
+        } else {
+          newCount += 1;
+          fingerprints.add(fingerprint);
+        }
+      }
+      return {
+        exportedAt: incoming.exportedAt,
+        currentCount: current.foods.length,
+        incomingCount: incoming.foods.length,
+        newCount,
+        duplicateCount,
+      };
+    },
+    async importFoodLibrary(serialized: string): Promise<FoodLibraryImportResult> {
+      const incoming = parseFoodLibrary(serialized);
+      return transact(draft => {
+        const fingerprints = new Set(draft.foods.map(food => foodFingerprint(publicFood(food))));
+        let imported = 0;
+        let skippedDuplicates = 0;
+        for (const food of incoming.foods) {
+          const fingerprint = foodFingerprint(food);
+          if (fingerprints.has(fingerprint)) {
+            skippedDuplicates += 1;
+            continue;
+          }
+          draft.foods.push({ ...food, id: draft.nextFoodId++ });
+          fingerprints.add(fingerprint);
+          imported += 1;
+        }
+        return {
+          incomingCount: incoming.foods.length,
+          imported,
+          skippedDuplicates,
+        };
+      });
+    },
     previewBackup(serialized: string): BackupPreview {
       const { envelope, data: backup } = parseBackup(serialized);
       return summarizeBackup(backup, envelope.createdAt);
@@ -1223,6 +1323,52 @@ function isISODateTime(value: unknown): value is string {
   if (typeof value !== 'string') return false;
   const parsed = new Date(value);
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString() === value;
+}
+
+function parseFoodLibrary(serialized: string): FoodLibraryEnvelope {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(serialized);
+  } catch {
+    fail('Food library file is not valid JSON.');
+  }
+  if (!isRecord(parsed) || !hasExactKeys(parsed, ['format', 'version', 'exportedAt', 'foods'])) {
+    fail('Food library file has an invalid envelope.');
+  }
+  if (parsed.format !== 'clear-access-food-library' || parsed.version !== 1) {
+    fail(`Unsupported food library format or version (${String(parsed.version)}).`);
+  }
+  if (!isISODateTime(parsed.exportedAt)) fail('Food library file has an invalid export timestamp.');
+  if (!Array.isArray(parsed.foods) || parsed.foods.length > 50_000) {
+    fail('Food library file has an invalid food list.');
+  }
+
+  const ids = new Set<number>();
+  for (const food of parsed.foods) {
+    if (!isRecord(food) || !hasExactKeys(food, [
+      'id', 'name', 'category', 'source', 'caloriesPer100g', 'proteinPer100g', 'carbsPer100g',
+      'fatPer100g', 'fiberPer100g', 'fiberKnown', 'calciumMgPer100g', 'ironMgPer100g',
+    ], ['brand', 'sourceUrl']) ||
+      !Number.isSafeInteger(food.id) || (food.id as number) < 1 ||
+      typeof food.name !== 'string' || !food.name.trim() || food.name.length > 120 ||
+      (food.brand !== undefined && (typeof food.brand !== 'string' || food.brand.length > 160)) ||
+      (food.sourceUrl !== undefined && (typeof food.sourceUrl !== 'string' || food.sourceUrl.length > 2048)) ||
+      !CATEGORIES.includes(food.category as Food['category']) ||
+      !['reference', 'custom', 'open_food_facts'].includes(String(food.source)) ||
+      !isFiniteNumber(food.caloriesPer100g) ||
+      !isFiniteNumber(food.proteinPer100g) ||
+      !isFiniteNumber(food.carbsPer100g) ||
+      !isFiniteNumber(food.fatPer100g) ||
+      !isFiniteNumber(food.fiberPer100g) ||
+      typeof food.fiberKnown !== 'boolean' ||
+      !(food.calciumMgPer100g === null || isFiniteNumber(food.calciumMgPer100g)) ||
+      !(food.ironMgPer100g === null || isFiniteNumber(food.ironMgPer100g)) ||
+      ids.has(food.id as number)) {
+      fail('Food library file contains an invalid food record.');
+    }
+    ids.add(food.id as number);
+  }
+  return parsed as unknown as FoodLibraryEnvelope;
 }
 
 function parseBackup(serialized: string): { envelope: BackupEnvelope; data: StoreData } {
