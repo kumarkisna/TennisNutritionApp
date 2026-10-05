@@ -102,7 +102,7 @@ function serveLandingPage(req, res, landingPageTemplate, appName) {
 
 function serveStaticFile(urlPath, res) {
   const safePath = path.normalize(urlPath).replace(/^(\.\.(\/|\\|$))+/, '');
-  const filePath = path.join(STATIC_ROOT, safePath);
+  let filePath = path.join(STATIC_ROOT, safePath);
 
   if (!filePath.startsWith(STATIC_ROOT)) {
     res.writeHead(403);
@@ -110,10 +110,30 @@ function serveStaticFile(urlPath, res) {
     return;
   }
 
-  if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
-    res.writeHead(404);
-    res.end('Not Found');
-    return;
+  const webIndexPath = path.join(STATIC_ROOT, 'web', 'index.html');
+  const isWebRoute = safePath === '/web' || safePath.startsWith('/web/');
+  const isWebAsset = safePath.startsWith('/web/_expo/');
+  const isWebNavigation =
+    isWebRoute &&
+    !isWebAsset &&
+    (safePath === '/web' || !path.extname(safePath));
+
+  if (fs.existsSync(filePath) && fs.statSync(filePath).isDirectory()) {
+    if (isWebNavigation && fs.existsSync(webIndexPath)) {
+      filePath = webIndexPath;
+    } else {
+      res.writeHead(404);
+      res.end('Not Found');
+      return;
+    }
+  } else if (!fs.existsSync(filePath)) {
+    if (isWebNavigation && fs.existsSync(webIndexPath)) {
+      filePath = webIndexPath;
+    } else {
+      res.writeHead(404);
+      res.end('Not Found');
+      return;
+    }
   }
 
   const ext = path.extname(filePath).toLowerCase();

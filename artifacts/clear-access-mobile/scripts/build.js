@@ -1,10 +1,13 @@
 const fs = require('fs');
 const path = require('path');
+const net = require('net');
 const { spawn } = require('child_process');
 const { Readable } = require('stream');
 const { pipeline } = require('stream/promises');
 
 let metroProcess = null;
+let metroPort = null;
+let webConfigBackup = null;
 
 const projectRoot = path.resolve(__dirname, '..');
 
@@ -24,6 +27,18 @@ function findWorkspaceRoot(startDir) {
 const workspaceRoot = findWorkspaceRoot(projectRoot);
 const basePath = (process.env.BASE_PATH || '/').replace(/\/+$/, '');
 
+function restoreWebConfig() {
+  if (!webConfigBackup) return;
+
+  try {
+    fs.writeFileSync(webConfigBackup.path, webConfigBackup.content);
+  } catch (error) {
+    console.error(`Failed to restore app.json: ${error.message}`);
+  } finally {
+    webConfigBackup = null;
+  }
+}
+
 function exitWithError(message) {
   console.error(message);
   if (metroProcess) {
@@ -34,6 +49,7 @@ function exitWithError(message) {
 
 function setupSignalHandlers() {
   const cleanup = () => {
+    restoreWebConfig();
     if (metroProcess) {
       console.log('Cleaning up Metro process...');
       metroProcess.kill();
@@ -88,6 +104,7 @@ function prepareDirectories(timestamp) {
     path.join(staticBuild, timestamp, '_expo', 'static', 'js', 'android'),
     path.join(staticBuild, 'ios'),
     path.join(staticBuild, 'android'),
+    path.join(staticBuild, 'web'),
   ];
 
   for (const dir of dirs) {
@@ -115,8 +132,10 @@ function clearMetroCache() {
 }
 
 async function checkMetroHealth() {
+  if (!metroPort) return false;
+
   try {
-    const response = await fetch('http://localhost:8081/status', {
+    const response = await fetch(`http://localhost:${metroPort}/status`, {
       signal: AbortSignal.timeout(5000),
     });
     return response.ok;
@@ -125,11 +144,38 @@ async function checkMetroHealth() {
   }
 }
 
+function findAvailablePort() {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.unref();
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      if (!address || typeof address === 'string') {
+        server.close();
+        reject(new Error('Could not determine an available Metro port'));
+        return;
+      }
+
+      server.close((error) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(address.port);
+        }
+      });
+    });
+  });
+}
+
 function getExpoPublicReplId() {
   return process.env.REPL_ID || process.env.EXPO_PUBLIC_REPL_ID;
 }
 
 async function startMetro(expoPublicDomain, expoPublicReplId) {
+  metroPort = await findAvailablePort();
+  console.log(`Using Metro port ${metroPort}`);
+
   const isRunning = await checkMetroHealth();
   if (isRunning) {
     console.log('Metro already running');
@@ -150,7 +196,16 @@ async function startMetro(expoPublicDomain, expoPublicReplId) {
 
   metroProcess = spawn(
     'pnpm',
-    ['exec', 'expo', 'start', '--no-dev', '--minify', '--localhost'],
+    [
+      'exec',
+      'expo',
+      'start',
+      '--no-dev',
+      '--minify',
+      '--localhost',
+      '--port',
+      String(metroPort),
+    ],
     {
       stdio: ['ignore', 'pipe', 'pipe'],
       detached: false,
@@ -230,7 +285,7 @@ async function downloadBundle(platform, timestamp) {
     'entry',
   );
   const bundlePath = path.relative(workspaceRoot, entryPath);
-  const url = new URL(`http://localhost:8081/${bundlePath}.bundle`);
+  const url = new URL(`http://localhost:${metroPort}/${bundlePath}.bundle`);
   url.searchParams.set('platform', platform);
   url.searchParams.set('dev', 'false');
   url.searchParams.set('hot', 'false');
@@ -258,7 +313,7 @@ async function downloadManifest(platform) {
 
   try {
     console.log(`Fetching ${platform} manifest...`);
-    const response = await fetch('http://localhost:8081/manifest', {
+    const response = await fetch(`http://localhost:${metroPort}/manifest`, {
       headers: { 'expo-platform': platform },
       signal: controller.signal,
     });
@@ -342,7 +397,7 @@ function extractAssets(timestamp) {
       const originalPath = match[1];
       const filename = match[3] + '.' + match[4];
 
-      const tempUrl = new URL(`http://localhost:8081${originalPath}`);
+      const tempUrl = new URL(`http://localhost:${metroPort}${originalPath}`);
       const unstablePath = tempUrl.searchParams.get('unstable_path');
 
       if (!unstablePath) {
@@ -384,7 +439,9 @@ async function downloadAssets(assets, timestamp) {
   const failures = [];
 
   const downloadPromises = assets.map(async (asset) => {
-    const tempUrl = new URL(`http://localhost:8081${asset.originalPath}`);
+    const tempUrl = new URL(
+      `http://localhost:${metroPort}${asset.originalPath}`,
+    );
     const unstablePath = tempUrl.searchParams.get('unstable_path');
 
     if (!unstablePath) {
@@ -457,7 +514,9 @@ function updateBundleUrls(timestamp, baseUrl) {
     bundle = bundle.replace(
       /httpServerLocation:"(\/[^"]+)"/g,
       (_match, capturedPath) => {
-        const tempUrl = new URL(`http://localhost:8081${capturedPath}`);
+        const tempUrl = new URL(
+          `http://localhost:${metroPort}${capturedPath}`,
+        );
         const unstablePath = tempUrl.searchParams.get('unstable_path');
 
         if (!unstablePath) {
@@ -521,6 +580,70 @@ function updateManifests(manifests, timestamp, baseUrl, assetsByHash) {
   console.log('Manifests updated');
 }
 
+async function exportWebApp(domain, expoPublicReplId) {
+  console.log('Exporting browser build for Median...');
+
+  const appJsonPath = path.join(projectRoot, 'app.json');
+  const originalAppJson = fs.readFileSync(appJsonPath, 'utf-8');
+  webConfigBackup = { path: appJsonPath, content: originalAppJson };
+
+  try {
+    const appConfig = JSON.parse(originalAppJson);
+    appConfig.expo.experiments = {
+      ...appConfig.expo.experiments,
+      baseUrl: `${basePath}/web`,
+    };
+    fs.writeFileSync(
+      appJsonPath,
+      `${JSON.stringify(appConfig, null, 2)}\n`,
+    );
+
+    const env = {
+      ...process.env,
+      EXPO_PUBLIC_DOMAIN: domain,
+    };
+    if (expoPublicReplId) {
+      env.EXPO_PUBLIC_REPL_ID = expoPublicReplId;
+    }
+
+    await new Promise((resolve, reject) => {
+      const exportProcess = spawn(
+        'pnpm',
+        [
+          'exec',
+          'expo',
+          'export',
+          '--platform',
+          'web',
+          '--output-dir',
+          path.join('static-build', 'web'),
+          '--clear',
+        ],
+        {
+          cwd: projectRoot,
+          env,
+          stdio: 'inherit',
+        },
+      );
+
+      exportProcess.once('error', reject);
+      exportProcess.once('close', (code, signal) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(
+            new Error(
+              `Expo web export failed${signal ? ` with signal ${signal}` : ` with exit code ${code}`}`,
+            ),
+          );
+        }
+      });
+    });
+  } finally {
+    restoreWebConfig();
+  }
+}
+
 async function main() {
   console.log('Building static Expo Go deployment...');
 
@@ -572,11 +695,16 @@ async function main() {
   console.log('Updating manifests and creating landing page...');
   updateManifests(manifests, timestamp, baseUrl, assetsByHash);
 
-  console.log('Build complete! Deploy to:', baseUrl);
-
   if (metroProcess) {
+    console.log('Stopping native bundle server before web export...');
     metroProcess.kill();
+    metroProcess = null;
   }
+
+  await exportWebApp(domain, expoPublicReplId);
+  console.log(`Median browser build available at: ${baseUrl}${basePath}/web/`);
+
+  console.log('Build complete! Deploy to:', baseUrl);
   process.exit(0);
 }
 

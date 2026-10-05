@@ -6,10 +6,12 @@ A daily food planner with a standalone, device-local mobile app. The existing we
 
 - Published web app: [https://website-with-google-sign-in.replit.app](https://website-with-google-sign-in.replit.app)
 - Expo Go launch page (not a Median WebView app page): [https://website-with-google-sign-in.replit.app/clear-access-mobile/](https://website-with-google-sign-in.replit.app/clear-access-mobile/)
+- Median browser build (available after publishing the updated mobile artifact): [https://website-with-google-sign-in.replit.app/clear-access-mobile/web/](https://website-with-google-sign-in.replit.app/clear-access-mobile/web/)
 
 ## Mobile product direction
 
 - The mobile app must work independently using local device storage, without sign-in, server requests, or cloud synchronization.
+- The Median browser build stores its local data in the WebView's browser storage, separate from Expo Go's native app storage; native background meal alerts are unavailable in that WebView.
 - Appearance is a device-wide, explicitly selected theme, independent of each person's nutrition settings. Store its identifier separately from planner records; restoring a planner backup does not replace the device's appearance.
 - **Why:** The requested mobile product is local-only, rather than a companion that depends on the existing web accounts.
 - Keep people, food records, meal plans, activity selections, preferences, and dated height measurements on the device. Search the local food library, not an online discovery service.

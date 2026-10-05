@@ -12,7 +12,8 @@
     },
     "android": { "permissions": ["android.permission.SCHEDULE_EXACT_ALARM"] },
     "web": {
-      "favicon": "./assets/images/icon.png"
+      "favicon": "./assets/images/icon.png",
+      "output": "single"
     },
     "plugins": ["expo-router", "expo-notifications"],
     "experiments": {
