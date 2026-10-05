@@ -42,6 +42,7 @@ export default function Overview() {
     </Card>
     <Btn label="Plan this day" icon="arrow-right" testID="link-overview-plan-day" onPress={() => { setDate(date); router.push('/planner'); }} />
     <Btn variant="ghost" label="Height history & CDC chart" icon="trending-up" testID="button-overview-height-chart" onPress={() => router.push('/height')} />
+    <Btn variant="ghost" label="Weight progress & target" icon="activity" testID="button-overview-weight-progress" onPress={() => router.push('/weight')} />
     <Card>
       <Eyebrow>{person.name}'s planning targets</Eyebrow>
       <PlanningTargets person={person} date={date} />

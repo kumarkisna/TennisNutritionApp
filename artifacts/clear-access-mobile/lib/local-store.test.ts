@@ -128,7 +128,7 @@ test('migrates v1 data in-place without losing people, foods, entries, activitie
   assert.equal((await migratedStore.getDayActivity({ date: '2020-03-04', personId: custom.id })).activityType, 'strength');
   assert.equal((await migratedStore.listHeightRecords()).length, 0);
   const migrated = JSON.parse(storage.values.get('clear-access-mobile:planner:v1')!);
-  assert.equal(migrated.version, 4);
+  assert.equal(migrated.version, 5);
   assert.equal(migrated.nextPersonId, current.nextPersonId);
   assert.equal(migrated.nextFoodId, current.nextFoodId);
   assert.equal(migrated.nextEntryId, current.nextEntryId);
@@ -165,7 +165,7 @@ test('migrates v2 local data and old backups with no nutrition goal while preser
   const migratedPeople = await migratedStore.listPeople();
   assert.equal(migratedPeople.find(candidate => candidate.id === person.id)?.nutritionGoal, null);
   const migrated = JSON.parse(storage.values.get('clear-access-mobile:planner:v1')!);
-  assert.equal(migrated.version, 4);
+  assert.equal(migrated.version, 5);
   assert.deepEqual(migrated.foods, current.foods);
   assert.deepEqual(migrated.entries, current.entries);
   assert.deepEqual(migrated.activities, current.activities);
@@ -198,7 +198,7 @@ test('migrates v3 local data and backups by clearing ages without DOB and recalc
   const migratedPeople = await migratedStore.listPeople();
   assert.equal(migratedPeople.find(person => person.id === noDob.id)?.ageYears, null);
   assert.equal(migratedPeople.find(person => person.id === withDob.id)?.ageYears, getAgeOnDate('2000-01-01', today()));
-  assert.equal(JSON.parse(storage.values.get('clear-access-mobile:planner:v1')!).version, 4);
+  assert.equal(JSON.parse(storage.values.get('clear-access-mobile:planner:v1')!).version, 5);
 
   const oldBackup = JSON.parse(await source.exportBackup());
   oldBackup.data = versionThree;
@@ -207,6 +207,35 @@ test('migrates v3 local data and backups by clearing ages without DOB and recalc
   const restoredPeople = await restoredStore.listPeople();
   assert.equal(restoredPeople.find(person => person.id === noDob.id)?.ageYears, null);
   assert.equal(restoredPeople.find(person => person.id === withDob.id)?.ageYears, getAgeOnDate('2000-01-01', today()));
+});
+
+test('migrates v4 local data and backups with empty progress history and no target', async () => {
+  const storage = new MemoryStorage();
+  const source = createLocalStore(storage);
+  const person = await source.createPerson({ ...baselinePerson('Version four'), weightKg: 72 });
+  await source.createHeightRecord({ personId: person.id, date: '2020-01-02', heightCm: 170 });
+  const current = await source.exportForTests() as Record<string, unknown>;
+  const people = (current.people as Array<Record<string, unknown>>).map(({ targetWeightKg: _target, ...legacyPerson }) => legacyPerson);
+  const { weightRecords: _weights, nextWeightRecordId: _weightId, ...legacyData } = current;
+  const versionFour = { ...legacyData, version: 4, people };
+  storage.values.set('clear-access-mobile:planner:v1', JSON.stringify(versionFour));
+
+  const migratedStore = createLocalStore(storage);
+  const migratedPerson = (await migratedStore.listPeople()).find(candidate => candidate.id === person.id)!;
+  assert.equal(migratedPerson.targetWeightKg, null);
+  assert.equal(migratedPerson.weightKg, 72);
+  assert.equal((await migratedStore.listHeightRecords({ personId: person.id })).length, 1);
+  assert.deepEqual(await migratedStore.listWeightRecords(), []);
+  assert.equal(JSON.parse(storage.values.get('clear-access-mobile:planner:v1')!).version, 5);
+  assert.equal((await migratedStore.createWeightRecord({ personId: person.id, date: '2020-01-03', weightKg: 71 })).id, 1);
+
+  const legacyBackup = JSON.parse(await source.exportBackup());
+  legacyBackup.data = versionFour;
+  const restored = createLocalStore(new MemoryStorage());
+  await restored.restoreBackup(JSON.stringify(legacyBackup));
+  assert.equal((await restored.listPeople()).find(candidate => candidate.id === person.id)?.targetWeightKg, null);
+  assert.deepEqual(await restored.listWeightRecords(), []);
+  assert.equal((await restored.listHeightRecords({ personId: person.id })).length, 1);
 });
 
 test('calculates age from DOB on person creation and clears it when DOB is removed', async () => {
@@ -258,6 +287,66 @@ test('persists, date-sorts, updates, and deletes isolated height records', async
   assert.equal((await restarted.listHeightRecords({ personId: alice.id })).length, 2);
   await restarted.deleteHeightRecord(newer.id);
   assert.deepEqual((await restarted.listHeightRecords({ personId: alice.id })).map(record => record.id), [older.id]);
+});
+
+test('keeps dated weigh-ins separate from planning weight and supports isolated CRUD', async () => {
+  const storage = new MemoryStorage();
+  const store = createLocalStore(storage);
+  const alice = await store.createPerson({
+    ...baselinePerson('Weight Alice'),
+    weightKg: 70,
+    targetWeightKg: 65,
+    dateOfBirth: '1988-03-04',
+    nutritionGoal: 'weight_loss',
+  });
+  const bob = await store.createPerson({ ...baselinePerson('Weight Bob'), weightKg: 82 });
+  const params = { personId: alice.id, date: '2020-03-04' };
+  await store.saveDayActivity({ ...params, activityType: 'training_60' });
+  const summaryBefore = await store.getDailySummary(params);
+  const older = await store.createWeightRecord({ personId: alice.id, date: '2020-01-10', weightKg: 72.4 });
+  const newer = await store.createWeightRecord({ personId: alice.id, date: '2020-02-10', weightKg: 70.8 });
+  const bobRecord = await store.createWeightRecord({ personId: bob.id, date: '2020-02-10', weightKg: 82 });
+  assert.deepEqual((await store.listWeightRecords({ personId: alice.id })).map(record => record.id), [newer.id, older.id]);
+  assert.deepEqual((await store.listWeightRecords({ personId: bob.id })).map(record => record.id), [bobRecord.id]);
+  assert.deepEqual(await store.getDailySummary(params), summaryBefore);
+
+  const changed = await store.updateWeightRecord(older.id, { date: '2020-03-10', weightKg: 71.5 });
+  assert.equal(changed.weightKg, 71.5);
+  assert.equal((await store.listPeople()).find(candidate => candidate.id === alice.id)?.weightKg, 70);
+  assert.equal((await store.listPeople()).find(candidate => candidate.id === alice.id)?.targetWeightKg, 65);
+  assert.deepEqual(await store.getDailySummary(params), summaryBefore);
+
+  const updatedTarget = await store.updatePerson(alice.id, { targetWeightKg: 64 });
+  assert.equal(updatedTarget.weightKg, 70);
+  assert.equal(updatedTarget.targetWeightKg, 64);
+  assert.deepEqual(await store.getDailySummary(params), summaryBefore);
+  assert.equal((await createLocalStore(storage).listWeightRecords({ personId: alice.id })).length, 2);
+  await store.deleteWeightRecord(newer.id);
+  assert.deepEqual((await store.listWeightRecords({ personId: alice.id })).map(record => record.id), [older.id]);
+});
+
+test('validates weigh-in dates, ranges, person scope, duplicates, and target weight', async () => {
+  const store = createLocalStore(new MemoryStorage());
+  const alice = await store.createPerson({ ...baselinePerson('Validated weight'), dateOfBirth: '2000-01-01' });
+  const bob = await store.createPerson(baselinePerson('Other weight person'));
+  const tomorrowDate = new Date();
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+  const tomorrow = `${tomorrowDate.getFullYear()}-${String(tomorrowDate.getMonth() + 1).padStart(2, '0')}-${String(tomorrowDate.getDate()).padStart(2, '0')}`;
+  await assert.rejects(store.createWeightRecord({ personId: alice.id, date: '2021-02-29', weightKg: 70 }), /valid.*date/i);
+  await assert.rejects(store.createWeightRecord({ personId: alice.id, date: tomorrow, weightKg: 70 }), /future/i);
+  await assert.rejects(store.createWeightRecord({ personId: alice.id, date: '1999-12-31', weightKg: 70 }), /before.*date of birth/i);
+  await assert.rejects(store.createWeightRecord({ personId: alice.id, date: '2020-01-01', weightKg: 0.9 }), /1 and 500/i);
+  await assert.rejects(store.createWeightRecord({ personId: alice.id, date: '2020-01-01', weightKg: 500.1 }), /1 and 500/i);
+  await assert.rejects(store.createWeightRecord({ personId: 9999, date: '2020-01-01', weightKg: 70 }), /person not found/i);
+  await assert.rejects(store.createPerson({ ...baselinePerson('Invalid target'), targetWeightKg: 0 }), /target weight/i);
+  await assert.rejects(store.createPerson({ ...baselinePerson('Invalid target upper'), targetWeightKg: 501 }), /target weight/i);
+  await store.createWeightRecord({ personId: alice.id, date: '2020-01-01', weightKg: 70 });
+  await assert.rejects(store.createWeightRecord({ personId: alice.id, date: '2020-01-01', weightKg: 69 }), /edit the existing record instead/i);
+  await store.createWeightRecord({ personId: bob.id, date: '2020-01-01', weightKg: 80 });
+  const aliceSecondRecord = await store.createWeightRecord({ personId: alice.id, date: '2020-01-02', weightKg: 71 });
+  await assert.rejects(store.updateWeightRecord(aliceSecondRecord.id, { date: '2020-01-01', weightKg: 99 }), /edit the existing record instead/i);
+  await assert.rejects(store.updateWeightRecord(1, { weightKg: Number.NaN }), /1 and 500/i);
+  await assert.rejects(store.updatePerson(alice.id, { dateOfBirth: '2020-01-02' }), /after an existing weight/i);
 });
 
 test('rejects duplicate same-person measurement dates, but allows another person on that date', async () => {
@@ -315,30 +404,39 @@ test('daily summary derives weight-and-activity calories and responds to person 
   assert.equal((await store.getDailySummary({ date, personId: under18.id })).targetCalories, null);
 });
 
-test('deleting a person cascades only that person’s height records and protects the default', async () => {
+test('deleting a person cascades only that person’s height and weight records and protects the default', async () => {
   const store = createLocalStore(new MemoryStorage());
   const defaultPerson = (await store.listPeople())[0];
   const deleted = await store.createPerson(baselinePerson('Height cascade'));
   const retained = await store.createPerson(baselinePerson('Height retained'));
   await store.createHeightRecord({ personId: deleted.id, date: '2020-01-01', heightCm: 100 });
   await store.createHeightRecord({ personId: retained.id, date: '2020-01-01', heightCm: 110 });
+  await store.createWeightRecord({ personId: deleted.id, date: '2020-01-01', weightKg: 60 });
+  await store.createWeightRecord({ personId: retained.id, date: '2020-01-01', weightKg: 70 });
   await assert.rejects(store.deletePerson(defaultPerson.id), /default person cannot be deleted/i);
   await store.deletePerson(deleted.id);
   assert.equal((await store.listHeightRecords({ personId: retained.id })).length, 1);
   assert.equal((await store.listHeightRecords()).length, 1);
+  assert.equal((await store.listWeightRecords({ personId: retained.id })).length, 1);
+  assert.equal((await store.listWeightRecords()).length, 1);
 });
 
-test('a failed height-record persistence leaves committed and durable records unchanged', async () => {
+test('a failed measurement persistence leaves committed and durable records unchanged', async () => {
   const storage = new MemoryStorage();
   const store = createLocalStore(storage);
   const person = await store.createPerson(baselinePerson('Durable height'));
   const saved = await store.createHeightRecord({ personId: person.id, date: '2020-01-01', heightCm: 100 });
+  const savedWeight = await store.createWeightRecord({ personId: person.id, date: '2020-01-01', weightKg: 70 });
   const committedBytes = storage.values.get('clear-access-mobile:planner:v1');
   storage.failNextWrite = true;
   await assert.rejects(store.createHeightRecord({ personId: person.id, date: '2020-01-02', heightCm: 101 }), /change was not applied/i);
+  storage.failNextWrite = true;
+  await assert.rejects(store.createWeightRecord({ personId: person.id, date: '2020-01-02', weightKg: 71 }), /change was not applied/i);
   assert.deepEqual(await store.listHeightRecords(), [saved]);
+  assert.deepEqual(await store.listWeightRecords(), [savedWeight]);
   assert.equal(storage.values.get('clear-access-mobile:planner:v1'), committedBytes);
   assert.deepEqual(await createLocalStore(storage).listHeightRecords(), [saved]);
+  assert.deepEqual(await createLocalStore(storage).listWeightRecords(), [savedWeight]);
 });
 
 test('device-local height query and mutation hooks are configured to run while offline', () => {
@@ -352,6 +450,8 @@ test('device-local height query and mutation hooks are configured to run while o
   assert.equal((apiSource.match(/networkMode:\s*'always'/g) ?? []).length, 2);
   assert.match(apiSource, /useListHeightRecords[\s\S]*?useLocalQuery/);
   assert.match(apiSource, /useCreateHeightRecord[\s\S]*?useLocalMutation/);
+  assert.match(apiSource, /useListWeightRecords[\s\S]*?useLocalQuery/);
+  assert.match(apiSource, /useCreateWeightRecord[\s\S]*?useLocalMutation/);
 });
 
 test('keeps entries and activity isolated by person and date, and cascades only a deleted person', async () => {
@@ -514,6 +614,7 @@ test('backup round-trips all people, preferences, goals, height records, foods, 
   const alice = await source.createPerson({
     ...baselinePerson('Backup Alice'),
     weightKg: 62.5,
+    targetWeightKg: 58,
     dateOfBirth: '1994-04-12',
     growthReferenceSex: 'female',
     ironGoalMg: 18,
@@ -529,6 +630,7 @@ test('backup round-trips all people, preferences, goals, height records, foods, 
   const bob = await source.createPerson({
     ...baselinePerson('Backup Bob'),
     weightKg: 79,
+    targetWeightKg: 76,
     activityLevel: 'very_active',
     baselineCalories: 2400,
   });
@@ -552,6 +654,8 @@ test('backup round-trips all people, preferences, goals, height records, foods, 
   await source.saveDayActivity({ date, personId: bob.id, activityType: 'endurance' });
   await source.createHeightRecord({ personId: alice.id, date: '2020-01-10', heightCm: 165.4 });
   await source.createHeightRecord({ personId: bob.id, date: '2020-02-11', heightCm: 181 });
+  await source.createWeightRecord({ personId: alice.id, date: '2020-01-10', weightKg: 64.2 });
+  await source.createWeightRecord({ personId: bob.id, date: '2020-02-11', weightKg: 79 });
 
   const expectedData = await source.exportForTests();
   const durableBytes = storage.values.get('clear-access-mobile:planner:v1');
@@ -567,14 +671,15 @@ test('backup round-trips all people, preferences, goals, height records, foods, 
   const beforePreview = await source.exportForTests();
   const preview = source.previewBackup(serialized);
   assert.deepEqual(preview.people, [
-    { id: defaultPerson.id, name: 'Me', entries: 0, activities: 0, heightRecords: 0 },
-    { id: alice.id, name: 'Backup Alice', entries: 2, activities: 1, heightRecords: 1 },
-    { id: bob.id, name: 'Backup Bob', entries: 1, activities: 1, heightRecords: 1 },
+    { id: defaultPerson.id, name: 'Me', entries: 0, activities: 0, heightRecords: 0, weightRecords: 0 },
+    { id: alice.id, name: 'Backup Alice', entries: 2, activities: 1, heightRecords: 1, weightRecords: 1 },
+    { id: bob.id, name: 'Backup Bob', entries: 1, activities: 1, heightRecords: 1, weightRecords: 1 },
   ]);
   assert.equal(preview.foods, (expectedData as { foods: unknown[] }).foods.length);
   assert.equal(preview.entries, 3);
   assert.equal(preview.activities, 2);
   assert.equal(preview.heightRecords, 2);
+  assert.equal(preview.weightRecords, 2);
   assert.deepEqual(await source.exportForTests(), beforePreview, 'preview must not mutate in-memory state');
   assert.equal(storage.values.get('clear-access-mobile:planner:v1'), durableBytes, 'preview must not write storage');
 
@@ -589,11 +694,13 @@ test('backup round-trips all people, preferences, goals, height records, foods, 
     await source.getDailySummary({ date, personId: alice.id }),
   );
   assert.deepEqual(await destination.listHeightRecords(), await source.listHeightRecords());
+  assert.deepEqual(await destination.listWeightRecords(), await source.listWeightRecords());
   const restoredAlice = (await destination.listPeople()).find(person => person.id === alice.id)!;
   assert.equal(restoredAlice.ironGoalSource, 'Dietitian recommendation');
   assert.equal(restoredAlice.ironGoalReviewedOn, '2024-05-06');
   assert.equal(restoredAlice.fatGoalG, 70);
   assert.equal(restoredAlice.nutritionGoal, 'weight_loss');
+  assert.equal(restoredAlice.targetWeightKg, 58);
   assert.equal(restoredAlice.activityLevel, 'moderate');
   assert.equal(restoredAlice.activityMultiplier, 1.2);
   assert.equal(restoredAlice.targetCalories, 2700);
@@ -627,6 +734,7 @@ test('backup preview and restore reject malformed envelopes, model fields, dates
   await source.createMealEntry({ date: '2020-01-01', personId: person.id, meal: 'lunch', foodId: food.id, grams: 100 });
   await source.saveDayActivity({ date: '2020-01-01', personId: person.id, activityType: 'rest' });
   await source.createHeightRecord({ personId: person.id, date: '2020-01-01', heightCm: 150 });
+  await source.createWeightRecord({ personId: person.id, date: '2020-01-01', weightKg: 68 });
   const goodBackup = await source.exportBackup();
   const malformed = [
     '{not JSON',
@@ -678,6 +786,21 @@ test('backup preview and restore reject malformed envelopes, model fields, dates
     (() => {
       const value = JSON.parse(goodBackup);
       value.data.heightRecords[0].personId = 99999;
+      return JSON.stringify(value);
+    })(),
+    (() => {
+      const value = JSON.parse(goodBackup);
+      value.data.weightRecords[0].date = 'not-a-date';
+      return JSON.stringify(value);
+    })(),
+    (() => {
+      const value = JSON.parse(goodBackup);
+      value.data.weightRecords[0].personId = 99999;
+      return JSON.stringify(value);
+    })(),
+    (() => {
+      const value = JSON.parse(goodBackup);
+      value.data.weightRecords[0].weightKg = 0;
       return JSON.stringify(value);
     })(),
     (() => {
@@ -915,7 +1038,7 @@ test('food-library files export every food and safely merge exact matches withou
 test('person planner files include linked records and foods, remap IDs, and leave other plans unchanged', async () => {
   const source = createLocalStore(new MemoryStorage());
   const sourcePerson = (await source.listPeople())[0];
-  await source.updatePerson(sourcePerson.id, { nutritionGoal: 'weight_loss' });
+  await source.updatePerson(sourcePerson.id, { nutritionGoal: 'weight_loss', weightKg: 72, targetWeightKg: 61 });
   const otherPerson = await source.createPerson(baselinePerson('Other source person'));
   const transferFood = await source.createFood({
     name: 'Food linked to one person',
@@ -941,6 +1064,7 @@ test('person planner files include linked records and foods, remap IDs, and leav
   await source.saveDayActivity({ date, personId: sourcePerson.id, activityType: 'training_60' });
   await source.saveMealTime({ date, personId: sourcePerson.id, meal: 'lunch', time: '12:30' });
   await source.createHeightRecord({ date, personId: sourcePerson.id, heightCm: 165 });
+  await source.createWeightRecord({ date, personId: sourcePerson.id, weightKg: 70 });
 
   const serialized = await source.exportPersonPlanner(sourcePerson.id);
   const file = JSON.parse(serialized);
@@ -951,6 +1075,8 @@ test('person planner files include linked records and foods, remap IDs, and leav
   assert.equal(file.data.entries.length, 1);
   assert.equal(file.data.activities.length, 1);
   assert.equal(file.data.heightRecords.length, 1);
+  assert.equal(file.data.weightRecords.length, 1);
+  assert.equal(file.data.people[0].targetWeightKg, 61);
 
   const destination = createLocalStore(new MemoryStorage());
   const existingPerson = (await destination.listPeople())[0];
@@ -977,17 +1103,21 @@ test('person planner files include linked records and foods, remap IDs, and leav
   assert.equal(preview.entries, 1);
   assert.equal(preview.activities, 1);
   assert.equal(preview.heightRecords, 1);
+  assert.equal(preview.weightRecords, 1);
 
   const result = await destination.importPersonPlanner(serialized, preview.suggestedName);
   assert.equal(result.person.isDefault, false);
   assert.equal(result.person.name, 'Me (Imported)');
   assert.equal(result.person.nutritionGoal, 'weight_loss');
+  assert.equal(result.person.weightKg, 72);
+  assert.equal(result.person.targetWeightKg, 61);
   assert.deepEqual({
     foodsImported: result.foodsImported,
     entriesImported: result.entriesImported,
     activitiesImported: result.activitiesImported,
     heightRecordsImported: result.heightRecordsImported,
-  }, { foodsImported: 1, entriesImported: 1, activitiesImported: 1, heightRecordsImported: 1 });
+    weightRecordsImported: result.weightRecordsImported,
+  }, { foodsImported: 1, entriesImported: 1, activitiesImported: 1, heightRecordsImported: 1, weightRecordsImported: 1 });
 
   const importedEntries = await destination.listMealEntries({ date, personId: result.person.id });
   assert.equal(importedEntries.length, 1);
@@ -996,6 +1126,7 @@ test('person planner files include linked records and foods, remap IDs, and leav
   assert.equal((await destination.getDayActivity({ date, personId: result.person.id })).activityType, 'training_60');
   assert.equal((await destination.getDayActivity({ date, personId: result.person.id })).mealTimes?.lunch, '12:30');
   assert.equal((await destination.listHeightRecords({ personId: result.person.id }))[0].heightCm, 165);
+  assert.equal((await destination.listWeightRecords({ personId: result.person.id }))[0].weightKg, 70);
 
   const untouchedEntries = await destination.listMealEntries({ date: '2020-02-21', personId: existingPerson.id });
   assert.equal(untouchedEntries.length, 1);

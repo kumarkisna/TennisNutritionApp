@@ -38,6 +38,7 @@ function RootLayoutNav() {
       <Stack.Screen name="portion" />
       <Stack.Screen name="food-form" />
       <Stack.Screen name="height" options={{ title: 'Height & growth' }} />
+      <Stack.Screen name="weight" options={{ title: 'Weight progress' }} />
     </Stack>
   );
 }

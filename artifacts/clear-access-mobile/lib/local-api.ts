@@ -28,10 +28,14 @@ import type {
   HeightRecord,
   HeightRecordInput,
   HeightRecordUpdate,
+  WeightRecord,
+  WeightRecordInput,
+  WeightRecordUpdate,
   GetDayActivityParams,
   GetDailySummaryParams,
   ListFoodsParams,
   ListHeightRecordsParams,
+  ListWeightRecordsParams,
   ListMealEntriesParams,
   MealEntry,
   MealEntryInput,
@@ -80,10 +84,14 @@ export type {
   HeightRecord,
   HeightRecordInput,
   HeightRecordUpdate,
+  WeightRecord,
+  WeightRecordInput,
+  WeightRecordUpdate,
   GetDayActivityParams,
   GetDailySummaryParams,
   ListFoodsParams,
   ListHeightRecordsParams,
+  ListWeightRecordsParams,
   ListMealEntriesParams,
   MealEntry,
   MealEntryInput,
@@ -118,6 +126,7 @@ export const importLocalPersonPlanner = (serialized: string, name: string) => lo
 export const getListPeopleQueryKey = () => ['listPeople'] as const;
 export const getListFoodsQueryKey = (params?: ListFoodsParams) => ['listFoods', params] as const;
 export const getListHeightRecordsQueryKey = (params?: ListHeightRecordsParams) => ['listHeightRecords', params] as const;
+export const getListWeightRecordsQueryKey = (params?: ListWeightRecordsParams) => ['listWeightRecords', params] as const;
 export const getListMealEntriesQueryKey = (params?: ListMealEntriesParams) => ['listMealEntries', params] as const;
 export const getGetDailySummaryQueryKey = (params?: GetDailySummaryParams) => ['getDailySummary', params] as const;
 export const getGetDayActivityQueryKey = (params?: GetDayActivityParams) => ['getDayActivity', params] as const;
@@ -160,6 +169,7 @@ function useLocalMutation<TData, TVariables>(
 const PEOPLE_REFRESH = [
   getListPeopleQueryKey(),
   ['listHeightRecords'],
+  ['listWeightRecords'],
   ['listMealEntries'],
   ['getDailySummary'],
   ['getDayActivity'],
@@ -171,6 +181,7 @@ const FOODS_REFRESH = [
 ];
 const ENTRIES_REFRESH = [['listMealEntries'], ['getDailySummary']];
 const HEIGHT_RECORDS_REFRESH = [['listHeightRecords']];
+const WEIGHT_RECORDS_REFRESH = [['listWeightRecords']];
 
 export function useListPeople(options?: LocalQueryOptions<Person[]>) {
   return useLocalQuery(getListPeopleQueryKey(), () => localStore.listPeople(), options);
@@ -197,6 +208,20 @@ export function useUpdateHeightRecord() {
 }
 export function useDeleteHeightRecord() {
   return useLocalMutation(({ id }: { id: number }) => localStore.deleteHeightRecord(id), HEIGHT_RECORDS_REFRESH);
+}
+
+export function useListWeightRecords(params: ListWeightRecordsParams & { personId: number }, options?: LocalQueryOptions<WeightRecord[]>) {
+  return useLocalQuery(getListWeightRecordsQueryKey(params), () => localStore.listWeightRecords(params), options);
+}
+export function useCreateWeightRecord() {
+  return useLocalMutation(({ data }: { data: WeightRecordInput }) => localStore.createWeightRecord(data), WEIGHT_RECORDS_REFRESH);
+}
+export function useUpdateWeightRecord() {
+  return useLocalMutation(({ id, data }: { id: number; data: WeightRecordUpdate }) =>
+    localStore.updateWeightRecord(id, data), WEIGHT_RECORDS_REFRESH);
+}
+export function useDeleteWeightRecord() {
+  return useLocalMutation(({ id }: { id: number }) => localStore.deleteWeightRecord(id), WEIGHT_RECORDS_REFRESH);
 }
 
 export function useListFoods(params?: ListFoodsParams, options?: LocalQueryOptions<Food[]>) {
@@ -287,7 +312,7 @@ export function useImportFood() {
 }
 
 export const LOCAL_PLANNER_QUERY_PREFIXES = [
-  'listPeople', 'listFoods', 'listHeightRecords', 'listMealEntries', 'getDailySummary', 'getDayActivity',
+  'listPeople', 'listFoods', 'listHeightRecords', 'listWeightRecords', 'listMealEntries', 'getDailySummary', 'getDayActivity',
   'listTennisFoodPlanDates', 'getMealReminderSource',
 ] as const;
 

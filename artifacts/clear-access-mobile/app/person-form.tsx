@@ -18,6 +18,7 @@ function PersonForm() {
   const update = useUpdatePerson();
   const [name, setName] = useState(editing?.name ?? '');
   const [weight, setWeight] = useState(editing?.weightKg == null ? '' : String(editing.weightKg));
+  const [targetWeight, setTargetWeight] = useState(editing?.targetWeightKg == null ? '' : String(editing.targetWeightKg));
   const [dateOfBirth, setDateOfBirth] = useState(editing?.dateOfBirth ?? '');
   const [nutritionGoal, setNutritionGoal] = useState(editing?.nutritionGoal ?? null);
   const [level, setLevel] = useState<ActivityLevelType>(editing?.activityLevel ?? 'moderate');
@@ -33,6 +34,7 @@ function PersonForm() {
   async function submit() {
     const cleaned = name.trim();
     const weightKg = parseOptional(weight);
+    const targetWeightKg = parseOptional(targetWeight);
     const dob = dateOfBirth.trim() || null;
     const ironMg = parseOptional(iron);
     const fatG = parseOptional(fat);
@@ -42,6 +44,9 @@ function PersonForm() {
     }
     if (weightKg === undefined || (weightKg !== null && (weightKg < 1 || weightKg > 500))) {
       setProblem('Body weight must be between 1 and 500 kg, or empty.'); warn(); return;
+    }
+    if (targetWeightKg === undefined || (targetWeightKg !== null && (targetWeightKg < 1 || targetWeightKg > 500))) {
+      setProblem('Target weight must be between 1 and 500 kg, or empty.'); warn(); return;
     }
     if (dob && !isIsoDate(dob)) {
       setProblem('Enter a real date of birth in YYYY-MM-DD format, or clear it.'); warn(); return;
@@ -66,7 +71,7 @@ function PersonForm() {
     }
     setProblem(null);
     const data: PersonInput = {
-      name: cleaned, weightKg, dateOfBirth: dob, nutritionGoal,
+      name: cleaned, weightKg, targetWeightKg, dateOfBirth: dob, nutritionGoal,
       activityLevel: level, baselineCalories: kcal,
       ironGoalMg: ironMg,
       ironGoalSource: ironMg === null ? null : ironSrc.trim() || null,
@@ -87,7 +92,8 @@ function PersonForm() {
     <Title>{editing ? `Edit ${editing.name}` : 'Add a person'}</Title>
     <Field label="Name" value={name} onChangeText={setName} maxLength={80} testID="input-manage-person-name" />
     <Eyebrow>Body details</Eyebrow>
-    <Field label="Body weight (kg)" value={weight} onChangeText={setWeight} keyboardType="decimal-pad" placeholder="Not set" hint="Used to scale workbook carbohydrate and protein ranges. Clear to remove." testID="input-manage-person-weight" />
+    <Field label="Planning body weight (kg)" value={weight} onChangeText={setWeight} keyboardType="decimal-pad" placeholder="Not set" hint="Used by planning estimates. This is separate from dated weigh-ins below." testID="input-manage-person-weight" />
+    <Field label="Target weight (kg)" value={targetWeight} onChangeText={setTargetWeight} keyboardType="decimal-pad" placeholder="No target" hint="Optional comparison for the progress chart only. It does not change planning body weight, calories, or nutrition references." testID="input-manage-person-target-weight" />
     <DateOfBirthAgeFields dateOfBirth={dateOfBirth} onChangeDateOfBirth={setDateOfBirth} testPrefix="input-manage-person" />
     <NutritionGoalSelector value={nutritionGoal} onChange={setNutritionGoal} testPrefix="select-manage-person-nutrition-goal" />
     <Eyebrow>Legacy/manual energy settings</Eyebrow>

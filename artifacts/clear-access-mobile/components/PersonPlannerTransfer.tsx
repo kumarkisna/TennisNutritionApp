@@ -87,7 +87,7 @@ export function PersonPlannerImport() {
       setPending(null);
       try {
         await client.invalidateQueries({ predicate: isPlannerQuery });
-        setNotice(`${result.person.name} was added with ${countLabel(result.entriesImported, 'meal', 'meals')}, ${countLabel(result.activitiesImported, 'planned day', 'planned days')}, ${countLabel(result.heightRecordsImported, 'height record', 'height records')}, and ${countLabel(result.foodsImported, 'new food', 'new foods')}.`);
+        setNotice(`${result.person.name} was added with ${countLabel(result.entriesImported, 'meal', 'meals')}, ${countLabel(result.activitiesImported, 'planned day', 'planned days')}, ${countLabel(result.heightRecordsImported, 'height record', 'height records')}, ${countLabel(result.weightRecordsImported, 'weigh-in', 'weigh-ins')}, and ${countLabel(result.foodsImported, 'new food', 'new foods')}.`);
       } catch {
         setError(new Error('The person was imported, but the planner could not refresh. Reopen the People screen to view the new profile.'));
       }
@@ -102,13 +102,13 @@ export function PersonPlannerImport() {
   return <Card style={{ gap: 10 }}>
     <Eyebrow>Move one person’s planner</Eyebrow>
     <Muted>Export one profile from its card, or import a person file here. Imports add a separate profile; they do not replace anyone already on this device.</Muted>
-    <Muted>A person file includes their profile, saved meals, dated activity and height records, and foods used by those meals. Other people’s plans are not included.</Muted>
+    <Muted>A person file includes their profile, saved meals, dated activity, height records and weigh-ins, and foods used by those meals. Other people’s plans are not included.</Muted>
     <Btn icon="upload" label="Import person file" variant="ghost" disabled={busy} testID="button-import-person-planner" onPress={() => void chooseFile()} />
     {preview ? <View testID="person-import-preview" style={{ gap: 8 }}>
       <Eyebrow>Review before importing</Eyebrow>
       <Muted>File: {pending.name}</Muted>
       <Text style={{ fontFamily: F.semi, color: c.foreground }}>From: {preview.personName}</Text>
-      <Muted>{countLabel(preview.entries, 'meal', 'meals')} · {countLabel(preview.activities, 'planned day', 'planned days')} · {countLabel(preview.heightRecords, 'height record', 'height records')} · {countLabel(preview.foods, 'food record', 'food records')}</Muted>
+      <Muted>{countLabel(preview.entries, 'meal', 'meals')} · {countLabel(preview.activities, 'planned day', 'planned days')} · {countLabel(preview.heightRecords, 'height record', 'height records')} · {countLabel(preview.weightRecords, 'weigh-in', 'weigh-ins')} · {countLabel(preview.foods, 'food record', 'food records')}</Muted>
       {preview.nameConflict ? <Muted>A profile with this name already exists. This import creates a separate person; edit the name below if you prefer another one.</Muted> : null}
       <Text style={{ fontFamily: F.semi, color: c.foreground }}>Name for the imported profile</Text>
       <TextInput

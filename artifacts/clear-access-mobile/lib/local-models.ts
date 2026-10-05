@@ -57,6 +57,7 @@ export type Person = {
   name: string;
   isDefault: boolean;
   weightKg: number | null;
+  targetWeightKg: number | null;
   ageYears: number | null;
   dateOfBirth: string | null;
   growthReferenceSex: 'male' | 'female' | null;
@@ -76,6 +77,7 @@ export type Person = {
 export type PersonInput = {
   name: string;
   weightKg?: number | null;
+  targetWeightKg?: number | null;
   dateOfBirth?: string | null;
   growthReferenceSex?: 'male' | 'female' | null;
   nutritionGoal?: NutritionGoal | null;
@@ -103,6 +105,19 @@ export type HeightRecordInput = {
   heightCm: number;
 };
 export type HeightRecordUpdate = { date?: string; heightCm?: number };
+
+export type WeightRecord = {
+  id: number;
+  personId: number;
+  date: string;
+  weightKg: number;
+};
+export type WeightRecordInput = {
+  personId: number;
+  date: string;
+  weightKg: number;
+};
+export type WeightRecordUpdate = { date?: string; weightKg?: number };
 
 export type Food = {
   id: number;
@@ -216,6 +231,7 @@ export type Preferences = {
 
 export type ListFoodsParams = { search?: string };
 export type ListHeightRecordsParams = { personId?: number };
+export type ListWeightRecordsParams = { personId?: number };
 export type DiscoverFoodsParams = { search: string };
 export type ListMealEntriesParams = { date: string; personId: number };
 export type GetDailySummaryParams = ListMealEntriesParams;

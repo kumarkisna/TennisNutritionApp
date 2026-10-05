@@ -23,5 +23,6 @@ export default function Settings() {
     <Btn variant="ghost" label="Edit person details" testID="button-settings-edit-person"
       onPress={() => router.push({ pathname: '/person-form', params: { id: String(person.id) } })} />
     <Btn variant="ghost" label="Height history & CDC reference" icon="trending-up" testID="button-settings-height-chart" onPress={() => router.push('/height')} />
+    <Btn variant="ghost" label="Weight progress & target" icon="activity" testID="button-settings-weight-progress" onPress={() => router.push('/weight')} />
   </Screen>;
 }

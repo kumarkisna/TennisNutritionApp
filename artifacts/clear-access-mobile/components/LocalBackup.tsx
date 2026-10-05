@@ -13,7 +13,7 @@ import { pickBackupFile, saveBackupFile } from '@/lib/backup-file';
 type Preview = ReturnType<typeof previewLocalBackup>;
 type Pending = { name: string; serialized: string; incoming: Preview; current: Preview };
 const totals = (preview: Preview) =>
-  `${preview.people.length} people · ${preview.foods} foods · ${preview.entries} meals · ${preview.activities} activities · ${preview.heightRecords} height records`;
+  `${preview.people.length} people · ${preview.foods} foods · ${preview.entries} meals · ${preview.activities} activities · ${preview.heightRecords} height records · ${preview.weightRecords} weigh-ins`;
 
 export function LocalBackup() {
   const c = useColors();
@@ -66,7 +66,7 @@ export function LocalBackup() {
       client.setQueryData(getListPeopleQueryKey(), people);
       selectPerson(people.find(person => person.isDefault)!.id);
       await client.invalidateQueries({ predicate: isPlannerQuery });
-      setNotice('Backup restored. All profiles, meals, activities, settings and height history now come from that file.');
+      setNotice('Backup restored. All profiles, meals, activities, settings, height history and weigh-ins now come from that file.');
     } catch {
       setError(new Error('Backup was restored, but the screen could not refresh. Reopen the app to view the restored records.'));
     } finally { setBusy(false); }
@@ -74,7 +74,7 @@ export function LocalBackup() {
 
   return <Card>
     <Eyebrow>Local backup & restore</Eyebrow>
-    <Muted>Back up everyone on this device, including foods, meals, activities, personal settings and dated height history. No sign-in, automatic cloud sync or server upload.</Muted>
+    <Muted>Back up everyone on this device, including foods, meals, activities, personal settings, dated height history and weigh-ins. No sign-in, automatic cloud sync or server upload.</Muted>
     <Muted>This unencrypted file contains personal information: names, birth dates, body measurements and nutrition records. Choose a trusted folder or recipient. On Android, export offers Save to device or Share with another app. Clearing storage or uninstalling can erase the records on this device.</Muted>
     <Btn label="Export full backup" icon="download" disabled={busy || !!pending} testID="button-export-backup" onPress={() => void exportFile()} />
     <Btn label="Choose backup to restore" icon="upload" variant="ghost" disabled={busy} testID="button-import-backup" onPress={() => void chooseFile()} />
@@ -83,7 +83,7 @@ export function LocalBackup() {
       <Muted>File: {pending.name}</Muted>
       <Muted>Created: {pending.incoming.createdAt}</Muted>
       <Text style={{ fontFamily: 'Inter_700Bold' }}>From backup: {totals(pending.incoming)}</Text>
-      {pending.incoming.people.map(person => <Muted key={person.id}>{person.name}: {person.entries} meals, {person.activities} activities, {person.heightRecords} height records; saved personal settings included.</Muted>)}
+      {pending.incoming.people.map(person => <Muted key={person.id}>{person.name}: {person.entries} meals, {person.activities} activities, {person.heightRecords} height records, {person.weightRecords} weigh-ins; saved personal settings included.</Muted>)}
       <Muted>Currently on this device: {totals(pending.current)}</Muted>
       <Muted>People being replaced: {pending.current.people.map(person => person.name).join(', ')}.</Muted>
       <Text style={{ fontFamily: 'Inter_700Bold', color: c.destructive }}>Replace ALL local planner records with this backup? This does not merge records. Save a backup of the current records first if you want to keep them.</Text>

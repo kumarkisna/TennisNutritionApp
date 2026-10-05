@@ -32,10 +32,14 @@ import {
   type HeightRecord,
   type HeightRecordInput,
   type HeightRecordUpdate,
+  type WeightRecord,
+  type WeightRecordInput,
+  type WeightRecordUpdate,
   type GetDayActivityParams,
   type GetDailySummaryParams,
   type ListFoodsParams,
   type ListHeightRecordsParams,
+  type ListWeightRecordsParams,
   type ListMealEntriesParams,
   type MealEntry,
   type MealEntryInput,
@@ -48,7 +52,7 @@ import {
 } from './local-models';
 
 export const LOCAL_STORAGE_KEY = 'clear-access-mobile:planner:v1';
-const STORE_VERSION = 4;
+const STORE_VERSION = 5;
 const MEALS = Object.values(Meal);
 const ACTIVITY_LEVELS = Object.values(ActivityLevel);
 const DAY_ACTIVITIES = Object.values(DayActivityType);
@@ -69,6 +73,7 @@ export type AsyncKeyValueStorage = {
 type StoredFood = Food & { referenceKey?: string };
 type StoredEntry = { id: number; date: string; personId: number; meal: MealEntryInput['meal']; grams: number; foodId: number; tennisDietId?: string };
 type StoredHeightRecord = HeightRecord;
+type StoredWeightRecord = WeightRecord;
 type StoreData = {
   version: number;
   people: Person[];
@@ -76,10 +81,12 @@ type StoreData = {
   entries: StoredEntry[];
   activities: DayActivity[];
   heightRecords: StoredHeightRecord[];
+  weightRecords: StoredWeightRecord[];
   nextPersonId: number;
   nextFoodId: number;
   nextEntryId: number;
   nextHeightRecordId: number;
+  nextWeightRecordId: number;
   mealAlertsEnabled?: boolean;
 };
 
@@ -122,6 +129,7 @@ export type PersonPlannerImportPreview = {
   entries: number;
   activities: number;
   heightRecords: number;
+  weightRecords: number;
 };
 export type PersonPlannerImportResult = {
   person: Person;
@@ -129,6 +137,7 @@ export type PersonPlannerImportResult = {
   entriesImported: number;
   activitiesImported: number;
   heightRecordsImported: number;
+  weightRecordsImported: number;
 };
 function fail(message: string): never {
   throw new Error(message);
@@ -183,6 +192,7 @@ function seedStore(): StoreData {
     name: 'Me',
     isDefault: true,
     weightKg: null,
+    targetWeightKg: null,
     ageYears: null,
     dateOfBirth: null,
     growthReferenceSex: null,
@@ -205,10 +215,12 @@ function seedStore(): StoreData {
     entries: [],
     activities: [],
     heightRecords: [],
+    weightRecords: [],
     nextPersonId: 2,
     nextFoodId: foods.length + 1,
     nextEntryId: 1,
     nextHeightRecordId: 1,
+    nextWeightRecordId: 1,
   };
 }
 
@@ -217,13 +229,15 @@ function validateStoredData(value: unknown): StoreData {
   if (value.version !== STORE_VERSION) {
     fail(`Unsupported local planner storage version (${String(value.version)}). Your data was not changed.`);
   }
-  const { people, foods, entries, activities, heightRecords, nextPersonId, nextFoodId, nextEntryId, nextHeightRecordId } = value;
+  const { people, foods, entries, activities, heightRecords, weightRecords, nextPersonId, nextFoodId, nextEntryId, nextHeightRecordId, nextWeightRecordId } = value;
   if (value.mealAlertsEnabled !== undefined && typeof value.mealAlertsEnabled !== 'boolean') fail('Local reminder settings are invalid. Your data was not changed.');
   if (
     !Array.isArray(people) || !Array.isArray(foods) || !Array.isArray(entries) || !Array.isArray(activities) ||
     !Array.isArray(heightRecords) ||
+    !Array.isArray(weightRecords) ||
     !Number.isSafeInteger(nextPersonId) || !Number.isSafeInteger(nextFoodId) || !Number.isSafeInteger(nextEntryId) ||
     !Number.isSafeInteger(nextHeightRecordId) ||
+    !Number.isSafeInteger(nextWeightRecordId) ||
     !people.some(p => isRecord(p) && p.isDefault === true)
   ) {
     fail('Local planner storage is corrupted. Your data was not changed.');
@@ -234,6 +248,7 @@ function validateStoredData(value: unknown): StoreData {
     if (!isRecord(person) || !Number.isSafeInteger(person.id) || (person.id as number) < 1 ||
       typeof person.name !== 'string' || !person.name.trim() ||
        !(person.ageYears === null || (Number.isInteger(person.ageYears) && isFiniteInRange(person.ageYears, 0, 120))) ||
+       !(person.targetWeightKg === null || isFiniteInRange(person.targetWeightKg, 1, 500)) ||
        !(person.dateOfBirth === null || (typeof person.dateOfBirth === 'string' &&
          isValidCalendarDate(person.dateOfBirth) && person.dateOfBirth <= todayDate())) ||
        (person.dateOfBirth === null && person.ageYears !== null) ||
@@ -313,10 +328,31 @@ function validateStoredData(value: unknown): StoreData {
     heightRecordKeys.add(key);
     heightRecordIds.add(record.id as number);
   }
+  const weightRecordIds = new Set<number>();
+  const weightRecordKeys = new Set<string>();
+  for (const record of weightRecords) {
+    if (!isRecord(record) || !Number.isSafeInteger(record.id) || (record.id as number) < 1 ||
+      weightRecordIds.has(record.id as number) || !personIds.has(record.personId as number) ||
+      typeof record.date !== 'string' || !isValidCalendarDate(record.date) || record.date > todayDate() ||
+      !isFiniteInRange(record.weightKg, 1, 500)) {
+      fail('Local planner storage contains an invalid weight record. Your data was not changed.');
+    }
+    const person = people.find(candidate => isRecord(candidate) && candidate.id === record.personId);
+    if (person && typeof person.dateOfBirth === 'string' && person.dateOfBirth > record.date) {
+      fail('Local planner storage contains a weight record before the person’s date of birth. Your data was not changed.');
+    }
+    const key = `${record.personId}:${record.date}`;
+    if (weightRecordKeys.has(key)) {
+      fail('Local planner storage contains duplicate weight records. Your data was not changed.');
+    }
+    weightRecordKeys.add(key);
+    weightRecordIds.add(record.id as number);
+  }
   if ((nextPersonId as number) <= Math.max(...personIds) ||
     (foodIds.size && (nextFoodId as number) <= Math.max(...foodIds)) ||
     (entryIds.size && (nextEntryId as number) <= Math.max(...entryIds)) ||
-    (heightRecordIds.size && (nextHeightRecordId as number) <= Math.max(...heightRecordIds))) {
+    (heightRecordIds.size && (nextHeightRecordId as number) <= Math.max(...heightRecordIds)) ||
+    (weightRecordIds.size && (nextWeightRecordId as number) <= Math.max(...weightRecordIds))) {
     fail('Local planner storage has invalid next-ID counters. Your data was not changed.');
   }
   return value as unknown as StoreData;
@@ -324,7 +360,7 @@ function validateStoredData(value: unknown): StoreData {
 
 function validateBackupData(value: unknown): StoreData {
   const invalid = (kind: string): never => fail(`Backup contains an invalid ${kind}.`);
-  if (isRecord(value) && (value.version === 2 || value.version === 3) && Array.isArray(value.people)) {
+  if (isRecord(value) && [2, 3, 4].includes(value.version as number) && Array.isArray(value.people)) {
     return validateBackupData({
       ...value,
       version: STORE_VERSION,
@@ -332,18 +368,21 @@ function validateBackupData(value: unknown): StoreData {
         ...person,
         ...(value.version === 2 ? { nutritionGoal: null } : {}),
         ageYears: ageForDateOfBirth(person.dateOfBirth),
+        targetWeightKg: person.targetWeightKg === undefined ? null : person.targetWeightKg,
       } : person),
+      weightRecords: value.weightRecords === undefined ? [] : value.weightRecords,
+      nextWeightRecordId: value.nextWeightRecordId === undefined ? 1 : value.nextWeightRecordId,
     });
   }
   if (!isRecord(value) || !hasExactKeys(value, [
-    'version', 'people', 'foods', 'entries', 'activities', 'heightRecords',
-    'nextPersonId', 'nextFoodId', 'nextEntryId', 'nextHeightRecordId',
+    'version', 'people', 'foods', 'entries', 'activities', 'heightRecords', 'weightRecords',
+    'nextPersonId', 'nextFoodId', 'nextEntryId', 'nextHeightRecordId', 'nextWeightRecordId',
   ], ['mealAlertsEnabled']) || (Object.hasOwn(value, 'mealAlertsEnabled') && typeof value.mealAlertsEnabled !== 'boolean') || value.version !== STORE_VERSION ||
     !Array.isArray(value.people) || !Array.isArray(value.foods) || !Array.isArray(value.entries) ||
-    !Array.isArray(value.activities) || !Array.isArray(value.heightRecords)) {
+    !Array.isArray(value.activities) || !Array.isArray(value.heightRecords) || !Array.isArray(value.weightRecords)) {
     return invalid('data structure');
   }
-  const counters = [value.nextPersonId, value.nextFoodId, value.nextEntryId, value.nextHeightRecordId];
+  const counters = [value.nextPersonId, value.nextFoodId, value.nextEntryId, value.nextHeightRecordId, value.nextWeightRecordId];
   if (!counters.every(counter => Number.isSafeInteger(counter) && (counter as number) >= 1)) {
     return invalid('ID counter');
   }
@@ -354,6 +393,7 @@ function validateBackupData(value: unknown): StoreData {
   for (const person of value.people) {
     if (!isRecord(person) || !hasExactKeys(person, [
       'id', 'name', 'isDefault', 'weightKg', 'ageYears', 'dateOfBirth', 'growthReferenceSex',
+      'targetWeightKg',
       'nutritionGoal',
       'ironGoalMg', 'ironGoalSource', 'ironGoalReviewedOn', 'fatGoalG', 'fatGoalSource',
       'fatGoalReviewedOn', 'activityLevel', 'baselineCalories', 'activityMultiplier', 'targetCalories',
@@ -361,6 +401,7 @@ function validateBackupData(value: unknown): StoreData {
       typeof person.name !== 'string' || !person.name.trim() || person.name.length > 80 ||
       typeof person.isDefault !== 'boolean' ||
       !(person.weightKg === null || isFiniteInRange(person.weightKg, 1, 500)) ||
+      !(person.targetWeightKg === null || isFiniteInRange(person.targetWeightKg, 1, 500)) ||
       !(person.ageYears === null || (Number.isInteger(person.ageYears) && isFiniteInRange(person.ageYears, 0, 120))) ||
       !(person.dateOfBirth === null || (typeof person.dateOfBirth === 'string' &&
         isValidCalendarDate(person.dateOfBirth) && person.dateOfBirth <= todayDate())) ||
@@ -475,11 +516,31 @@ function validateBackupData(value: unknown): StoreData {
     heightRecordKeys.add(key);
     heightRecordIds.add(record.id as number);
   }
+  const weightRecordIds = new Set<number>();
+  const weightRecordKeys = new Set<string>();
+  for (const record of value.weightRecords) {
+    if (!isRecord(record) || !hasExactKeys(record, ['id', 'personId', 'date', 'weightKg']) ||
+      !Number.isSafeInteger(record.id) || (record.id as number) < 1 || weightRecordIds.has(record.id as number) ||
+      !Number.isSafeInteger(record.personId) || !peopleById.has(record.personId as number) ||
+      typeof record.date !== 'string' || !isValidCalendarDate(record.date) || record.date > todayDate() ||
+      !isFiniteInRange(record.weightKg, 1, 500)) {
+      return invalid('weight record');
+    }
+    const person = peopleById.get(record.personId as number)!;
+    if (typeof person.dateOfBirth === 'string' && person.dateOfBirth > record.date) {
+      return invalid('weight record date');
+    }
+    const key = `${record.personId}:${record.date}`;
+    if (weightRecordKeys.has(key)) return invalid('duplicate weight record');
+    weightRecordKeys.add(key);
+    weightRecordIds.add(record.id as number);
+  }
 
   if ((value.nextPersonId as number) <= Math.max(0, ...peopleById.keys()) ||
     (value.nextFoodId as number) <= Math.max(0, ...foodIds) ||
     (value.nextEntryId as number) <= Math.max(0, ...entryIds) ||
-    (value.nextHeightRecordId as number) <= Math.max(0, ...heightRecordIds)) {
+    (value.nextHeightRecordId as number) <= Math.max(0, ...heightRecordIds) ||
+    (value.nextWeightRecordId as number) <= Math.max(0, ...weightRecordIds)) {
     return invalid('ID counter');
   }
   return value as unknown as StoreData;
@@ -494,6 +555,7 @@ function migrateVersionOne(value: unknown): StoreData {
     version: STORE_VERSION,
     people: value.people.map(person => isRecord(person) ? {
       ...person,
+      targetWeightKg: person.targetWeightKg === undefined ? null : person.targetWeightKg,
       dateOfBirth: person.dateOfBirth === undefined ? null : person.dateOfBirth,
       growthReferenceSex: person.growthReferenceSex === undefined ? null : person.growthReferenceSex,
       nutritionGoal: person.nutritionGoal === undefined ? null : person.nutritionGoal,
@@ -501,6 +563,8 @@ function migrateVersionOne(value: unknown): StoreData {
     } : person),
     heightRecords: [],
     nextHeightRecordId: 1,
+    weightRecords: [],
+    nextWeightRecordId: 1,
   };
   return validateStoredData(migrated);
 }
@@ -514,9 +578,12 @@ function migrateVersionTwo(value: unknown): StoreData {
     version: STORE_VERSION,
     people: value.people.map(person => isRecord(person) ? {
       ...person,
+      targetWeightKg: person.targetWeightKg === undefined ? null : person.targetWeightKg,
       nutritionGoal: null,
       ageYears: ageForDateOfBirth(person.dateOfBirth),
     } : person),
+    weightRecords: value.weightRecords === undefined ? [] : value.weightRecords,
+    nextWeightRecordId: value.nextWeightRecordId === undefined ? 1 : value.nextWeightRecordId,
   });
 }
 
@@ -529,8 +596,27 @@ function migrateVersionThree(value: unknown): StoreData {
     version: STORE_VERSION,
     people: value.people.map(person => isRecord(person) ? {
       ...person,
+      targetWeightKg: person.targetWeightKg === undefined ? null : person.targetWeightKg,
       ageYears: ageForDateOfBirth(person.dateOfBirth),
     } : person),
+    weightRecords: value.weightRecords === undefined ? [] : value.weightRecords,
+    nextWeightRecordId: value.nextWeightRecordId === undefined ? 1 : value.nextWeightRecordId,
+  });
+}
+
+function migrateVersionFour(value: unknown): StoreData {
+  if (!isRecord(value) || value.version !== 4 || !Array.isArray(value.people)) {
+    fail('Local planner storage is corrupted. Your data was not changed.');
+  }
+  return validateStoredData({
+    ...value,
+    version: STORE_VERSION,
+    people: value.people.map(person => isRecord(person) ? {
+      ...person,
+      targetWeightKg: person.targetWeightKg === undefined ? null : person.targetWeightKg,
+    } : person),
+    weightRecords: value.weightRecords === undefined ? [] : value.weightRecords,
+    nextWeightRecordId: value.nextWeightRecordId === undefined ? 1 : value.nextWeightRecordId,
   });
 }
 
@@ -631,6 +717,10 @@ function validatePersonInput(input: PersonInput | PersonUpdate, existing?: Perso
   if (result.weightKg !== null && result.weightKg !== undefined && !isFiniteInRange(result.weightKg, 1, 500)) {
     fail('Weight must be between 1 and 500 kg, or left blank.');
   }
+  if (result.targetWeightKg !== null && result.targetWeightKg !== undefined &&
+    !isFiniteInRange(result.targetWeightKg, 1, 500)) {
+    fail('Target weight must be between 1 and 500 kg, or left blank.');
+  }
   if (result.dateOfBirth !== null && result.dateOfBirth !== undefined) {
     if (typeof result.dateOfBirth !== 'string' || !isValidCalendarDate(result.dateOfBirth)) {
       fail('Enter a valid date of birth.');
@@ -679,6 +769,7 @@ function validatePersonInput(input: PersonInput | PersonUpdate, existing?: Perso
   return {
     name: name ?? existing?.name ?? '',
     weightKg: normalized.weightKg as number | null ?? null,
+    targetWeightKg: normalized.targetWeightKg as number | null ?? null,
     ageYears,
     dateOfBirth,
     growthReferenceSex: normalized.growthReferenceSex as Person['growthReferenceSex'] ?? null,
@@ -797,6 +888,16 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
         data = migrated;
         return migrated;
       }
+      if (isRecord(parsed) && parsed.version === 4) {
+        const migrated = migrateVersionFour(parsed);
+        try {
+          await storage.setItem(storageKey, JSON.stringify(migrated));
+        } catch (error) {
+          throw new Error(`Could not migrate local planner data; the change was not applied: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        data = migrated;
+        return migrated;
+      }
       data = validateStoredData(parsed);
       return data;
     })();
@@ -846,6 +947,10 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
           record.personId === id && record.date < fields.dateOfBirth!)) {
           fail('Date of birth cannot be after an existing height measurement.');
         }
+        if (fields.dateOfBirth && draft.weightRecords.some(record =>
+          record.personId === id && record.date < fields.dateOfBirth!)) {
+          fail('Date of birth cannot be after an existing weight measurement.');
+        }
         if (draft.people.some(person => person.id !== id && person.name.toLocaleLowerCase() === fields.name.toLocaleLowerCase())) {
           fail('That person is already in your planner.');
         }
@@ -861,6 +966,7 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
         draft.entries = draft.entries.filter(entry => entry.personId !== id);
         draft.activities = draft.activities.filter(activity => activity.personId !== id);
         draft.heightRecords = draft.heightRecords.filter(record => record.personId !== id);
+        draft.weightRecords = draft.weightRecords.filter(record => record.personId !== id);
       });
     },
     async listFoods(params?: ListFoodsParams): Promise<Food[]> {
@@ -931,6 +1037,68 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
       return transact(draft => {
         if (!draft.heightRecords.some(record => record.id === id)) fail('Height record not found.');
         draft.heightRecords = draft.heightRecords.filter(record => record.id !== id);
+      });
+    },
+    async listWeightRecords(params?: ListWeightRecordsParams): Promise<WeightRecord[]> {
+      return read(current => {
+        if (params?.personId !== undefined) {
+          if (!Number.isSafeInteger(params.personId) || params.personId < 1) fail('Choose a valid person.');
+          findPerson(current, params.personId);
+        }
+        return current.weightRecords
+          .filter(record => params?.personId === undefined || record.personId === params.personId)
+          .sort((left, right) => right.date.localeCompare(left.date) || right.id - left.id);
+      });
+    },
+    async createWeightRecord(input: WeightRecordInput): Promise<WeightRecord> {
+      return transact(draft => {
+        if (!Number.isSafeInteger(input.personId) || input.personId < 1) fail('Choose a valid person.');
+        const person = findPerson(draft, input.personId);
+        if (!isValidCalendarDate(input.date)) fail('Enter a valid weight measurement date.');
+        if (input.date > todayDate()) fail('Weight measurement date cannot be in the future.');
+        if (person.dateOfBirth && input.date < person.dateOfBirth) {
+          fail('Weight measurement date cannot be before the person’s date of birth.');
+        }
+        if (!isFiniteInRange(input.weightKg, 1, 500)) fail('Weight must be between 1 and 500 kg.');
+        if (draft.weightRecords.some(record => record.personId === input.personId && record.date === input.date)) {
+          fail('A weight record already exists for this person on that date. Edit the existing record instead.');
+        }
+        const record: StoredWeightRecord = {
+          id: draft.nextWeightRecordId++,
+          personId: input.personId,
+          date: input.date,
+          weightKg: input.weightKg,
+        };
+        draft.weightRecords.push(record);
+        return record;
+      });
+    },
+    async updateWeightRecord(id: number, input: WeightRecordUpdate): Promise<WeightRecord> {
+      return transact(draft => {
+        const record = draft.weightRecords.find(candidate => candidate.id === id);
+        if (!record) fail('Weight record not found.');
+        const person = findPerson(draft, record.personId);
+        const date = input.date === undefined ? record.date : input.date;
+        const weightKg = input.weightKg === undefined ? record.weightKg : input.weightKg;
+        if (!isValidCalendarDate(date)) fail('Enter a valid weight measurement date.');
+        if (date > todayDate()) fail('Weight measurement date cannot be in the future.');
+        if (person.dateOfBirth && date < person.dateOfBirth) {
+          fail('Weight measurement date cannot be before the person’s date of birth.');
+        }
+        if (!isFiniteInRange(weightKg, 1, 500)) fail('Weight must be between 1 and 500 kg.');
+        if (draft.weightRecords.some(candidate =>
+          candidate.id !== id && candidate.personId === record.personId && candidate.date === date)) {
+          fail('A weight record already exists for this person on that date. Edit the existing record instead.');
+        }
+        record.date = date;
+        record.weightKg = weightKg;
+        return record;
+      });
+    },
+    async deleteWeightRecord(id: number): Promise<void> {
+      return transact(draft => {
+        if (!draft.weightRecords.some(record => record.id === id)) fail('Weight record not found.');
+        draft.weightRecords = draft.weightRecords.filter(record => record.id !== id);
       });
     },
     async createFood(input: FoodInput): Promise<Food> {
@@ -1180,6 +1348,10 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
           .filter(record => record.personId === person.id)
           .sort((left, right) => left.date.localeCompare(right.date) || left.id - right.id)
           .map((record, index) => ({ ...record, id: index + 1, personId: 1 }));
+        const weightRecords = current.weightRecords
+          .filter(record => record.personId === person.id)
+          .sort((left, right) => left.date.localeCompare(right.date) || left.id - right.id)
+          .map((record, index) => ({ ...record, id: index + 1, personId: 1 }));
         const data: StoreData = {
           version: STORE_VERSION,
           people: [{ ...person, id: 1, isDefault: true }],
@@ -1187,10 +1359,12 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
           entries,
           activities,
           heightRecords,
+          weightRecords,
           nextPersonId: 2,
           nextFoodId: foods.length + 1,
           nextEntryId: entries.length + 1,
           nextHeightRecordId: heightRecords.length + 1,
+          nextWeightRecordId: weightRecords.length + 1,
         };
         const envelope: PersonPlannerEnvelope = {
           format: 'clear-access-person-planner',
@@ -1221,6 +1395,7 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
         entries: incoming.data.entries.length,
         activities: incoming.data.activities.length,
         heightRecords: incoming.data.heightRecords.length,
+        weightRecords: incoming.data.weightRecords.length,
       };
     },
     async importPersonPlanner(serialized: string, importedName: string): Promise<PersonPlannerImportResult> {
@@ -1230,6 +1405,7 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
         const personFields = validatePersonInput({
           name: importedName,
           weightKg: sourcePerson.weightKg,
+          targetWeightKg: sourcePerson.targetWeightKg,
           dateOfBirth: sourcePerson.dateOfBirth,
           growthReferenceSex: sourcePerson.growthReferenceSex,
           nutritionGoal: sourcePerson.nutritionGoal,
@@ -1286,12 +1462,20 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
             personId: person.id,
           });
         }
+        for (const record of incoming.weightRecords) {
+          draft.weightRecords.push({
+            ...record,
+            id: draft.nextWeightRecordId++,
+            personId: person.id,
+          });
+        }
         return {
           person,
           foodsImported,
           entriesImported: incoming.entries.length,
           activitiesImported: incoming.activities.length,
           heightRecordsImported: incoming.heightRecords.length,
+          weightRecordsImported: incoming.weightRecords.length,
         };
       });
     },
@@ -1555,11 +1739,12 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
 
 export type BackupPreview = {
   createdAt: string;
-  people: Array<{ id: number; name: string; entries: number; activities: number; heightRecords: number }>;
+  people: Array<{ id: number; name: string; entries: number; activities: number; heightRecords: number; weightRecords: number }>;
   foods: number;
   entries: number;
   activities: number;
   heightRecords: number;
+  weightRecords: number;
 };
 
 function summarizeBackup(data: StoreData, createdAt: string): BackupPreview {
@@ -1571,11 +1756,13 @@ function summarizeBackup(data: StoreData, createdAt: string): BackupPreview {
       entries: data.entries.filter(entry => entry.personId === person.id).length,
       activities: data.activities.filter(activity => activity.personId === person.id).length,
       heightRecords: data.heightRecords.filter(record => record.personId === person.id).length,
+      weightRecords: data.weightRecords.filter(record => record.personId === person.id).length,
     })),
     foods: data.foods.length,
     entries: data.entries.length,
     activities: data.activities.length,
     heightRecords: data.heightRecords.length,
+    weightRecords: data.weightRecords.length,
   };
 }
 
