@@ -7,6 +7,7 @@
 - [SVG preview event verification](svg-preview-events.md) — test rendered-element clicks; React component callbacks can survive in props but be discarded by native-to-web normalization.
 - [Native appearance overrides](native-appearance-overrides.md) — native reset contracts differ from older SDK examples; explicit app themes must also update native controls.
 - [Expo startup readiness](expo-devtools-startup.md) — optional debugger errors and blank first frames can be non-blocking; verify meaningful app rendering before treating them as failures.
+- [Expo web printing](expo-web-printing.md) — Expo Print's web methods print the current page; write generated HTML into a separate print window.
 - [Tennis nutrition boundary](tennis-nutrition-boundary.md) — schedules guide meal timing, not automatic personalised intake prescriptions or changes to daily references.
 - [Tennis plan sharing](tennis-plan-sharing.md) — copy to another local person or reuse for the same person on another date, with independent date choices.
 - [Meal time defaults](meal-time-defaults.md) — editable suggestions, not optimal-intake advice; preserve assigned day times when future routine defaults change.
