@@ -104,6 +104,29 @@ export type FoodLibraryImportResult = {
   imported: number;
   skippedDuplicates: number;
 };
+type PersonPlannerEnvelope = {
+  format: 'clear-access-person-planner';
+  version: 1;
+  exportedAt: string;
+  data: StoreData;
+};
+export type PersonPlannerImportPreview = {
+  exportedAt: string;
+  personName: string;
+  suggestedName: string;
+  nameConflict: boolean;
+  foods: number;
+  entries: number;
+  activities: number;
+  heightRecords: number;
+};
+export type PersonPlannerImportResult = {
+  person: Person;
+  foodsImported: number;
+  entriesImported: number;
+  activitiesImported: number;
+  heightRecordsImported: number;
+};
 function fail(message: string): never {
   throw new Error(message);
 }
@@ -477,6 +500,20 @@ function foodFingerprint(food: Food): string {
     food.calciumMgPer100g,
     food.ironMgPer100g,
   ]);
+}
+function suggestUniquePersonName(name: string, people: Person[]): string {
+  const existingNames = new Set(people.map(person => person.name.trim().toLocaleLowerCase()));
+  const normalized = name.trim();
+  if (!existingNames.has(normalized.toLocaleLowerCase())) return normalized;
+  for (let index = 1; index < 10_000; index += 1) {
+    const suffix = index === 1 ? ' (Imported)' : ` (Imported ${index})`;
+    let base = normalized.slice(0, 80 - suffix.length).trimEnd();
+    const lastCodeUnit = base.charCodeAt(base.length - 1);
+    if (lastCodeUnit >= 0xD800 && lastCodeUnit <= 0xDBFF) base = base.slice(0, -1);
+    const candidate = `${base}${suffix}`;
+    if (!existingNames.has(candidate.toLocaleLowerCase())) return candidate;
+  }
+  return fail('Could not suggest a unique name for the imported person.');
 }
 function foodNutrition(food: Food, grams: number): Nutrition {
   const portion = grams / 100;
@@ -1035,6 +1072,147 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
         };
       });
     },
+    async exportPersonPlanner(personId: number): Promise<string> {
+      const pending = writeQueue.then(async () => {
+        const current = await load();
+        const person = findPerson(current, personId);
+        const ownEntries = current.entries
+          .filter(entry => entry.personId === person.id)
+          .sort((left, right) => left.date.localeCompare(right.date) || left.id - right.id);
+        const usedFoodIds = new Set(ownEntries.map(entry => entry.foodId));
+        const ownFoods = current.foods
+          .filter(food => usedFoodIds.has(food.id))
+          .sort((left, right) => left.name.localeCompare(right.name) || left.id - right.id);
+        const foodIds = new Map(ownFoods.map((food, index) => [food.id, index + 1]));
+        const foods = ownFoods.map((food, index) => ({ ...food, id: index + 1 }));
+        const entries: StoredEntry[] = ownEntries.map((entry, index) => {
+          const foodId = foodIds.get(entry.foodId);
+          if (!foodId) fail('Could not export a meal because its food record is missing.');
+          return { ...entry, id: index + 1, personId: 1, foodId };
+        });
+        const activities = current.activities
+          .filter(activity => activity.personId === person.id)
+          .sort((left, right) => left.date.localeCompare(right.date))
+          .map(activity => ({ ...activity, personId: 1 }));
+        const heightRecords = current.heightRecords
+          .filter(record => record.personId === person.id)
+          .sort((left, right) => left.date.localeCompare(right.date) || left.id - right.id)
+          .map((record, index) => ({ ...record, id: index + 1, personId: 1 }));
+        const data: StoreData = {
+          version: STORE_VERSION,
+          people: [{ ...person, id: 1, isDefault: true }],
+          foods,
+          entries,
+          activities,
+          heightRecords,
+          nextPersonId: 2,
+          nextFoodId: foods.length + 1,
+          nextEntryId: entries.length + 1,
+          nextHeightRecordId: heightRecords.length + 1,
+        };
+        const envelope: PersonPlannerEnvelope = {
+          format: 'clear-access-person-planner',
+          version: 1,
+          exportedAt: new Date().toISOString(),
+          data,
+        };
+        const serialized = JSON.stringify(envelope, null, 2);
+        parsePersonPlanner(serialized);
+        return serialized;
+      });
+      writeQueue = pending.then(() => undefined, () => undefined);
+      return pending;
+    },
+    async previewPersonPlannerImport(serialized: string): Promise<PersonPlannerImportPreview> {
+      const incoming = parsePersonPlanner(serialized);
+      await writeQueue;
+      const current = await load();
+      const person = incoming.data.people[0];
+      const nameConflict = current.people.some(candidate =>
+        candidate.name.trim().toLocaleLowerCase() === person.name.trim().toLocaleLowerCase());
+      return {
+        exportedAt: incoming.exportedAt,
+        personName: person.name,
+        suggestedName: suggestUniquePersonName(person.name, current.people),
+        nameConflict,
+        foods: incoming.data.foods.length,
+        entries: incoming.data.entries.length,
+        activities: incoming.data.activities.length,
+        heightRecords: incoming.data.heightRecords.length,
+      };
+    },
+    async importPersonPlanner(serialized: string, importedName: string): Promise<PersonPlannerImportResult> {
+      const incoming = parsePersonPlanner(serialized).data;
+      const sourcePerson = incoming.people[0];
+      return transact(draft => {
+        const personFields = validatePersonInput({
+          name: importedName,
+          weightKg: sourcePerson.weightKg,
+          ageYears: sourcePerson.ageYears,
+          dateOfBirth: sourcePerson.dateOfBirth,
+          growthReferenceSex: sourcePerson.growthReferenceSex,
+          ironGoalMg: sourcePerson.ironGoalMg,
+          ironGoalSource: sourcePerson.ironGoalSource,
+          ironGoalReviewedOn: sourcePerson.ironGoalReviewedOn,
+          fatGoalG: sourcePerson.fatGoalG,
+          fatGoalSource: sourcePerson.fatGoalSource,
+          fatGoalReviewedOn: sourcePerson.fatGoalReviewedOn,
+          activityLevel: sourcePerson.activityLevel,
+          baselineCalories: sourcePerson.baselineCalories,
+        });
+        if (draft.people.some(candidate =>
+          candidate.name.trim().toLocaleLowerCase() === personFields.name.trim().toLocaleLowerCase())) {
+          fail('A person with this name already exists. Choose a different name for the imported profile.');
+        }
+        const person: Person = {
+          id: draft.nextPersonId++,
+          isDefault: false,
+          ...personFields,
+        };
+        draft.people.push(person);
+
+        const foodFingerprints = new Map<string, number>();
+        for (const food of draft.foods) {
+          const fingerprint = foodFingerprint(publicFood(food));
+          if (!foodFingerprints.has(fingerprint)) foodFingerprints.set(fingerprint, food.id);
+        }
+        const importedFoodIds = new Map<number, number>();
+        let foodsImported = 0;
+        for (const food of incoming.foods) {
+          const fingerprint = foodFingerprint(publicFood(food));
+          let targetId = foodFingerprints.get(fingerprint);
+          if (targetId === undefined) {
+            targetId = draft.nextFoodId++;
+            draft.foods.push({ ...food, id: targetId });
+            foodFingerprints.set(fingerprint, targetId);
+            foodsImported += 1;
+          }
+          importedFoodIds.set(food.id, targetId);
+        }
+        for (const entry of incoming.entries) {
+          const foodId = importedFoodIds.get(entry.foodId);
+          if (foodId === undefined) fail('Planner file references a missing food record.');
+          draft.entries.push({ ...entry, id: draft.nextEntryId++, personId: person.id, foodId });
+        }
+        for (const activity of incoming.activities) {
+          draft.activities.push({ ...activity, personId: person.id });
+        }
+        for (const record of incoming.heightRecords) {
+          draft.heightRecords.push({
+            ...record,
+            id: draft.nextHeightRecordId++,
+            personId: person.id,
+          });
+        }
+        return {
+          person,
+          foodsImported,
+          entriesImported: incoming.entries.length,
+          activitiesImported: incoming.activities.length,
+          heightRecordsImported: incoming.heightRecords.length,
+        };
+      });
+    },
     previewBackup(serialized: string): BackupPreview {
       const { envelope, data: backup } = parseBackup(serialized);
       return summarizeBackup(backup, envelope.createdAt);
@@ -1369,6 +1547,25 @@ function parseFoodLibrary(serialized: string): FoodLibraryEnvelope {
     ids.add(food.id as number);
   }
   return parsed as unknown as FoodLibraryEnvelope;
+}
+
+function parsePersonPlanner(serialized: string): { envelope: PersonPlannerEnvelope; data: StoreData } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(serialized);
+  } catch {
+    fail('Person planner file is not valid JSON.');
+  }
+  if (!isRecord(parsed) || !hasExactKeys(parsed, ['format', 'version', 'exportedAt', 'data'])) {
+    fail('Person planner file has an invalid envelope.');
+  }
+  if (parsed.format !== 'clear-access-person-planner' || parsed.version !== 1) {
+    fail(`Unsupported person planner format or version (${String(parsed.version)}).`);
+  }
+  if (!isISODateTime(parsed.exportedAt)) fail('Person planner file has an invalid export timestamp.');
+  const data = validateBackupData(parsed.data);
+  if (data.people.length !== 1) fail('Person planner file must contain exactly one person.');
+  return { envelope: parsed as unknown as PersonPlannerEnvelope, data };
 }
 
 function parseBackup(serialized: string): { envelope: BackupEnvelope; data: StoreData } {
