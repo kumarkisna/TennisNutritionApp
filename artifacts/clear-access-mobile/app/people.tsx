@@ -6,6 +6,7 @@ import { useDeletePerson, type Person } from '@/lib/local-api';
 import { usePlanner } from '@/contexts/PlannerProvider';
 import { useColors } from '@/hooks/useColors';
 import { Btn, Card, ErrorBox, Eyebrow, F, Muted, Screen, Title, success, warn, tap } from '@/components/ui';
+import { PersonPlannerExportButton, PersonPlannerImport } from '@/components/PersonPlannerTransfer';
 import { n } from '@/lib/format';
 
 function People() {
@@ -28,6 +29,7 @@ function People() {
   return <Screen title="People">
     <Eyebrow>This device / separate plans</Eyebrow>
     <Title sub="Everyone has their own meals and body details for daily planning estimates. Your food library stays shared on this device.">People in your planner.</Title>
+    <PersonPlannerImport />
     {people.map(p => {
       const on = p.id === person.id;
       return <Card key={p.id} tone={on ? 'mint' : 'card'} style={{ gap: 8 }}>
@@ -40,6 +42,7 @@ function People() {
         </Pressable>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <Btn small variant="ghost" icon="edit-2" label="Edit" testID={`button-edit-person-${p.id}`} onPress={() => router.push({ pathname: '/person-form', params: { id: String(p.id) } })} />
+          <PersonPlannerExportButton person={p} />
           {!p.isDefault ? <Btn small variant="danger" icon="trash-2" label="Delete" testID={`button-delete-person-${p.id}`} onPress={() => { setConfirming(p); setConfirmed(false); remove.reset(); }} /> : null}
         </View>
       </Card>;

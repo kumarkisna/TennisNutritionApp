@@ -1131,7 +1131,7 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
       const nameConflict = current.people.some(candidate =>
         candidate.name.trim().toLocaleLowerCase() === person.name.trim().toLocaleLowerCase());
       return {
-        exportedAt: incoming.exportedAt,
+        exportedAt: incoming.envelope.exportedAt,
         personName: person.name,
         suggestedName: suggestUniquePersonName(person.name, current.people),
         nameConflict,

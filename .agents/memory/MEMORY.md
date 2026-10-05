@@ -3,10 +3,10 @@
 - [Sports workbook target integrity](sports-workbook-targets.md) — iron target cells were stored as Excel dates; never turn them into mg/day targets without a verified source.
 - [Direct React server-render tests](react-ssr-tests.md) — standalone TSX runners may use classic JSX despite Vite's automatic runtime.
 - [Wouter links in server-render tests](wouter-ssr-tests.md) — SSR tests that render a Link need a static location hook, not browser or memory-location hooks.
-- [Local backup validation boundary](local-backup-validation.md) — validate external backups strictly without tightening legacy storage hydration as a side effect.
+- [Local backup validation boundary](local-backup-validation.md) — keep food-only, per-person, and whole-device transfers distinct; validate imports without restricting legacy storage.
 - [SVG preview event verification](svg-preview-events.md) — test rendered-element clicks; React component callbacks can survive in props but be discarded by native-to-web normalization.
 - [Native appearance overrides](native-appearance-overrides.md) — native reset contracts differ from older SDK examples; explicit app themes must also update native controls.
-- [Expo startup readiness](expo-devtools-startup.md) — optional debugger errors and blank first frames can be non-blocking; verify meaningful app rendering before treating them as failures.
+- [Expo startup readiness](expo-devtools-startup.md) — verify meaningful rendering; keep Expo tunnel subdomain labels short enough for DNS limits.
 - [Expo web printing](expo-web-printing.md) — Expo Print's web methods print the current page; write generated HTML into a separate print window.
 - [Tennis nutrition boundary](tennis-nutrition-boundary.md) — schedules guide meal timing, not automatic personalised intake prescriptions or changes to daily references.
 - [Tennis plan sharing](tennis-plan-sharing.md) — copy to another local person or reuse for the same person on another date, with independent date choices.

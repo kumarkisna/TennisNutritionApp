@@ -99,10 +99,22 @@ export type {
   ImportFoodInput,
 } from './local-models';
 export { createLocalStore, LOCAL_STORAGE_KEY, isValidCalendarDate } from './local-store';
+export type {
+  FoodLibraryImportPreview,
+  FoodLibraryImportResult,
+  PersonPlannerImportPreview,
+  PersonPlannerImportResult,
+} from './local-store';
 
 export const localStore = createLocalStore(AsyncStorage);
 
 export const exportLocalBackup = () => localStore.exportBackup();
+export const exportLocalFoodLibrary = () => localStore.exportFoodLibrary();
+export const previewLocalFoodImport = (serialized: string) => localStore.previewFoodLibraryImport(serialized);
+export const importLocalFoodLibrary = (serialized: string) => localStore.importFoodLibrary(serialized);
+export const exportLocalPersonPlanner = (personId: number) => localStore.exportPersonPlanner(personId);
+export const previewLocalPersonPlannerImport = (serialized: string) => localStore.previewPersonPlannerImport(serialized);
+export const importLocalPersonPlanner = (serialized: string, name: string) => localStore.importPersonPlanner(serialized, name);
 export const getListPeopleQueryKey = () => ['listPeople'] as const;
 export const getListFoodsQueryKey = (params?: ListFoodsParams) => ['listFoods', params] as const;
 export const getListHeightRecordsQueryKey = (params?: ListHeightRecordsParams) => ['listHeightRecords', params] as const;

@@ -14,3 +14,9 @@ Preserve finite historical food nutrition values even when they exceed the limit
 **Why:** Older imported mineral values may exceed current editing limits. Applying those limits to restore creates apparently successful backups that cannot be reopened. A backup must not silently correct the original nutritional data.
 
 **How to apply:** Test legacy migration through export, preview, restore and reload, not just round trips of newly created records. Count current-device records directly from trusted storage so an unsupported export cannot prevent restoring a separately valid backup.
+
+Keep three transfer scopes distinct: Foods-tab files contain the food library only; person planner files contain one profile, its dated planner records, and foods referenced by its meals; whole-device backups remain available separately. Person imports create a new profile, remap local IDs, reuse exact-match foods, and never replace existing profiles or records.
+
+**Why:** Food and planner IDs are local to each device, and person names may collide. Additive imports preserve meal-to-food links without risking another profile’s records.
+
+**How to apply:** For transfer changes, test ID collisions, same-name profile suggestions, exact food reuse, and that unrelated profiles remain unchanged. Keep global reminder enablement on the destination device.

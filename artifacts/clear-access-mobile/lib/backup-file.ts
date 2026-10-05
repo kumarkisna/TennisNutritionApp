@@ -3,11 +3,11 @@ import { Platform } from 'react-native';
 // Limit file reads before parsing. Backups stay on the device; no network calls.
 const MAX_BACKUP_BYTES = 10 * 1024 * 1024;
 const checkSize = (size: number) => {
-  if (size > MAX_BACKUP_BYTES) throw new Error('Choose a backup smaller than 10 MB.');
+  if (size > MAX_BACKUP_BYTES) throw new Error('Choose a file smaller than 10 MB.');
 };
 
-export async function saveBackupFile(serialized: string): Promise<void> {
-  const name = `clear-access-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+async function saveJsonFile(serialized: string, prefix: string, dialogTitle: string): Promise<void> {
+  const name = `${prefix}-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
   if (Platform.OS === 'web') {
     const url = URL.createObjectURL(new Blob([serialized], { type: 'application/json' }));
     const link = document.createElement('a');
@@ -28,14 +28,21 @@ export async function saveBackupFile(serialized: string): Promise<void> {
   try {
     file.write(serialized);
     await Sharing.shareAsync(file.uri, {
-      mimeType: 'application/json', UTI: 'public.json', dialogTitle: 'Save your personal planner backup',
+      mimeType: 'application/json', UTI: 'public.json', dialogTitle,
     });
   } finally {
     if (file.exists) file.delete();
   }
 }
 
-export async function pickBackupFile(): Promise<{ name: string; serialized: string } | null> {
+export const saveBackupFile = (serialized: string) =>
+  saveJsonFile(serialized, 'clear-access-backup', 'Save your personal planner backup');
+export const saveFoodLibraryFile = (serialized: string) =>
+  saveJsonFile(serialized, 'clear-access-foods', 'Save your food library');
+export const savePersonPlannerFile = (serialized: string) =>
+  saveJsonFile(serialized, 'clear-access-person-planner', 'Save this person’s planner file');
+
+async function pickJsonFile(): Promise<{ name: string; serialized: string } | null> {
   if (Platform.OS === 'web') {
     return new Promise((resolve, reject) => {
       const input = document.createElement('input');
@@ -70,3 +77,7 @@ export async function pickBackupFile(): Promise<{ name: string; serialized: stri
     if (file.exists) file.delete();
   }
 }
+
+export const pickBackupFile = pickJsonFile;
+export const pickFoodLibraryFile = pickJsonFile;
+export const pickPersonPlannerFile = pickJsonFile;

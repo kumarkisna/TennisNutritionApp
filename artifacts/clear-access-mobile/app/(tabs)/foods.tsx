@@ -5,6 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { useListFoods, type Food } from '@/lib/local-api';
 import { useColors } from '@/hooks/useColors';
 import { Btn, CaloriesMacros, Card, Chips, DISCLAIMER, EmptyState, ErrorBox, Eyebrow, F, LoadingBlock, Muted, Screen, Title } from '@/components/ui';
+import { FoodLibraryTransfer } from '@/components/FoodLibraryTransfer';
 import { cap, n } from '@/lib/format';
 
 type Filter = 'all' | 'custom' | 'open_food_facts' | 'reference';
@@ -28,6 +29,7 @@ export default function Foods() {
   return <Screen tabs onRefresh={() => foods.refetch()} refreshing={foods.isRefetching}>
     <Eyebrow>03 / Food library</Eyebrow>
     <Title sub="Search the food library stored on this device or create a custom food. Values per 100 g.">Know what goes in.</Title>
+    <FoodLibraryTransfer />
 
       <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: c.card, borderColor: c.input, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12 }}>
