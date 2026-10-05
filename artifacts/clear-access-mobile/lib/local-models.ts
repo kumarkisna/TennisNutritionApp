@@ -76,7 +76,6 @@ export type Person = {
 export type PersonInput = {
   name: string;
   weightKg?: number | null;
-  ageYears?: number | null;
   dateOfBirth?: string | null;
   growthReferenceSex?: 'male' | 'female' | null;
   nutritionGoal?: NutritionGoal | null;

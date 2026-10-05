@@ -5,12 +5,13 @@ import { MealAlertSettings } from '@/components/MealAlertSettings';
 import { LocalBackup } from '@/components/LocalBackup';
 import { ThemePicker } from '@/components/ThemePicker';
 import { NutritionGoalSelector } from '@/components/NutritionGoalSelector';
+import { DateOfBirthAgeFields } from '@/components/DateOfBirthAgeFields';
 import { useColors } from '@/hooks/useColors';
 import { Text } from 'react-native';
 import { useUpdatePerson, type ActivityLevelType, type Person, type PersonUpdate } from '@/lib/local-api';
 import { usePlanner } from '@/contexts/PlannerProvider';
 import { Btn, Card, Chips, ErrorBox, Eyebrow, Field, Muted, Screen, Title, success, warn } from '@/components/ui';
-import { isIsoDate, parseOptional } from '@/lib/format';
+import { isIsoDate, parseOptional, today } from '@/lib/format';
 import { activityOptions } from '@/lib/activity';
 
 const s = (v: number | string | null) => (v === null ? '' : String(v));
@@ -20,7 +21,7 @@ function SettingsForm({ person }: { person: Person }) {
   const { refreshPeople } = usePlanner();
   const update = useUpdatePerson();
   const [weight, setWeight] = useState(s(person.weightKg));
-  const [age, setAge] = useState(s(person.ageYears));
+  const [dateOfBirth, setDateOfBirth] = useState(person.dateOfBirth ?? '');
   const [nutritionGoal, setNutritionGoal] = useState(person.nutritionGoal);
   const [level, setLevel] = useState<ActivityLevelType>(person.activityLevel);
   const [baseline, setBaseline] = useState(String(person.baselineCalories));
@@ -35,11 +36,13 @@ function SettingsForm({ person }: { person: Person }) {
 
   async function save() {
     setSaved(false);
-    const w = parseOptional(weight), a = parseOptional(age), i = parseOptional(iron), f = parseOptional(fat);
+    const w = parseOptional(weight), i = parseOptional(iron), f = parseOptional(fat);
+    const dob = dateOfBirth.trim() || null;
     const b = Number(baseline);
     const bad = (m: string) => { setProblem(m); warn(); };
     if (w === undefined || (w !== null && (w < 1 || w > 500))) return bad('Body weight must be between 1 and 500 kg, or empty.');
-    if (a === undefined || (a !== null && (!Number.isInteger(a) || a < 1 || a > 120))) return bad('Age must be a whole number from 1 to 120, or empty.');
+    if (dob && !isIsoDate(dob)) return bad('Enter a real date of birth in YYYY-MM-DD format, or clear it.');
+    if (dob && dob > today()) return bad('Date of birth cannot be in the future.');
     if (!Number.isInteger(b) || b < 1000 || b > 5000) return bad('Baseline must be a whole number from 1,000 to 5,000 kcal.');
     if (i === undefined || (i !== null && (i <= 0 || i > 100))) return bad('Iron goal must be above 0 and at most 100 mg, or empty.');
     if (f === undefined || (f !== null && (f <= 0 || f > 500))) return bad('Fat goal must be above 0 and at most 500 g, or empty.');
@@ -48,7 +51,7 @@ function SettingsForm({ person }: { person: Person }) {
     if (ironSrc.length > 300 || fatSrc.length > 300) return bad('Source notes can be up to 300 characters.');
     setProblem(null);
     const data: PersonUpdate = {
-      weightKg: w, ageYears: a, activityLevel: level, baselineCalories: b,
+      weightKg: w, dateOfBirth: dob, activityLevel: level, baselineCalories: b,
       nutritionGoal,
       ironGoalMg: i, ironGoalSource: i === null ? null : ironSrc.trim() || null, ironGoalReviewedOn: i === null ? null : ironDate.trim() || null,
       fatGoalG: f, fatGoalSource: f === null ? null : fatSrc.trim() || null, fatGoalReviewedOn: f === null ? null : fatDate.trim() || null,
@@ -62,8 +65,8 @@ function SettingsForm({ person }: { person: Person }) {
   return <>
     <Card>
       <Eyebrow>Body details and legacy settings</Eyebrow>
+      <DateOfBirthAgeFields dateOfBirth={dateOfBirth} onChangeDateOfBirth={setDateOfBirth} testPrefix="input" />
       <Field label="Body weight (kg)" value={weight} onChangeText={setWeight} keyboardType="decimal-pad" placeholder="Not set" hint="Used to scale workbook carbohydrate and protein ranges. Clear to remove." testID="input-weight" />
-      <Field label="Age (years)" value={age} onChangeText={setAge} keyboardType="number-pad" placeholder="Not set" hint="Used for calcium and adult-estimate eligibility only when no date of birth is saved. Unknown age is not assumed to be adult." testID="input-age" />
       <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 11.5, color: c.foreground }}>Legacy/manual energy settings</Text>
       <Chips testPrefix="select-activity-level" value={level} onChange={setLevel} options={activityOptions.map(o => ({ value: o.value, label: o.title }))} />
       <Muted>Legacy/manual activity level and multiplier setting; retained for saved-data compatibility and do not control daily automatic targets.</Muted>

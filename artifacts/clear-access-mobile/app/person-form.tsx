@@ -4,8 +4,9 @@ import { useCreatePerson, useUpdatePerson, type ActivityLevelType, type PersonIn
 import { useOptionalPlanner } from '@/contexts/PlannerProvider';
 import { Btn, Chips, ErrorBox, Eyebrow, Field, Muted, Screen, Title, success, warn } from '@/components/ui';
 import { NutritionGoalSelector } from '@/components/NutritionGoalSelector';
+import { DateOfBirthAgeFields } from '@/components/DateOfBirthAgeFields';
 import { activityOptions } from '@/lib/activity';
-import { parseOptional } from '@/lib/format';
+import { isIsoDate, parseOptional, today } from '@/lib/format';
 
 function PersonForm() {
   const router = useRouter();
@@ -17,7 +18,7 @@ function PersonForm() {
   const update = useUpdatePerson();
   const [name, setName] = useState(editing?.name ?? '');
   const [weight, setWeight] = useState(editing?.weightKg == null ? '' : String(editing.weightKg));
-  const [age, setAge] = useState(editing?.ageYears == null ? '' : String(editing.ageYears));
+  const [dateOfBirth, setDateOfBirth] = useState(editing?.dateOfBirth ?? '');
   const [nutritionGoal, setNutritionGoal] = useState(editing?.nutritionGoal ?? null);
   const [level, setLevel] = useState<ActivityLevelType>(editing?.activityLevel ?? 'moderate');
   const [baseline, setBaseline] = useState(String(editing?.baselineCalories ?? 1800));
@@ -26,7 +27,7 @@ function PersonForm() {
   async function submit() {
     const cleaned = name.trim();
     const weightKg = parseOptional(weight);
-    const ageYears = parseOptional(age);
+    const dob = dateOfBirth.trim() || null;
     const kcal = Number(baseline);
     if (!cleaned || cleaned.length > 80 || !Number.isInteger(kcal) || kcal < 1000 || kcal > 5000) {
       setProblem('Enter a name (up to 80 characters) and a baseline from 1,000 to 5,000 kcal.'); warn(); return;
@@ -34,11 +35,14 @@ function PersonForm() {
     if (weightKg === undefined || (weightKg !== null && (weightKg < 1 || weightKg > 500))) {
       setProblem('Body weight must be between 1 and 500 kg, or empty.'); warn(); return;
     }
-    if (ageYears === undefined || (ageYears !== null && (!Number.isInteger(ageYears) || ageYears < 1 || ageYears > 120))) {
-      setProblem('Age must be a whole number from 1 to 120, or empty.'); warn(); return;
+    if (dob && !isIsoDate(dob)) {
+      setProblem('Enter a real date of birth in YYYY-MM-DD format, or clear it.'); warn(); return;
+    }
+    if (dob && dob > today()) {
+      setProblem('Date of birth cannot be in the future.'); warn(); return;
     }
     setProblem(null);
-    const data: PersonInput = { name: cleaned, weightKg, ageYears, nutritionGoal, activityLevel: level, baselineCalories: kcal };
+    const data: PersonInput = { name: cleaned, weightKg, dateOfBirth: dob, nutritionGoal, activityLevel: level, baselineCalories: kcal };
     try {
       if (editing) await update.mutateAsync({ id: editing.id, data });
       else { const created = await create.mutateAsync({ data }); planner?.selectPerson(created.id); }
@@ -52,7 +56,7 @@ function PersonForm() {
     <Field label="Name" value={name} onChangeText={setName} maxLength={80} testID="input-manage-person-name" />
     <Eyebrow>Body details</Eyebrow>
     <Field label="Body weight (kg)" value={weight} onChangeText={setWeight} keyboardType="decimal-pad" placeholder="Not set" hint="Used to scale workbook carbohydrate and protein ranges. Clear to remove." testID="input-manage-person-weight" />
-    <Field label="Age (years)" value={age} onChangeText={setAge} keyboardType="number-pad" placeholder="Not set" hint="Used for calcium and adult-estimate eligibility only when no date of birth is saved. Unknown age is not assumed to be adult." testID="input-manage-person-age" />
+    <DateOfBirthAgeFields dateOfBirth={dateOfBirth} onChangeDateOfBirth={setDateOfBirth} testPrefix="input-manage-person" />
     <NutritionGoalSelector value={nutritionGoal} onChange={setNutritionGoal} testPrefix="select-manage-person-nutrition-goal" />
     <Eyebrow>Legacy/manual energy settings</Eyebrow>
     <Chips testPrefix="select-manage-person-activity" value={level} onChange={setLevel} options={activityOptions.map(o => ({ value: o.value, label: o.title }))} />

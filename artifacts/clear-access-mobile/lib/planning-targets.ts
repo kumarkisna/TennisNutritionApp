@@ -80,7 +80,7 @@ export function calculatePlanningEstimates(
     return {
       calories: null,
       fat: null,
-      unavailableReason: `Adult estimates are unavailable until a date of birth or age is saved.${weightMissing ? ' Body weight is also needed.' : ''}`,
+      unavailableReason: `Adult estimates are unavailable until a date of birth is saved.${weightMissing ? ' Body weight is also needed.' : ''}`,
     };
   }
   if (!Number.isFinite(age) || age < 18) {

@@ -8,6 +8,8 @@ import { useColors } from '@/hooks/useColors';
 import { Btn, Card, ErrorBox, Eyebrow, F, Muted, Screen, Title, success, warn, tap } from '@/components/ui';
 import { PersonPlannerExportButton, PersonPlannerImport } from '@/components/PersonPlannerTransfer';
 import { n } from '@/lib/format';
+import { getAgeOnDate } from '@/lib/planning-targets';
+import { today } from '@/lib/format';
 
 function People() {
   const c = useColors();
@@ -32,12 +34,13 @@ function People() {
     <PersonPlannerImport />
     {people.map(p => {
       const on = p.id === person.id;
+      const age = p.dateOfBirth ? getAgeOnDate(p.dateOfBirth, today()) : null;
       return <Card key={p.id} tone={on ? 'mint' : 'card'} style={{ gap: 8 }}>
         <Pressable testID={`row-person-${p.id}`} onPress={() => { tap(); selectPerson(p.id); }} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <Feather name={on ? 'check-circle' : 'circle'} size={22} color={on ? c.primary : c.mutedForeground} />
           <View style={{ flex: 1 }}>
             <Text style={{ fontFamily: F.bold, fontSize: 16, color: c.foreground }}>{p.name}</Text>
-            <Muted>{p.isDefault ? 'Default · ' : ''}{p.weightKg === null ? 'Weight not set' : `${n(p.weightKg, 1)} kg`}{p.ageYears === null ? ' · Age not set' : ` · ${p.ageYears} years`}{on ? ' · Selected' : ''}</Muted>
+             <Muted>{p.isDefault ? 'Default · ' : ''}{p.weightKg === null ? 'Weight not set' : `${n(p.weightKg, 1)} kg`}{age === null ? ' · Age not set' : ` · ${age} years`}{on ? ' · Selected' : ''}</Muted>
           </View>
         </Pressable>
         <View style={{ flexDirection: 'row', gap: 8 }}>

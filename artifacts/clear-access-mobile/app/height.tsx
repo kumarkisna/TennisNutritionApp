@@ -203,10 +203,10 @@ function HeightTracker({ person, plannerDate, refreshPeople }: {
 
     <Card tone="mint">
       <SectionTitle kicker="Growth profile">Optional CDC comparison details</SectionTitle>
-      <Muted>Date of birth supports calendar-age growth comparisons and age checking for the selected planner day. It does not automatically replace the stored integer ageYears value. Neither birth date nor CDC reference sex is inferred from another profile field.</Muted>
+      <Muted>Date of birth determines age automatically and supports calendar-age growth comparisons for the selected planner day. Neither birth date nor CDC reference sex is inferred from another profile field.</Muted>
       <Field
         label="Date of birth"
-        hint="Use YYYY-MM-DD. Growth comparisons use this calendar date; it does not automatically replace stored ageYears."
+        hint="Use YYYY-MM-DD. Age and growth comparisons use this date; age is calculated automatically."
         value={dateOfBirthText}
         onChangeText={value => { setDateOfBirthText(value); setProfileError(null); }}
         placeholder="YYYY-MM-DD"
