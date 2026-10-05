@@ -26,3 +26,9 @@ Surface native scheduling limits and failures instead of claiming every future a
 **Why:** Devices limit pending local notifications, and permission, exact-alarm access, battery settings and Do Not Disturb can affect delivery.
 
 **How to apply:** Clearly distinguish saved alerts from successfully scheduled ones, disclose overflow, refresh the queue when the app resumes, and verify actual delivery separately on physical iPhone/Android devices.
+
+For Expo SDK 57 Android Expo Go, avoid importing the `expo-notifications` root barrel when the app only needs local notifications. Its push-token auto-registration side effect can invoke remote-push APIs, which Expo Go rejects.
+
+**Why:** The app's local meal reminders triggered a remote-push error during module import, before any reminder action occurred.
+
+**How to apply:** Import only the required local-notification modules directly, and recheck this behavior when upgrading Expo Notifications.

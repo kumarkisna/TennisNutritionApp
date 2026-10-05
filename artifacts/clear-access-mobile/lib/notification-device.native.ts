@@ -1,8 +1,16 @@
 import { Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
+import { cancelScheduledNotificationAsync } from 'expo-notifications/build/cancelScheduledNotificationAsync';
+import { getAllScheduledNotificationsAsync } from 'expo-notifications/build/getAllScheduledNotificationsAsync';
+import { AndroidImportance } from 'expo-notifications/build/NotificationChannelManager.types';
+import { getPermissionsAsync, requestPermissionsAsync } from 'expo-notifications/build/NotificationPermissions';
+import { IosAuthorizationStatus } from 'expo-notifications/build/NotificationPermissions.types';
+import { setNotificationChannelAsync } from 'expo-notifications/build/setNotificationChannelAsync';
+import { scheduleNotificationAsync } from 'expo-notifications/build/scheduleNotificationAsync';
+import { SchedulableTriggerInputTypes } from 'expo-notifications/build/Notifications.types';
+import { setNotificationHandler } from 'expo-notifications/build/NotificationsHandler';
 import type { ReminderDevice } from './meal-reminders';
 
-Notifications.setNotificationHandler({
+setNotificationHandler({
   handleNotification: async () => ({
     shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false,
   }),
@@ -10,24 +18,24 @@ Notifications.setNotificationHandler({
 export const notificationDevice: ReminderDevice = {
   supported: true,
   async permission(request = false) {
-    if (Platform.OS === 'android') await Notifications.setNotificationChannelAsync('meal-reminders', {
-      name: 'Meal reminders', importance: Notifications.AndroidImportance.DEFAULT, sound: 'default',
+    if (Platform.OS === 'android') await setNotificationChannelAsync('meal-reminders', {
+      name: 'Meal reminders', importance: AndroidImportance.DEFAULT, sound: 'default',
     });
-    const current = request ? await Notifications.requestPermissionsAsync() : await Notifications.getPermissionsAsync();
-    return current.granted || current.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL;
+    const current = request ? await requestPermissionsAsync() : await getPermissionsAsync();
+    return current.granted || current.ios?.status === IosAuthorizationStatus.PROVISIONAL;
   },
   async pending() {
-    return (await Notifications.getAllScheduledNotificationsAsync()).map(item => ({
+    return (await getAllScheduledNotificationsAsync()).map(item => ({
       id: item.identifier,
       signature: typeof item.content.data?.mealReminderSignature === 'string' ? item.content.data.mealReminderSignature : undefined,
     }));
   },
-  async cancel(id) { await Notifications.cancelScheduledNotificationAsync(id); },
+  async cancel(id) { await cancelScheduledNotificationAsync(id); },
   async schedule(job) {
-    try { await Notifications.scheduleNotificationAsync({
+    try { await scheduleNotificationAsync({
       identifier: job.id,
       content: { title: job.title, body: job.body, sound: 'default', data: { mealReminderSignature: job.signature } },
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(job.at), channelId: 'meal-reminders' },
+      trigger: { type: SchedulableTriggerInputTypes.DATE, date: new Date(job.at), channelId: 'meal-reminders' },
     }); } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       throw new Error(Platform.OS === 'android'
