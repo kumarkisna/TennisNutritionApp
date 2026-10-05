@@ -20,3 +20,9 @@ Keep three transfer scopes distinct: Foods-tab files contain the food library on
 **Why:** Food and planner IDs are local to each device, and person names may collide. Additive imports preserve meal-to-food links without risking another profile’s records.
 
 **How to apply:** For transfer changes, test ID collisions, same-name profile suggestions, exact food reuse, and that unrelated profiles remain unchanged. Keep global reminder enablement on the destination device.
+
+On Android, every export must offer saving to a chosen device folder as well as sharing to another app. A share sheet alone is not a local-save option.
+
+**Why:** The user reported that share-only export forced them to use another app when they wanted a local copy.
+
+**How to apply:** Write exports with Android's Storage Access Framework, keep sharing as a separate choice, and report cancellation without claiming the file was saved.

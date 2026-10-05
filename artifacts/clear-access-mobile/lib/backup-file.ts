@@ -1,16 +1,12 @@
 import { Alert, Platform } from 'react-native';
 
-// Limit file reads before parsing. Backups stay on the device; no network calls.
-const MAX_BACKUP_BYTES = 10 * 1024 * 1024;
+// Limit imported files before parsing. Transfers are local unless the user chooses to share.
+const MAX_TRANSFER_BYTES = 10 * 1024 * 1024;
 const checkSize = (size: number) => {
-  if (size > MAX_BACKUP_BYTES) throw new Error('Choose a file smaller than 10 MB.');
+  if (size > MAX_TRANSFER_BYTES) throw new Error('Choose a file smaller than 10 MB.');
 };
 
 export type JsonFileSaveResult = 'saved' | 'shared' | 'cancelled';
-
-function fileName(prefix: string) {
-  return `${prefix}-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
-}
 
 function downloadJsonFile(serialized: string, name: string): void {
   const url = URL.createObjectURL(new Blob([serialized], { type: 'application/json' }));
@@ -26,7 +22,7 @@ function downloadJsonFile(serialized: string, name: string): void {
 async function shareJsonFile(serialized: string, name: string, dialogTitle: string): Promise<void> {
   const Sharing = await import('expo-sharing');
   if (!await Sharing.isAvailableAsync()) {
-    throw new Error('File sharing is unavailable on this device. No backup was saved.');
+    throw new Error('File sharing is unavailable on this device. No file was saved.');
   }
   const { File, Paths } = await import('expo-file-system');
   const file = new File(Paths.cache, name);
@@ -52,7 +48,7 @@ function chooseAndroidExport(dialogTitle: string): Promise<AndroidExportChoice> 
     };
     Alert.alert(
       dialogTitle,
-      'Choose how to export this JSON file.',
+      'Save to device opens the Android folder picker. Share sends the file to another app.',
       [
         { text: 'Save to device', onPress: () => finish('save') },
         { text: 'Share with another app', onPress: () => finish('share') },

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { Platform, Text, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import {
@@ -32,8 +32,10 @@ export function FoodLibraryTransfer() {
     setError(null);
     setNotice(null);
     try {
-      await saveFoodLibraryFile(await exportLocalFoodLibrary());
-      setNotice('Food file offered for saving. Finish the save or share step to keep it.');
+      const result = await saveFoodLibraryFile(await exportLocalFoodLibrary());
+      setNotice(result === 'saved'
+        ? Platform.OS === 'android' ? 'Food file saved to the selected folder.' : 'Food file download started.'
+        : result === 'shared' ? 'Share sheet closed.' : 'Export cancelled. No file was saved.');
     } catch (problem) {
       failed(problem);
     } finally {
@@ -84,7 +86,7 @@ export function FoodLibraryTransfer() {
   const preview = pending?.preview;
   return <Card style={{ gap: 10 }}>
     <Eyebrow>Food library transfer</Eyebrow>
-    <Muted>Export the foods saved on this device or import a food file. Imports add new foods and skip exact matches; they do not change meal plans or profiles.</Muted>
+    <Muted>Export the foods saved on this device or import a food file. On Android, choose Save to device or Share with another app. Imports add new foods and skip exact matches; they do not change meal plans or profiles.</Muted>
     <View style={{ flexDirection: 'row', gap: 8 }}>
       <Btn small icon="download" label="Export foods" disabled={busy || !!pending} testID="button-export-foods" onPress={() => void exportFoods()} />
       <Btn small icon="upload" label="Import foods" variant="ghost" disabled={busy} testID="button-import-foods" onPress={() => void chooseFile()} />

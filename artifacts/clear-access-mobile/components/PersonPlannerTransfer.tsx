@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Text, TextInput, View } from 'react-native';
+import { Platform, Text, TextInput, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import {
@@ -30,8 +30,10 @@ export function PersonPlannerExportButton({ person }: { person: Person }) {
     setError(null);
     setNotice(null);
     try {
-      await savePersonPlannerFile(await exportLocalPersonPlanner(person.id));
-      setNotice('Planner file offered for saving or sharing.');
+      const result = await savePersonPlannerFile(await exportLocalPersonPlanner(person.id));
+      setNotice(result === 'saved'
+        ? Platform.OS === 'android' ? 'Planner file saved to the selected folder.' : 'Planner file download started.'
+        : result === 'shared' ? 'Share sheet closed.' : 'Export cancelled. No file was saved.');
     } catch (problem) {
       setError(problem instanceof Error ? problem : new Error(String(problem)));
     } finally {

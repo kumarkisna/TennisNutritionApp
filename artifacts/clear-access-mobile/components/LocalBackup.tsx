@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { Platform, Text, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import { Btn, Card, ErrorBox, Eyebrow, Muted } from './ui';
@@ -28,8 +28,10 @@ export function LocalBackup() {
   async function exportFile() {
     setBusy(true); setError(null); setNotice(null);
     try {
-      await saveBackupFile(await exportLocalBackup());
-      setNotice('Backup file offered for saving. Keep it only if you completed the save or share step.');
+      const result = await saveBackupFile(await exportLocalBackup());
+      setNotice(result === 'saved'
+        ? Platform.OS === 'android' ? 'Backup saved to the selected folder.' : 'Backup file download started.'
+        : result === 'shared' ? 'Share sheet closed.' : 'Export cancelled. No file was saved.');
     } catch (problem) { failed(problem); }
     finally { setBusy(false); }
   }
@@ -73,8 +75,8 @@ export function LocalBackup() {
   return <Card>
     <Eyebrow>Local backup & restore</Eyebrow>
     <Muted>Back up everyone on this device, including foods, meals, activities, personal settings and dated height history. No sign-in, automatic cloud sync or server upload.</Muted>
-    <Muted>This unencrypted file contains personal information: names, birth dates, body measurements and nutrition records. Choose a trusted location or recipient. Clearing storage or uninstalling can erase the records on this device.</Muted>
-    <Btn label="Save / share backup" icon="download" disabled={busy || !!pending} testID="button-export-backup" onPress={() => void exportFile()} />
+    <Muted>This unencrypted file contains personal information: names, birth dates, body measurements and nutrition records. Choose a trusted folder or recipient. On Android, export offers Save to device or Share with another app. Clearing storage or uninstalling can erase the records on this device.</Muted>
+    <Btn label="Export full backup" icon="download" disabled={busy || !!pending} testID="button-export-backup" onPress={() => void exportFile()} />
     <Btn label="Choose backup to restore" icon="upload" variant="ghost" disabled={busy} testID="button-import-backup" onPress={() => void chooseFile()} />
     {pending ? <View testID="backup-restore-preview" style={{ gap: 10 }}>
       <Eyebrow>Review before replacing</Eyebrow>
