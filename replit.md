@@ -5,7 +5,7 @@ A daily food planner with a standalone, device-local mobile app. The existing we
 ## Pinned links
 
 - Published web app: [https://website-with-google-sign-in.replit.app](https://website-with-google-sign-in.replit.app)
-- Mobile planner web route: [https://website-with-google-sign-in.replit.app/clear-access-mobile/](https://website-with-google-sign-in.replit.app/clear-access-mobile/)
+- Expo Go launch page (not a Median WebView app page): [https://website-with-google-sign-in.replit.app/clear-access-mobile/](https://website-with-google-sign-in.replit.app/clear-access-mobile/)
 
 ## Mobile product direction
 
