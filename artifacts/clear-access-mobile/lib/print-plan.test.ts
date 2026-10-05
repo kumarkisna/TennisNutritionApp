@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 // @ts-ignore Node test modules belong to the direct regression runner.
 import test from 'node:test';
 import type { MealEntry, TennisPlan } from './local-models';
+import { printHtmlInBrowserWindow } from './print-browser';
 import { buildPlannedDietHtml, sortPlannedDiet } from './print-plan';
 
 const mealTimes = { breakfast: '08:00', lunch: '13:00', dinner: '19:00', snack: '16:00' };
@@ -77,6 +78,41 @@ test('print HTML includes tennis plan type, sorted sessions, intensity, and rati
   assert.ok(html.indexOf('09:00') < html.indexOf('15:00'));
   assert.match(html, /Practice[\s\S]*1 h 30 min[\s\S]*Hard/);
   assert.match(html, /Gym[\s\S]*45 min[\s\S]*Light/);
+});
+
+test('web printing opens and prints the supplied document, then closes it', () => {
+  const html = '<html><body>Saved day plan</body></html>';
+  let writtenHtml = '';
+  let printCalled = false;
+  let focused = false;
+  let closed = false;
+  let afterPrint: (() => void) | undefined;
+  const printWindow = {
+    document: {
+      open() {},
+      write(markup: string) { writtenHtml = markup; },
+      close() {},
+    },
+    addEventListener(_type: 'afterprint', listener: () => void) { afterPrint = listener; },
+    focus() { focused = true; },
+    print() { printCalled = true; },
+    close() { closed = true; },
+  };
+
+  printHtmlInBrowserWindow(html, () => printWindow);
+
+  assert.equal(writtenHtml, html);
+  assert.equal(focused, true);
+  assert.equal(printCalled, true);
+  afterPrint?.();
+  assert.equal(closed, true);
+});
+
+test('web printing explains when the browser blocks the print window', () => {
+  assert.throws(
+    () => printHtmlInBrowserWindow('<html></html>', () => null),
+    /print window was blocked/i,
+  );
 });
 
 test('empty plans print a clear empty state and missing linked slots fail explicitly', () => {
