@@ -4,6 +4,7 @@ import { isTennisPlan, isTennisDiet, tennisPlanProblem, tennisActivityPlanProble
 import { getMealTimes, isMealTimes } from './meal-scheduling';
 import { isMealAlerts, type ReminderSource } from './meal-reminders';
 import { getTennisFoodPlanFingerprint } from './tennis-copy';
+import { isFoodIngredientList } from './food-nutrition';
 import {
   ActivityLevel,
   DayActivityType,
@@ -271,6 +272,7 @@ function validateStoredData(value: unknown): StoreData {
       typeof food.name !== 'string' || !food.name.trim() || foodIds.has(food.id as number) ||
       !CATEGORIES.includes(food.category as Food['category']) ||
       !['reference', 'custom', 'open_food_facts'].includes(String(food.source)) ||
+      (food.ingredients !== undefined && (food.source !== 'custom' || !isFoodIngredientList(food.ingredients))) ||
       !['caloriesPer100g', 'proteinPer100g', 'carbsPer100g', 'fatPer100g', 'fiberPer100g']
         .every(key => typeof food[key] === 'number' && Number.isFinite(food[key])) ||
       (food.calciumMgPer100g !== null && typeof food.calciumMgPer100g !== 'number') ||
@@ -441,7 +443,7 @@ function validateBackupData(value: unknown): StoreData {
     if (!isRecord(food) || !hasExactKeys(food, [
       'id', 'name', 'category', 'source', 'caloriesPer100g', 'proteinPer100g', 'carbsPer100g',
       'fatPer100g', 'fiberPer100g', 'fiberKnown', 'calciumMgPer100g', 'ironMgPer100g',
-    ], ['brand', 'sourceUrl', 'referenceKey']) ||
+    ], ['brand', 'sourceUrl', 'referenceKey', 'ingredients']) ||
       !Number.isSafeInteger(food.id) || (food.id as number) < 1 ||
       typeof food.name !== 'string' || !food.name.trim() || food.name.length > 120 ||
       (food.brand !== undefined && (typeof food.brand !== 'string' || food.brand.length > 160)) ||
@@ -449,6 +451,7 @@ function validateBackupData(value: unknown): StoreData {
       (food.referenceKey !== undefined && (typeof food.referenceKey !== 'string' || !food.referenceKey.trim() || food.referenceKey.length > 120)) ||
       !CATEGORIES.includes(food.category as Food['category']) ||
       !['reference', 'custom', 'open_food_facts'].includes(String(food.source)) ||
+      (food.ingredients !== undefined && (food.source !== 'custom' || !isFoodIngredientList(food.ingredients))) ||
       !isFiniteNumber(food.caloriesPer100g) ||
       !isFiniteNumber(food.proteinPer100g) ||
       !isFiniteNumber(food.carbsPer100g) ||
@@ -643,6 +646,7 @@ function foodFingerprint(food: Food): string {
     food.fiberKnown,
     food.calciumMgPer100g,
     food.ironMgPer100g,
+    food.ingredients ?? [],
   ]);
 }
 function suggestUniquePersonName(name: string, people: Person[]): string {
@@ -791,6 +795,10 @@ function validateFood(data: FoodInput | FoodUpdate, existing?: Food): Omit<Food,
   const name = result.name?.trim();
   if (name !== undefined && (!name || name.length > 120)) fail('Enter a food name up to 120 characters.');
   if (!result.category || !CATEGORIES.includes(result.category)) fail('Choose a valid food category.');
+  const ingredients = result.ingredients === undefined ? [] : result.ingredients;
+  if (!isFoodIngredientList(ingredients)) {
+    fail('Ingredient details are invalid. Check each ingredient and try again.');
+  }
   const fields: Array<[keyof Food, string, number, number]> = [
     ['caloriesPer100g', 'Calories', 0, 1000],
     ['proteinPer100g', 'Protein', 0, 100],
@@ -821,6 +829,7 @@ function validateFood(data: FoodInput | FoodUpdate, existing?: Food): Omit<Food,
     fiberPer100g: result.fiberPer100g!,
     calciumMgPer100g: result.calciumMgPer100g ?? null,
     ironMgPer100g: result.ironMgPer100g ?? null,
+    ...(ingredients.length > 0 ? { ingredients: clone(ingredients) } : {}),
   };
 }
 
@@ -1795,13 +1804,14 @@ function parseFoodLibrary(serialized: string): FoodLibraryEnvelope {
     if (!isRecord(food) || !hasExactKeys(food, [
       'id', 'name', 'category', 'source', 'caloriesPer100g', 'proteinPer100g', 'carbsPer100g',
       'fatPer100g', 'fiberPer100g', 'fiberKnown', 'calciumMgPer100g', 'ironMgPer100g',
-    ], ['brand', 'sourceUrl']) ||
+    ], ['brand', 'sourceUrl', 'ingredients']) ||
       !Number.isSafeInteger(food.id) || (food.id as number) < 1 ||
       typeof food.name !== 'string' || !food.name.trim() || food.name.length > 120 ||
       (food.brand !== undefined && (typeof food.brand !== 'string' || food.brand.length > 160)) ||
       (food.sourceUrl !== undefined && (typeof food.sourceUrl !== 'string' || food.sourceUrl.length > 2048)) ||
       !CATEGORIES.includes(food.category as Food['category']) ||
       !['reference', 'custom', 'open_food_facts'].includes(String(food.source)) ||
+      (food.ingredients !== undefined && (food.source !== 'custom' || !isFoodIngredientList(food.ingredients))) ||
       !isFiniteNumber(food.caloriesPer100g) ||
       !isFiniteNumber(food.proteinPer100g) ||
       !isFiniteNumber(food.carbsPer100g) ||

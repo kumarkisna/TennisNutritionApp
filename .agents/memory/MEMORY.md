@@ -15,3 +15,4 @@
 - [Local meal alerts](meal-alert-policy.md) — explicit opt-in; master-off must cancel native jobs, not just update preferences; disclose device delivery limits.
 - [Mobile test runner](mobile-test-runner.md) — run mobile regression tests from the app directory so process.cwd()-based source checks resolve correctly.
 - [Date-of-birth age semantics](date-of-birth-age.md) — age is derived from optional DOB; clear stored ages when DOB is absent, and use the planner date for date-specific estimates.
+- [Custom-food nutrient aggregation](custom-food-nutrient-aggregation.md) — ingredient nutrition is mass-weighted per 100 g; unknown minerals remain unknown instead of counting as zero.

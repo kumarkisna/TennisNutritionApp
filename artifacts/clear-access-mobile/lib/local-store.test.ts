@@ -7,7 +7,12 @@ import { existsSync, readFileSync } from 'node:fs';
 // @ts-ignore Node's built-in test modules are used only by this direct store regression suite.
 import { resolve } from 'node:path';
 import { createLocalStore, type AsyncKeyValueStorage } from './local-store';
-import type { PersonInput } from './local-models';
+import type { FoodIngredient, PersonInput } from './local-models';
+import {
+  calculateFoodNutrition,
+  foodIngredientToDraft,
+  parseFoodIngredientDrafts,
+} from './food-nutrition';
 import { getAgeOnDate } from './planning-targets';
 import { today } from './format';
 
@@ -45,6 +50,83 @@ const baselinePerson = (name: string): PersonInput => ({
   name,
   activityLevel: 'sedentary',
   baselineCalories: 2000,
+});
+
+test('custom-food ingredients calculate weighted per-100 g nutrition and round-trip through exports', async () => {
+  const ingredients: FoodIngredient[] = [
+    {
+      name: 'Ingredient A',
+      grams: 200,
+      caloriesPer100g: 200,
+      proteinPer100g: 10,
+      carbsPer100g: 20,
+      fatPer100g: 5,
+      fiberPer100g: 3,
+      calciumMgPer100g: 50,
+      ironMgPer100g: null,
+    },
+    {
+      name: 'Ingredient B',
+      grams: 100,
+      caloriesPer100g: 100,
+      proteinPer100g: 20,
+      carbsPer100g: 40,
+      fatPer100g: 10,
+      fiberPer100g: 6,
+      calciumMgPer100g: 150,
+      ironMgPer100g: 2,
+    },
+  ];
+  const parsed = parseFoodIngredientDrafts(ingredients.map((ingredient, index) =>
+    foodIngredientToDraft(ingredient, String(index)),
+  ));
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) return;
+  const nutrition = calculateFoodNutrition(parsed.ingredients);
+  if (nutrition === null) throw new Error('Valid ingredients should produce nutrition values.');
+  assert.deepEqual(nutrition, {
+    caloriesPer100g: 166.7,
+    proteinPer100g: 13.3,
+    carbsPer100g: 26.7,
+    fatPer100g: 6.7,
+    fiberPer100g: 4,
+    calciumMgPer100g: 83.3,
+    ironMgPer100g: null,
+  });
+  assert.equal(parseFoodIngredientDrafts([{
+    ...foodIngredientToDraft(ingredients[0], 'incomplete'),
+    grams: '',
+  }]).ok, false);
+
+  const store = createLocalStore(new MemoryStorage());
+  const food = await store.createFood({
+    name: 'Weighted custom mix',
+    category: 'other',
+    ...nutrition,
+    ingredients: parsed.ingredients,
+  });
+  assert.deepEqual(food.ingredients, ingredients);
+  await assert.rejects(
+    store.createFood({
+      name: 'Invalid custom mix',
+      category: 'other',
+      ...nutrition,
+      ingredients: [{ ...ingredients[0], grams: 0 }],
+    }),
+    /ingredient details are invalid/i,
+  );
+
+  const foodLibrary = await store.exportFoodLibrary();
+  const libraryDestination = createLocalStore(new MemoryStorage());
+  await libraryDestination.importFoodLibrary(foodLibrary);
+  const fromLibrary = (await libraryDestination.listFoods({ search: 'Weighted custom mix' }))[0];
+  assert.deepEqual(fromLibrary.ingredients, ingredients);
+  assert.equal(fromLibrary.proteinPer100g, 13.3);
+
+  const backupDestination = createLocalStore(new MemoryStorage());
+  await backupDestination.restoreBackup(await store.exportBackup());
+  const fromBackup = (await backupDestination.listFoods({ search: 'Weighted custom mix' }))[0];
+  assert.deepEqual(fromBackup.ingredients, ingredients);
 });
 
 test('adolescent athlete activity survives reload and local backup restore', async () => {
