@@ -20,3 +20,9 @@ A 0–10 experience rating belongs to one person's whole tennis plan on one date
 **Why:** The score describes the user's experience of the source-day plan, not the destination day or its nutrition suitability.
 
 **How to apply:** Keep the score optional and per dated plan. Use it to filter the same person's local history without changing goals or nutrition references.
+
+Food-timetable reuse copies timed slots and linked food portions, not the source's tennis sessions or notes. Destination activity and nutrition references stay unchanged even when the chosen day has no saved tennis plan.
+
+**Why:** Importing an active session plan made food-only reuse on fresh or ordinary days require changing the destination activity. Food timing must remain independent of sports workload and personalised targets.
+
+**How to apply:** Preserve existing destination sessions; allow a session-free food timetable when none exist. Do not silently add source training or matches to make a food copy valid.

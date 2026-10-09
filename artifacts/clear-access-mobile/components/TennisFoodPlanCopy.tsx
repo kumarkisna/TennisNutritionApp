@@ -7,7 +7,7 @@ import {
   type CopyTennisFoodPlanInput, type DayActivityKind, type Person, type TennisPlan, type TennisPlanHistoryItem,
 } from '@/lib/local-api';
 import { filterTennisPlanHistory, followingCalendarDate, getTennisFoodPlanFingerprint } from '@/lib/tennis-copy';
-import { dietPhaseLabels, timeMinutes, tennisActivityPlanProblem } from '@/lib/tennis-planning';
+import { dietPhaseLabels, timeMinutes } from '@/lib/tennis-planning';
 import { sportsActivities } from '@/lib/planning-targets';
 import { useOptionalPlanner } from '@/contexts/PlannerProvider';
 import { useColors } from '@/hooks/useColors';
@@ -43,8 +43,8 @@ export function TennisFoodPlanCopy({ person, date }: { person: Person; date: str
   const [open, setOpen] = useState(false);
   const [sourceId, setSourceId] = useState(person.id);
   const [sourceDate, setSourceDate] = useState(date);
-  const [targetId, setTargetId] = useState<number | null>(null);
-  const [targetDate, setTargetDate] = useState(date);
+  const [targetId, setTargetId] = useState<number | null>(person.id);
+  const [targetDate, setTargetDate] = useState(() => followingCalendarDate(date));
   const [ratingFilter, setRatingFilter] = useState<RatingFilter>('any');
   const [dayTypeFilter, setDayTypeFilter] = useState<DayTypeFilter>('any');
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>('any');
@@ -55,9 +55,8 @@ export function TennisFoodPlanCopy({ person, date }: { person: Person; date: str
   const pending = copy.isPending;
 
   const all = useMemo(() => people.data ?? [], [people.data]);
-  const others = all.filter(p => p.id !== sourceId);
   const source = all.find(p => p.id === sourceId);
-  const effTargetId = targetId !== null && all.some(p => p.id === targetId) ? targetId : (others[0]?.id ?? source?.id ?? null);
+  const effTargetId = targetId !== null && all.some(p => p.id === targetId) ? targetId : (source?.id ?? null);
   const target = all.find(p => p.id === effTargetId);
 
   const srcDateOk = isValidCalendarDate(sourceDate.trim());
@@ -80,6 +79,7 @@ export function TennisFoodPlanCopy({ person, date }: { person: Person; date: str
   const srcDay = useGetDayActivity({ personId: sourceId, date: sourceDate.trim() }, { query: { enabled: srcOn } });
   const srcEntries = useListMealEntries({ personId: sourceId, date: sourceDate.trim() }, { query: { enabled: srcOn } });
   const tgtDay = useGetDayActivity({ personId: effTargetId ?? 0, date: targetDate.trim() }, { query: { enabled: tgtOn } });
+  const tgtEntries = useListMealEntries({ personId: effTargetId ?? 0, date: targetDate.trim() }, { query: { enabled: tgtOn } });
 
   const plan = srcOn ? srcDay.data?.tennis : undefined;
   const diets = useMemo(() => [...(plan?.diets ?? [])].sort((a, b) => timeMinutes(a.time) - timeMinutes(b.time) || a.id.localeCompare(b.id)), [plan]);
@@ -88,15 +88,12 @@ export function TennisFoodPlanCopy({ person, date }: { person: Person; date: str
   const srcFailed = srcDay.isError || srcEntries.isError;
   const srcReady = srcOn && !srcFailed && srcDay.isSuccess && srcEntries.isSuccess && !srcFetching;
   const tgtSlots = tgtOn && tgtDay.isSuccess ? (tgtDay.data?.tennis?.diets?.length ?? 0) : 0;
-  const tgtReady = tgtOn && tgtDay.isSuccess && !tgtDay.isFetching && !tgtDay.isError;
-  const targetPlan = tgtReady ? tgtDay.data?.tennis ?? plan : undefined;
-  const targetActivityProblem = targetPlan
-    ? tennisActivityPlanProblem(tgtDay.data?.activityType ?? 'rest', targetPlan)
-    : null;
+  const tgtReady = tgtOn && tgtDay.isSuccess && !tgtDay.isFetching && !tgtDay.isError &&
+    tgtEntries.isSuccess && !tgtEntries.isFetching && !tgtEntries.isError;
   const key = `${effTargetId}|${targetDate.trim()}`;
   const justCopied = lastKey === key;
   const noSlots = srcReady && diets.length === 0;
-  const canReview = srcReady && diets.length > 0 && tgtReady && tgtSlots === 0 && !targetActivityProblem && !sameDay && !justCopied && !pending;
+  const canReview = srcReady && diets.length > 0 && tgtReady && tgtSlots === 0 && !sameDay && !justCopied && !pending;
 
   function reset() { setReview(null); setError(null); setDone(null); }
   function pickSource(id: number) {
@@ -125,8 +122,8 @@ export function TennisFoodPlanCopy({ person, date }: { person: Person; date: str
 
   async function confirm() {
     if (!review || gate.current || pending) return;
-    if (!srcReady || !tgtReady || tgtSlots > 0 || targetActivityProblem || sameDay || justCopied || !plan || !source) {
-      setError(new Error(targetActivityProblem ?? 'Check the source and destination, then review again.'));
+    if (!srcReady || !tgtReady || tgtSlots > 0 || sameDay || justCopied || !plan || !source) {
+      setError(new Error('Check the source and destination, then review again.'));
       return;
     }
     const fresh = getTennisFoodPlanFingerprint(plan, srcEntries.data ?? [], source.name);
@@ -225,9 +222,9 @@ export function TennisFoodPlanCopy({ person, date }: { person: Person; date: str
       {srcOn && (srcDay.isLoading || srcEntries.isLoading) ? <LoadingBlock rows={1} height={60} /> : null}
       {srcOn && srcFailed ? <ErrorBox error={srcDay.error ?? srcEntries.error} onRetry={() => { void srcDay.refetch(); void srcEntries.refetch(); }} /> : null}
       {tgtOn && tgtDay.isError ? <ErrorBox error={tgtDay.error} onRetry={() => tgtDay.refetch()} /> : null}
+      {tgtOn && tgtEntries.isError ? <ErrorBox error={tgtEntries.error} onRetry={() => tgtEntries.refetch()} /> : null}
       {noSlots ? <View testID="copy-cannot-copy"><Muted>Cannot copy: {source?.name} has no timed food slots on {sourceDate.trim()}. Choose another person or a date with timed slots{dateList.length ? ` (for example ${dateList[0].date})` : ''}.</Muted></View> : null}
       {sameDay ? <View testID="copy-same-day-error"><Muted>For the same person, choose a destination date different from the source date.</Muted></View> : null}
-      {targetActivityProblem ? <View testID="copy-activity-mismatch"><Muted>Destination conflict: {targetActivityProblem}</Muted></View> : null}
       {tgtReady && tgtSlots > 0 && !sameDay && !justCopied ? <ErrorBox error={new Error(`${target?.name} already has ${tgtSlots} timed food ${tgtSlots === 1 ? 'slot' : 'slots'} on ${targetDate.trim()}. Existing slots and foods are never replaced. Choose another date.`)} /> : null}
       {justCopied && !done ? <Muted>Already copied here. Change the destination person or date to copy again.</Muted> : null}
 
@@ -235,6 +232,8 @@ export function TennisFoodPlanCopy({ person, date }: { person: Person; date: str
         <View testID="copy-review" />
         <Text style={label}>Review copy</Text>
         <Text style={{ fontFamily: F.semi, fontSize: 14, color: c.foreground }}>{review.sourceName}, {review.input.sourceDate} to {review.targetName}, {review.input.targetDate}</Text>
+        <Muted>Destination: {activityLabel(tgtDay.data?.activityType ?? 'rest')} · {tgtEntries.data?.length ?? 0} existing food portions will be kept. Existing sessions and nutrition goals will not change.</Muted>
+        {!tgtDay.data?.tennis ? <Muted>No tennis sessions are saved on the destination. A food-only timetable will be created with the tennis plan set to Rest; the day’s activity stays unchanged. You can add sessions later.</Muted> : null}
         <Text style={{ fontFamily: F.bold, fontSize: 13, color: c.primary }}>{review.slots} {review.slots === 1 ? 'slot' : 'slots'} and {review.foods} {review.foods === 1 ? 'food portion' : 'food portions'} will be added</Text>
         {diets.map(d => {
           const list = linked.filter(e => e.tennisDietId === d.id);
@@ -243,10 +242,10 @@ export function TennisFoodPlanCopy({ person, date }: { person: Person; date: str
             {list.length ? list.map(e => <Muted key={e.id}>{e.food.name}: {n(e.grams, 1)} g, {e.meal}</Muted>) : <Muted>Empty slot, no foods</Muted>}
           </View>;
         })}
-        <Muted>Rules: every slot is copied, including empty ones, with exact grams, meal, times and stage. New IDs are created and each food is counted once. Only foods attached to timetable slots are copied, not ordinary portions. Existing tennis sessions and notes for {review.targetName} are kept; if there is no tennis day, the source sessions and notes are copied too. Targets, profile, meal times and notifications are unchanged, and no alerts are copied. Nothing existing is replaced or deleted.</Muted>
+        <Muted>Rules: every slot is copied, including empty ones, with exact grams, meal, times and stage. New IDs are created and each food is counted once. Only foods attached to timetable slots are copied, not ordinary portions. Tennis sessions, notes and ratings are not copied. Destination activity, targets, profile, meal times and notifications are unchanged, and no alerts are copied. Food times stay editable and do not follow session changes. Nothing existing is replaced or deleted.</Muted>
         <Muted>These are copied portion amounts, not personalized nutrition recommendations.</Muted>
         {srcFetching ? <Muted>Refreshing the source plan. Confirm will be available when it finishes.</Muted> : null}
-        <Btn icon="check" label="Confirm copy" loading={pending} disabled={pending || !srcReady || !tgtReady || tgtSlots > 0 || !!targetActivityProblem || sameDay || justCopied} testID="button-confirm-tennis-copy" onPress={() => void confirm()} />
+        <Btn icon="check" label="Confirm copy" loading={pending} disabled={pending || !srcReady || !tgtReady || tgtSlots > 0 || sameDay || justCopied} testID="button-confirm-tennis-copy" onPress={() => void confirm()} />
         <Btn variant="ghost" label="Cancel" disabled={pending} testID="button-cancel-tennis-copy" onPress={() => { setReview(null); setError(null); }} />
       </Card> : <Btn icon="eye" label="Show review" disabled={!canReview} testID="button-review-tennis-copy" onPress={openReview} />}
 

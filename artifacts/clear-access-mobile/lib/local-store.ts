@@ -1,6 +1,6 @@
 import { referenceFoodSeed } from './reference-food-seed';
 import { calculatePlanningEstimates, getAgeOnDate } from './planning-targets';
-import { isTennisPlan, isTennisDiet, tennisPlanProblem, tennisActivityPlanProblem } from './tennis-planning';
+import { emptyTennisPlan, isTennisPlan, isTennisDiet, tennisPlanProblem, tennisActivityPlanProblem } from './tennis-planning';
 import { getMealTimes, isMealTimes } from './meal-scheduling';
 import { isMealAlerts, type ReminderSource } from './meal-reminders';
 import { getTennisFoodPlanFingerprint } from './tennis-copy';
@@ -2170,31 +2170,28 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
         }
         let target = draft.activities.find(day => day.personId === targetPerson.id && day.date === input.targetDate);
         if (target?.tennis?.diets?.length) fail('The destination already has a tennis food timetable. Choose another date; nothing was overwritten.');
-        if (!target?.tennis) {
-          const activityProblem = tennisActivityPlanProblem(target?.activityType ?? 'rest', source);
-          if (activityProblem) fail(activityProblem);
-        }
         // No replacement or deletion: ordinary meals and all destination preferences survive.
         if (!target) {
           target = { date: input.targetDate, personId: targetPerson.id, activityType: 'rest' };
           draft.activities.push(target);
         }
         const idMap = new Map<string, string>();
-        const used = new Set(sourceIds);
+        const used = new Set(draft.activities.flatMap(day => day.tennis?.diets?.map(slot => slot.id) ?? []));
+        const copyId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
         let sequence = 0;
         const diets = source.diets.map(slot => {
           let id: string;
-          do { id = `diet-copy-${targetPerson.id.toString(36)}-${input.targetDate}-${draft.nextEntryId.toString(36)}-${(sequence++).toString(36)}`; } while (used.has(id));
+          do { id = `diet-copy-${copyId}-${(sequence++).toString(36)}`; } while (used.has(id));
           used.add(id); idMap.set(slot.id, id);
           return { ...slot, id };
         });
         // Existing practice/match sessions are independent of imported food times.
         if (target.tennis) target.tennis = { ...target.tennis, diets };
-        else {
-          target.tennis = { ...clone(source), diets };
-          // A past experience score belongs to the source date, not the copied plan.
-          delete target.tennis.experienceRating;
-        }
+        // A food-only container has no sessions. Active modes require sessions,
+        // so use Rest without changing the separate destination activity.
+        else target.tennis = {
+          ...emptyTennisPlan('rest'), diets,
+        };
         if (entries.length && !target.mealTimes) target.mealTimes = getMealTimes();
         for (const entry of entries) {
           draft.entries.push({
