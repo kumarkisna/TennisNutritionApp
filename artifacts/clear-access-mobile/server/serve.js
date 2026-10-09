@@ -154,6 +154,15 @@ const server = http.createServer((req, res) => {
     pathname = pathname.slice(basePath.length) || '/';
   }
 
+  // The Median WebView starts at /web/; take it directly to the daily planner.
+  if (pathname === '/web' || pathname === '/web/') {
+    res.writeHead(302, {
+      location: `${basePath}/web/planner`,
+    });
+    res.end();
+    return;
+  }
+
   if (pathname === '/' || pathname === '/manifest') {
     const platform = req.headers['expo-platform'];
     if (platform === 'ios' || platform === 'android') {
