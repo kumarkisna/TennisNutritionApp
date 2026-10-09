@@ -54,9 +54,14 @@ export function mapTennisFoodSlots(source: TennisDiet[], destination: TennisDiet
 export function getTennisFoodDestinationFingerprint(
   activity: DayActivity | undefined, entries: MealEntry[], personName: string,
 ): string {
+  // getDayActivity materializes an unpersisted blank day as an empty Rest day.
+  // Treat that representation like no activity so previews fingerprint the same
+  // state that the atomic store sees before the first save.
+  const emptyRest = activity?.activityType === 'rest' && !activity.tennis &&
+    !activity.mealTimes && !activity.mealAlerts && !activity.tennisFoodImports;
   return JSON.stringify({
     personName,
-    activity: activity ?? null,
+    activity: emptyRest ? null : activity ?? null,
     entries: [...entries].sort((a, b) => a.id - b.id).map(entry => ({
       id: entry.id, meal: entry.meal, grams: entry.grams, tennisDietId: entry.tennisDietId ?? null, food: entry.food,
     })),

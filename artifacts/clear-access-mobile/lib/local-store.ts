@@ -2179,7 +2179,6 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
         if (input.expectedTargetName !== targetPerson.name) fail('The destination person changed. Review your selection and try again.');
         const source = draft.activities.find(day => day.personId === sourcePerson.id && day.date === input.sourceDate)?.tennis;
         if (!source?.diets?.length) fail('The source date has no tennis food timetable. Choose another date.');
-        const sourceActivity = draft.activities.find(day => day.personId === sourcePerson.id && day.date === input.sourceDate);
         const sourceIds = new Set(source.diets.map(slot => slot.id));
         const entries = draft.entries.filter(entry => entry.personId === sourcePerson.id &&
           entry.date === input.sourceDate && entry.tennisDietId && sourceIds.has(entry.tennisDietId));
@@ -2236,7 +2235,7 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
           ...emptyTennisPlan('rest'), diets: addedDiets,
         };
         target.tennisFoodImports = [...(target.tennisFoodImports ?? []), ...importRefs];
-        if (entries.length && !target.mealTimes) target.mealTimes = getMealTimes();
+        if (!merge && entries.length && !target.mealTimes) target.mealTimes = getMealTimes();
         for (const entry of entries) {
           draft.entries.push({
             id: draft.nextEntryId++, personId: targetPerson.id, date: input.targetDate,

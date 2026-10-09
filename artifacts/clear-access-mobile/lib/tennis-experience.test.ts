@@ -4,7 +4,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createLocalStore, LOCAL_STORAGE_KEY } from './local-store';
 import { emptyTennisPlan } from './tennis-planning';
-import { filterTennisPlanHistory, followingCalendarDate, getTennisFoodPlanFingerprint } from './tennis-copy';
+import {
+  filterTennisPlanHistory, followingCalendarDate, getTennisFoodDestinationFingerprint, getTennisFoodPlanFingerprint,
+} from './tennis-copy';
 import type { TennisPlanHistoryItem } from './local-models';
 
 class MemoryStorage {
@@ -118,11 +120,22 @@ test('copying never transfers the source score and preserves a destination score
     expectedSource: getTennisFoodPlanFingerprint(source, entries, 'Me'),
   };
   await store.saveDayActivity({ personId: target.id, date: dates[1], activityType: 'training_120' });
-  await store.copyTennisFoodPlan(input);
+  const firstInput = {
+    ...input, expectedTarget: getTennisFoodDestinationFingerprint(
+      await store.getDayActivity({ personId: target.id, date: dates[1] }),
+      await store.listMealEntries({ personId: target.id, date: dates[1] }), target.name,
+    ),
+  };
+  await store.copyTennisFoodPlan(firstInput);
   assert.equal((await store.getDayActivity({ personId: target.id, date: dates[1] })).tennis?.experienceRating, undefined);
   assert.equal((await store.getDayActivity({ personId, date: dates[0] })).tennis?.experienceRating, 9);
 
   await store.saveTennisPlan({ personId: target.id, date: dates[2], plan: { ...emptyTennisPlan('rest'), experienceRating: 4 } });
-  await store.copyTennisFoodPlan({ ...input, targetDate: dates[2] });
+  await store.copyTennisFoodPlan({
+    ...firstInput, targetDate: dates[2], expectedTarget: getTennisFoodDestinationFingerprint(
+      await store.getDayActivity({ personId: target.id, date: dates[2] }),
+      await store.listMealEntries({ personId: target.id, date: dates[2] }), target.name,
+    ),
+  });
   assert.equal((await store.getDayActivity({ personId: target.id, date: dates[2] })).tennis?.experienceRating, 4);
 });

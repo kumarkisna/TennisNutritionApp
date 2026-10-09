@@ -6,7 +6,10 @@ import {
   useTennisFoodPlanDates, useTennisPlanHistory,
   type CopyTennisFoodPlanInput, type DayActivityKind, type Person, type TennisPlan, type TennisPlanHistoryItem,
 } from '@/lib/local-api';
-import { filterTennisPlanHistory, followingCalendarDate, getTennisFoodPlanFingerprint } from '@/lib/tennis-copy';
+import {
+  filterTennisPlanHistory, followingCalendarDate, getTennisFoodDestinationFingerprint,
+  getTennisFoodImportKey, getTennisFoodPlanFingerprint, mapTennisFoodSlots,
+} from '@/lib/tennis-copy';
 import { dietPhaseLabels, timeMinutes } from '@/lib/tennis-planning';
 import { sportsActivities } from '@/lib/planning-targets';
 import { useOptionalPlanner } from '@/contexts/PlannerProvider';
@@ -14,8 +17,15 @@ import { useColors } from '@/hooks/useColors';
 import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, LoadingBlock, Muted, success, tap, warn } from '@/components/ui';
 import { n } from '@/lib/format';
 
-type Review = { input: CopyTennisFoodPlanInput; sourceName: string; targetName: string; slots: number; foods: number };
-type Done = { personId: number; date: string; label: string; slots: number; foods: number };
+type Review = {
+  input: CopyTennisFoodPlanInput; sourceName: string; targetName: string; slots: number; foods: number;
+  merge: boolean; matches: Array<{ sourceId: string; targetId: string | null }>;
+  destinationPortions: number; destinationCalories: number;
+};
+type Done = {
+  personId: number; date: string; label: string; slots: number; foods: number;
+  matchedSlots: number; addedSlots: number; merge: boolean;
+};
 type RatingFilter = 'any' | 'unrated' | `${number}`;
 type DayTypeFilter = 'any' | TennisPlan['mode'];
 type ActivityFilter = 'any' | DayActivityKind;
@@ -90,10 +100,17 @@ export function TennisFoodPlanCopy({ person, date }: { person: Person; date: str
   const tgtSlots = tgtOn && tgtDay.isSuccess ? (tgtDay.data?.tennis?.diets?.length ?? 0) : 0;
   const tgtReady = tgtOn && tgtDay.isSuccess && !tgtDay.isFetching && !tgtDay.isError &&
     tgtEntries.isSuccess && !tgtEntries.isFetching && !tgtEntries.isError;
+  const targetImportKeys = new Set((tgtDay.data?.tennisFoodImports ?? []).map(getTennisFoodImportKey));
+  const alreadyImported = !!source && diets.length > 0 &&
+    diets.some(slot => targetImportKeys.has(getTennisFoodImportKey({
+      sourcePersonBackupId: source.backupIds[0], sourceDate: sourceDate.trim(), sourceDietId: slot.id,
+    })));
   const key = `${effTargetId}|${targetDate.trim()}`;
   const justCopied = lastKey === key;
   const noSlots = srcReady && diets.length === 0;
-  const canReview = srcReady && diets.length > 0 && tgtReady && tgtSlots === 0 && !sameDay && !justCopied && !pending;
+  const mergeAllowed = sourceId !== effTargetId && tgtSlots > 0;
+  const canReviewCopy = srcReady && diets.length > 0 && tgtReady && tgtSlots === 0 && !sameDay && !justCopied && !alreadyImported && !pending;
+  const canReviewMerge = srcReady && diets.length > 0 && tgtReady && mergeAllowed && !alreadyImported && !justCopied && !pending;
 
   function reset() { setReview(null); setError(null); setDone(null); }
   function pickSource(id: number) {
@@ -108,21 +125,28 @@ export function TennisFoodPlanCopy({ person, date }: { person: Person; date: str
     reset();
   }
 
-  function openReview() {
-    if (!canReview || !source || !target || effTargetId === null || !plan) return;
+  function openReview(merge: boolean) {
+    if (!(merge ? canReviewMerge : canReviewCopy) || !source || !target || effTargetId === null || !plan || !tgtReady) return;
     setError(null); setDone(null);
+    const input: CopyTennisFoodPlanInput = {
+      sourcePersonId: sourceId, sourceDate: sourceDate.trim(), targetPersonId: effTargetId, targetDate: targetDate.trim(),
+      expectedSource: getTennisFoodPlanFingerprint(plan, srcEntries.data ?? [], source.name),
+      expectedTarget: getTennisFoodDestinationFingerprint(tgtDay.data, tgtEntries.data ?? [], target.name),
+      expectedTargetName: target.name, mergeExisting: merge,
+    };
+    const matches = merge ? mapTennisFoodSlots(diets, tgtDay.data?.tennis?.diets ?? []) :
+      diets.map(slot => ({ sourceId: slot.id, targetId: null }));
     setReview({
-      input: {
-        sourcePersonId: sourceId, sourceDate: sourceDate.trim(), targetPersonId: effTargetId, targetDate: targetDate.trim(),
-        expectedSource: getTennisFoodPlanFingerprint(plan, srcEntries.data ?? [], source.name), expectedTargetName: target.name,
-      },
-      sourceName: source.name, targetName: target.name, slots: diets.length, foods: linked.length,
+      input, sourceName: source.name, targetName: target.name, slots: diets.length, foods: linked.length,
+      merge, matches, destinationPortions: tgtEntries.data?.length ?? 0,
+      destinationCalories: (tgtEntries.data ?? []).reduce((sum, entry) => sum + entry.nutrition.calories, 0),
     });
   }
 
   async function confirm() {
     if (!review || gate.current || pending) return;
-    if (!srcReady || !tgtReady || tgtSlots > 0 || sameDay || justCopied || !plan || !source) {
+    if (!srcReady || !tgtReady || (!review.merge && tgtSlots > 0) ||
+      (review.merge && (!mergeAllowed || tgtSlots === 0)) || sameDay || justCopied || alreadyImported || !plan || !source) {
       setError(new Error('Check the source and destination, then review again.'));
       return;
     }
@@ -132,15 +156,30 @@ export function TennisFoodPlanCopy({ person, date }: { person: Person; date: str
       setError(new Error('The source plan or food timetable changed since you reviewed it. Your choices are kept; review the refreshed plan and confirm again.'));
       return;
     }
+    if (!target || getTennisFoodDestinationFingerprint(tgtDay.data, tgtEntries.data ?? [], target.name) !== review.input.expectedTarget) {
+      setReview(null); warn();
+      setError(new Error('The destination changed since you reviewed it. Refresh the destination and review again.'));
+      return;
+    }
     gate.current = true; setError(null);
     const snap = review;
     try {
       const r = await copy.mutateAsync({ data: snap.input });
       success();
-      setDone({ personId: r.personId, date: r.date, label: `${snap.targetName} on ${r.date}`, slots: r.copiedSlots, foods: r.copiedFoods });
+      setDone({
+        personId: r.personId, date: r.date, label: `${snap.targetName} on ${r.date}`,
+        slots: r.copiedSlots, foods: r.copiedFoods, matchedSlots: r.matchedSlots,
+        addedSlots: r.addedSlots, merge: snap.merge,
+      });
       setLastKey(`${snap.input.targetPersonId}|${snap.input.targetDate}`);
       setReview(null);
-    } catch (e) { warn(); setError(e); }
+    } catch (e) {
+      warn(); setError(e);
+      if (e instanceof Error && /changed since review|source food plan changed|destination person changed|already been imported/i.test(e.message)) {
+        setReview(null);
+        void srcDay.refetch(); void srcEntries.refetch(); void tgtDay.refetch(); void tgtEntries.refetch();
+      }
+    }
     finally { gate.current = false; }
   }
 
@@ -225,33 +264,47 @@ export function TennisFoodPlanCopy({ person, date }: { person: Person; date: str
       {tgtOn && tgtEntries.isError ? <ErrorBox error={tgtEntries.error} onRetry={() => tgtEntries.refetch()} /> : null}
       {noSlots ? <View testID="copy-cannot-copy"><Muted>Cannot copy: {source?.name} has no timed food slots on {sourceDate.trim()}. Choose another person or a date with timed slots{dateList.length ? ` (for example ${dateList[0].date})` : ''}.</Muted></View> : null}
       {sameDay ? <View testID="copy-same-day-error"><Muted>For the same person, choose a destination date different from the source date.</Muted></View> : null}
-      {tgtReady && tgtSlots > 0 && !sameDay && !justCopied ? <ErrorBox error={new Error(`${target?.name} already has ${tgtSlots} timed food ${tgtSlots === 1 ? 'slot' : 'slots'} on ${targetDate.trim()}. Existing slots and foods are never replaced. Choose another date.`)} /> : null}
+      {tgtReady && alreadyImported ? <ErrorBox error={new Error('This source timetable was already imported to this person and date. No portions will be added again.')} /> : null}
+      {tgtReady && tgtSlots > 0 && !sameDay && !justCopied && !alreadyImported && !mergeAllowed ? <ErrorBox error={new Error(`${target?.name} already has ${tgtSlots} timed food ${tgtSlots === 1 ? 'slot' : 'slots'} on ${targetDate.trim()}. Same-person copies go to an empty day.`)} /> : null}
       {justCopied && !done ? <Muted>Already copied here. Change the destination person or date to copy again.</Muted> : null}
 
       {review ? <Card tone="mint">
         <View testID="copy-review" />
-        <Text style={label}>Review copy</Text>
+        <Text style={label}>{review.merge ? 'Review merge' : 'Review copy'}</Text>
         <Text style={{ fontFamily: F.semi, fontSize: 14, color: c.foreground }}>{review.sourceName}, {review.input.sourceDate} to {review.targetName}, {review.input.targetDate}</Text>
-        <Muted>Destination: {activityLabel(tgtDay.data?.activityType ?? 'rest')} · {tgtEntries.data?.length ?? 0} existing food portions will be kept. Existing sessions and nutrition goals will not change.</Muted>
+        <Muted>Destination: {activityLabel(tgtDay.data?.activityType ?? 'rest')} · {review.destinationPortions} existing food portions ({n(review.destinationCalories, 1)} kcal) will be kept. Existing sessions and nutrition goals will not change.</Muted>
         {!tgtDay.data?.tennis ? <Muted>No tennis sessions are saved on the destination. A food-only timetable will be created with the tennis plan set to Rest; the day’s activity stays unchanged. You can add sessions later.</Muted> : null}
-        <Text style={{ fontFamily: F.bold, fontSize: 13, color: c.primary }}>{review.slots} {review.slots === 1 ? 'slot' : 'slots'} and {review.foods} {review.foods === 1 ? 'food portion' : 'food portions'} will be added</Text>
+        <Text style={{ fontFamily: F.bold, fontSize: 13, color: c.primary }}>
+          {review.merge
+            ? `${review.matches.filter(match => match.targetId).length} matching ${review.matches.filter(match => match.targetId).length === 1 ? 'slot maps' : 'slots map'} to existing times; ${review.matches.filter(match => !match.targetId).length} ${review.matches.filter(match => !match.targetId).length === 1 ? 'new slot' : 'new slots'} will be added.`
+            : `${review.slots} ${review.slots === 1 ? 'slot' : 'slots'} will be added.`} {review.foods} {review.foods === 1 ? 'food portion' : 'food portions'} will be added; nutrition counts once per portion.
+        </Text>
         {diets.map(d => {
           const list = linked.filter(e => e.tennisDietId === d.id);
+          const mapped = review.matches.find(match => match.sourceId === d.id)?.targetId;
+          const destination = mapped ? tgtDay.data?.tennis?.diets?.find(slot => slot.id === mapped) : undefined;
           return <View key={d.id} style={{ gap: 1 }}>
-            <Text style={{ fontFamily: F.bold, fontSize: 13, color: c.foreground }}>{d.time} · {dietPhaseLabels[d.phase]}</Text>
+            <Text style={{ fontFamily: F.bold, fontSize: 13, color: c.foreground }}>
+              {d.time} · {dietPhaseLabels[d.phase]}{review.merge ? (destination ? ` · maps to existing ${destination.time} ${dietPhaseLabels[destination.phase]} slot` : ' · new slot') : ''}
+            </Text>
             {list.length ? list.map(e => <Muted key={e.id}>{e.food.name}: {n(e.grams, 1)} g, {e.meal}</Muted>) : <Muted>Empty slot, no foods</Muted>}
           </View>;
         })}
-        <Muted>Rules: every slot is copied, including empty ones, with exact grams, meal, times and stage. New IDs are created and each food is counted once. Only foods attached to timetable slots are copied, not ordinary portions. Tennis sessions, notes and ratings are not copied. Destination activity, targets, profile, meal times and notifications are unchanged, and no alerts are copied. Food times stay editable and do not follow session changes. Nothing existing is replaced or deleted.</Muted>
+        <Muted>Matching stage and time slots share the existing slot; non-matching slots stay separate. All listed source portions are additional, including foods similar to existing ones. Ordinary destination portions are kept. Sessions, notes, ratings, profile, references, goals, meal times and notifications are unchanged. Food times stay independently editable. Re-importing this source timetable to this day is blocked. Nothing is replaced or deleted.</Muted>
         <Muted>These are copied portion amounts, not personalized nutrition recommendations.</Muted>
         {srcFetching ? <Muted>Refreshing the source plan. Confirm will be available when it finishes.</Muted> : null}
-        <Btn icon="check" label="Confirm copy" loading={pending} disabled={pending || !srcReady || !tgtReady || tgtSlots > 0 || sameDay || justCopied} testID="button-confirm-tennis-copy" onPress={() => void confirm()} />
+        <Btn icon="check" label={review.merge ? 'Confirm merge' : 'Confirm copy'} loading={pending} disabled={pending || !srcReady || !tgtReady || (!review.merge && tgtSlots > 0) || (review.merge && !mergeAllowed) || sameDay || justCopied || alreadyImported} testID="button-confirm-tennis-copy" onPress={() => void confirm()} />
         <Btn variant="ghost" label="Cancel" disabled={pending} testID="button-cancel-tennis-copy" onPress={() => { setReview(null); setError(null); }} />
-      </Card> : <Btn icon="eye" label="Show review" disabled={!canReview} testID="button-review-tennis-copy" onPress={openReview} />}
+      </Card> : <>
+        {tgtReady && tgtSlots > 0 && mergeAllowed && !alreadyImported ? <Btn icon="eye" label="Review merge into existing timetable" disabled={!canReviewMerge} testID="button-review-tennis-merge" onPress={() => openReview(true)} /> : null}
+        <Btn icon="eye" label="Show copy review" disabled={!canReviewCopy} testID="button-review-tennis-copy" onPress={() => openReview(false)} />
+      </>}
 
       {error ? <ErrorBox error={error} /> : null}
       {done ? <View accessibilityLiveRegion="polite" testID="status-tennis-copy-result" style={{ backgroundColor: c.accent, borderColor: c.accentBorder, borderWidth: 1, borderRadius: 12, padding: 12, gap: 8 }}>
-        <Text style={{ fontFamily: F.semi, fontSize: 13, color: c.accentForeground }}>Copied {done.slots} {done.slots === 1 ? 'slot' : 'slots'} and {done.foods} {done.foods === 1 ? 'food' : 'foods'} to {done.label}.</Text>
+        <Text style={{ fontFamily: F.semi, fontSize: 13, color: c.accentForeground }}>
+          {done.merge ? 'Merged' : 'Copied'} {done.slots} {done.slots === 1 ? 'source slot' : 'source slots'} ({done.matchedSlots} matched, {done.addedSlots} added) and {done.foods} {done.foods === 1 ? 'portion' : 'portions'} to {done.label}.
+        </Text>
         {planner ? <View style={{ alignSelf: 'flex-start' }}><Btn small variant="ghost" icon="arrow-right" label="View copied plan" testID="button-view-copied-tennis-plan" onPress={view} /></View> : null}
       </View> : null}
     </>}
