@@ -3,7 +3,8 @@
 - [Sports workbook target integrity](sports-workbook-targets.md) — iron target cells were stored as Excel dates; never turn them into mg/day targets without a verified source.
 - [Direct React server-render tests](react-ssr-tests.md) — standalone TSX runners may use classic JSX despite Vite's automatic runtime.
 - [Wouter links in server-render tests](wouter-ssr-tests.md) — SSR tests that render a Link need a static location hook, not browser or memory-location hooks.
-- [Local backup validation boundary](local-backup-validation.md) — keep transfer scopes distinct, validate legacy-safe imports, and offer Android local-save beside sharing.
+- [Local backup validation boundary](local-backup-validation.md) — preserve local transfer scopes, stable person identity, additive restores, and Android local-save beside sharing.
+- [Expo Router query-string interop](expo-router-query-string-interop.md) — preserve the security override and bridge v9's default export to Router's named-export calls.
 - [SVG preview event verification](svg-preview-events.md) — test rendered-element clicks; React component callbacks can survive in props but be discarded by native-to-web normalization.
 - [Native appearance overrides](native-appearance-overrides.md) — native reset contracts differ from older SDK examples; explicit app themes must also update native controls.
 - [Expo startup readiness](expo-devtools-startup.md) — verify meaningful rendering; keep Expo tunnel subdomain labels short enough for DNS limits.

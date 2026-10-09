@@ -29,6 +29,7 @@ export function AllPeoplePlannerTransfer() {
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<PendingFile | null>(null);
   const [importNames, setImportNames] = useState<string[]>([]);
+  const [targetPersonIds, setTargetPersonIds] = useState<Array<number | null>>([]);
   const [error, setError] = useState<Error | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const isPlannerQuery = (query: { queryKey: readonly unknown[] }) =>
@@ -61,6 +62,7 @@ export function AllPeoplePlannerTransfer() {
       const preview = await previewLocalAllPeoplePlannerImport(file.serialized);
       setPending({ ...file, preview });
       setImportNames(preview.people.map(person => person.suggestedName));
+      setTargetPersonIds(preview.people.map(person => person.matchedPerson?.id ?? null));
     } catch (problem) {
       setError(problem instanceof Error ? problem : new Error(String(problem)));
     } finally {
@@ -74,12 +76,16 @@ export function AllPeoplePlannerTransfer() {
     setError(null);
     try {
       await client.cancelQueries({ predicate: isPlannerQuery });
-      const result = await importLocalAllPeoplePlanner(pending.serialized, importNames);
+      const result = await importLocalAllPeoplePlanner(pending.serialized, importNames, targetPersonIds);
       setPending(null);
       try {
         await client.invalidateQueries({ predicate: isPlannerQuery });
+        const profileActions = [
+          result.people.length ? `${countLabel(result.people.length, 'profile', 'profiles')} added` : '',
+          result.matchedPeople.length ? `${countLabel(result.matchedPeople.length, 'profile', 'profiles')} restored into existing profiles` : '',
+        ].filter(Boolean).join('; ');
         setNotice(
-          `${countLabel(result.people.length, 'person', 'people')} added with ` +
+          `${profileActions} with ` +
           `${countLabel(result.entriesImported, 'meal', 'meals')}, ` +
           `${countLabel(result.activitiesImported, 'planned day', 'planned days')}, ` +
           `${countLabel(result.heightRecordsImported, 'height record', 'height records')}, ` +
@@ -96,8 +102,12 @@ export function AllPeoplePlannerTransfer() {
     }
   }
 
-  const nameKeys = importNames.map(name => name.trim().toLocaleLowerCase());
+  const nameKeys = importNames
+    .filter((_, index) => targetPersonIds[index] == null)
+    .map(name => name.trim().toLocaleLowerCase());
   const hasInvalidNames = nameKeys.some(name => !name) || new Set(nameKeys).size !== nameKeys.length;
+  const selectedTargets = targetPersonIds.filter((id): id is number => id !== null);
+  const hasRepeatedTargets = new Set(selectedTargets).size !== selectedTargets.length;
   const preview = pending?.preview;
   const mealCount = preview?.people.reduce((total, person) => total + person.entries, 0) ?? 0;
   const activityCount = preview?.people.reduce((total, person) => total + person.activities, 0) ?? 0;
@@ -119,12 +129,39 @@ export function AllPeoplePlannerTransfer() {
         {' '}{countLabel(activityCount, 'planned day', 'planned days')} · {countLabel(heightCount, 'height record', 'height records')} ·
         {' '}{countLabel(weightCount, 'weigh-in', 'weigh-ins')} · {countLabel(preview.foods, 'food', 'foods')}
       </Muted>
-      <Muted>Import adds these profiles and records. It does not replace existing people or plans. Matching foods are reused; other foods are added to the shared library.</Muted>
+      <Muted>Matching backup IDs restore into the same people. For a first import, you can link a same-name profile or import separately. Existing profile settings and records are preserved; missing records are added.</Muted>
       {preview.people.map((person, index) => <View key={`${person.personName}-${index}`} style={{ gap: 5 }}>
         <Text style={{ fontFamily: F.semi, color: c.foreground }}>
           {person.personName}{person.nameConflict ? ' · name conflict' : ''}
         </Text>
-        <TextInput
+        {person.matchedPerson && targetPersonIds[index] === person.matchedPerson.id
+          ? <Muted>Backup ID matched {person.matchedPerson.name}; missing records will be restored there.</Muted>
+          : null}
+        {!person.matchedPerson && person.sameNamePerson ? <View style={{ gap: 5 }}>
+          <Muted>The name matches an existing profile, but the backup IDs differ. Link it if this is the same person.</Muted>
+          <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+            <Btn
+              small
+              label={`Restore into ${person.sameNamePerson.name}`}
+              variant={targetPersonIds[index] === person.sameNamePerson.id ? 'primary' : 'ghost'}
+              testID={`button-link-all-people-${index}`}
+              onPress={() => setTargetPersonIds(current => current.map((id, targetIndex) =>
+                targetIndex === index ? person.sameNamePerson!.id : id))}
+            />
+            <Btn
+              small
+              label="Import separately"
+              variant={targetPersonIds[index] == null ? 'primary' : 'ghost'}
+              testID={`button-unlink-all-people-${index}`}
+              onPress={() => setTargetPersonIds(current => current.map((id, targetIndex) =>
+                targetIndex === index ? null : id))}
+            />
+          </View>
+        </View> : null}
+        {!person.hasStableIdentity && targetPersonIds[index] == null
+          ? <Muted>This older file has no stable backup ID, so it cannot be matched automatically.</Muted>
+          : null}
+        {targetPersonIds[index] == null ? <TextInput
           testID={`input-all-people-import-name-${index}`}
           value={importNames[index] ?? ''}
           onChangeText={value => setImportNames(current => current.map((name, nameIndex) => nameIndex === index ? value : name))}
@@ -133,10 +170,11 @@ export function AllPeoplePlannerTransfer() {
           autoCapitalize="words"
           maxLength={80}
           style={{ minHeight: 44, paddingHorizontal: 12, borderWidth: 1, borderRadius: 12, borderColor: c.input, backgroundColor: c.card, fontFamily: F.medium, fontSize: 15, color: c.foreground }}
-        />
+        /> : null}
       </View>)}
-      {hasInvalidNames ? <Muted>Each imported profile needs a unique name.</Muted> : null}
-      <Btn icon="check" label="Add all profiles" loading={busy} disabled={hasInvalidNames} testID="button-confirm-import-all-people" onPress={() => void importPeople()} />
+      {hasInvalidNames ? <Muted>Each new profile needs a unique name.</Muted> : null}
+      {hasRepeatedTargets ? <Muted>Each existing profile can be selected only once.</Muted> : null}
+      <Btn icon="check" label="Restore people" loading={busy} disabled={hasInvalidNames || hasRepeatedTargets} testID="button-confirm-import-all-people" onPress={() => void importPeople()} />
       <Btn variant="ghost" label="Cancel" disabled={busy} testID="button-cancel-import-all-people" onPress={() => { setPending(null); setError(null); }} />
     </View> : null}
     {busy && !pending ? <Muted>Preparing all-people file…</Muted> : null}

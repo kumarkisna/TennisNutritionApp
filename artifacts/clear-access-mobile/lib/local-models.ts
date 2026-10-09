@@ -54,6 +54,7 @@ export type Nutrition = {
 
 export type Person = {
   id: number;
+  backupIds: string[];
   name: string;
   isDefault: boolean;
   weightKg: number | null;

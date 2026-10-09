@@ -189,7 +189,13 @@ test('migrates v1 data in-place without losing people, foods, entries, activitie
   await store.saveDayActivity({ date: '2020-03-04', personId: custom.id, activityType: 'strength' });
   const current = await store.exportForTests() as Record<string, unknown>;
   const legacyPeople = (current.people as Array<Record<string, unknown>>).map(person => {
-    const { dateOfBirth: _dob, growthReferenceSex: _sex, nutritionGoal: _goal, ...legacyPerson } = person;
+    const {
+      backupIds: _backupIds,
+      dateOfBirth: _dob,
+      growthReferenceSex: _sex,
+      nutritionGoal: _goal,
+      ...legacyPerson
+    } = person;
     return legacyPerson;
   });
   const { heightRecords: _records, nextHeightRecordId: _heightId, ...legacy } = current;
@@ -210,7 +216,7 @@ test('migrates v1 data in-place without losing people, foods, entries, activitie
   assert.equal((await migratedStore.getDayActivity({ date: '2020-03-04', personId: custom.id })).activityType, 'strength');
   assert.equal((await migratedStore.listHeightRecords()).length, 0);
   const migrated = JSON.parse(storage.values.get('clear-access-mobile:planner:v1')!);
-  assert.equal(migrated.version, 5);
+  assert.equal(migrated.version, 6);
   assert.equal(migrated.nextPersonId, current.nextPersonId);
   assert.equal(migrated.nextFoodId, current.nextFoodId);
   assert.equal(migrated.nextEntryId, current.nextEntryId);
@@ -237,7 +243,7 @@ test('migrates v2 local data and old backups with no nutrition goal while preser
   await source.createMealEntry({ date: '2020-03-04', personId: person.id, meal: 'lunch', foodId: food.id, grams: 125 });
   const current = await source.exportForTests() as Record<string, unknown>;
   const legacyPeople = (current.people as Array<Record<string, unknown>>).map(candidate => {
-    const { nutritionGoal: _goal, ...legacyPerson } = candidate;
+    const { backupIds: _backupIds, nutritionGoal: _goal, ...legacyPerson } = candidate;
     return legacyPerson;
   });
   const legacyData = { ...current, version: 2, people: legacyPeople };
@@ -247,7 +253,7 @@ test('migrates v2 local data and old backups with no nutrition goal while preser
   const migratedPeople = await migratedStore.listPeople();
   assert.equal(migratedPeople.find(candidate => candidate.id === person.id)?.nutritionGoal, null);
   const migrated = JSON.parse(storage.values.get('clear-access-mobile:planner:v1')!);
-  assert.equal(migrated.version, 5);
+  assert.equal(migrated.version, 6);
   assert.deepEqual(migrated.foods, current.foods);
   assert.deepEqual(migrated.entries, current.entries);
   assert.deepEqual(migrated.activities, current.activities);
@@ -269,10 +275,10 @@ test('migrates v3 local data and backups by clearing ages without DOB and recalc
     dateOfBirth: '2000-01-01',
   });
   const current = await source.exportForTests() as Record<string, unknown>;
-  const legacyPeople = (current.people as Array<Record<string, unknown>>).map(person => ({
-    ...person,
-    ageYears: person.dateOfBirth === null ? 16 : 99,
-  }));
+  const legacyPeople = (current.people as Array<Record<string, unknown>>).map(person => {
+    const { backupIds: _backupIds, ...legacyPerson } = person;
+    return { ...legacyPerson, ageYears: person.dateOfBirth === null ? 16 : 99 };
+  });
   const versionThree = { ...current, version: 3, people: legacyPeople };
 
   storage.values.set('clear-access-mobile:planner:v1', JSON.stringify(versionThree));
@@ -280,7 +286,7 @@ test('migrates v3 local data and backups by clearing ages without DOB and recalc
   const migratedPeople = await migratedStore.listPeople();
   assert.equal(migratedPeople.find(person => person.id === noDob.id)?.ageYears, null);
   assert.equal(migratedPeople.find(person => person.id === withDob.id)?.ageYears, getAgeOnDate('2000-01-01', today()));
-  assert.equal(JSON.parse(storage.values.get('clear-access-mobile:planner:v1')!).version, 5);
+  assert.equal(JSON.parse(storage.values.get('clear-access-mobile:planner:v1')!).version, 6);
 
   const oldBackup = JSON.parse(await source.exportBackup());
   oldBackup.data = versionThree;
@@ -297,7 +303,7 @@ test('migrates v4 local data and backups with empty progress history and no targ
   const person = await source.createPerson({ ...baselinePerson('Version four'), weightKg: 72 });
   await source.createHeightRecord({ personId: person.id, date: '2020-01-02', heightCm: 170 });
   const current = await source.exportForTests() as Record<string, unknown>;
-  const people = (current.people as Array<Record<string, unknown>>).map(({ targetWeightKg: _target, ...legacyPerson }) => legacyPerson);
+  const people = (current.people as Array<Record<string, unknown>>).map(({ backupIds: _backupIds, targetWeightKg: _target, ...legacyPerson }) => legacyPerson);
   const { weightRecords: _weights, nextWeightRecordId: _weightId, ...legacyData } = current;
   const versionFour = { ...legacyData, version: 4, people };
   storage.values.set('clear-access-mobile:planner:v1', JSON.stringify(versionFour));
@@ -308,7 +314,7 @@ test('migrates v4 local data and backups with empty progress history and no targ
   assert.equal(migratedPerson.weightKg, 72);
   assert.equal((await migratedStore.listHeightRecords({ personId: person.id })).length, 1);
   assert.deepEqual(await migratedStore.listWeightRecords(), []);
-  assert.equal(JSON.parse(storage.values.get('clear-access-mobile:planner:v1')!).version, 5);
+  assert.equal(JSON.parse(storage.values.get('clear-access-mobile:planner:v1')!).version, 6);
   assert.equal((await migratedStore.createWeightRecord({ personId: person.id, date: '2020-01-03', weightKg: 71 })).id, 1);
 
   const legacyBackup = JSON.parse(await source.exportBackup());
@@ -318,6 +324,33 @@ test('migrates v4 local data and backups with empty progress history and no targ
   assert.equal((await restored.listPeople()).find(candidate => candidate.id === person.id)?.targetWeightKg, null);
   assert.deepEqual(await restored.listWeightRecords(), []);
   assert.equal((await restored.listHeightRecords({ personId: person.id })).length, 1);
+});
+
+test('migrates v5 local storage and backups by assigning stable person IDs once', async () => {
+  const storage = new MemoryStorage();
+  const source = createLocalStore(storage);
+  await source.createPerson(baselinePerson('Version five'));
+  const current = await source.exportForTests() as Record<string, unknown>;
+  const legacyPeople = (current.people as Array<Record<string, unknown>>)
+    .map(({ backupIds: _backupIds, ...person }) => person);
+  const versionFive = { ...current, version: 5, people: legacyPeople };
+  storage.values.set('clear-access-mobile:planner:v1', JSON.stringify(versionFive));
+
+  const migratedStore = createLocalStore(storage);
+  const firstLoad = await migratedStore.listPeople();
+  const assignedIds = firstLoad.map(person => person.backupIds[0]);
+  assert.equal(new Set(assignedIds).size, firstLoad.length);
+  assert.ok(assignedIds.every(id => typeof id === 'string' && id.length >= 20));
+  assert.equal(JSON.parse(storage.values.get('clear-access-mobile:planner:v1')!).version, 6);
+  const secondLoad = await createLocalStore(storage).listPeople();
+  assert.deepEqual(secondLoad.map(person => person.backupIds), firstLoad.map(person => person.backupIds));
+
+  const oldBackup = JSON.parse(await source.exportBackup());
+  oldBackup.data = versionFive;
+  const restored = createLocalStore(new MemoryStorage());
+  await restored.restoreBackup(JSON.stringify(oldBackup));
+  assert.equal((await restored.listPeople()).length, firstLoad.length);
+  assert.ok((await restored.listPeople()).every(person => person.backupIds.length === 1));
 });
 
 test('calculates age from DOB on person creation and clears it when DOB is removed', async () => {
@@ -1216,6 +1249,65 @@ test('person planner files include linked records and foods, remap IDs, and leav
   assert.equal(untouchedEntries[0].food.caloriesPer100g, 190);
 });
 
+test('person planner import links a same-name profile, preserves its settings, and is idempotent by backup ID', async () => {
+  const source = createLocalStore(new MemoryStorage());
+  const sourcePerson = (await source.listPeople())[0];
+  await source.updatePerson(sourcePerson.id, { weightKg: 72 });
+  const food = await source.createFood({
+    name: 'Identity-linked meal food',
+    category: 'other',
+    caloriesPer100g: 130,
+    proteinPer100g: 8,
+    carbsPer100g: 18,
+    fatPer100g: 3,
+    fiberPer100g: 4,
+  });
+  const date = '2020-06-12';
+  await source.createMealEntry({ date, personId: sourcePerson.id, meal: 'lunch', foodId: food.id, grams: 140 });
+  await source.saveDayActivity({ date, personId: sourcePerson.id, activityType: 'training_60' });
+  await source.saveMealTime({ date, personId: sourcePerson.id, meal: 'lunch', time: '12:30' });
+  const serialized = await source.exportPersonPlanner(sourcePerson.id);
+
+  const destination = createLocalStore(new MemoryStorage());
+  const existingPerson = (await destination.listPeople())[0];
+  await destination.updatePerson(existingPerson.id, { weightKg: 65 });
+  await destination.saveDayActivity({ date, personId: existingPerson.id, activityType: 'rest' });
+
+  const preview = await destination.previewPersonPlannerImport(serialized);
+  assert.equal(preview.hasStableIdentity, true);
+  assert.equal(preview.matchedPerson, null);
+  assert.equal(preview.sameNamePerson?.id, existingPerson.id);
+  assert.equal(preview.nameConflict, true);
+
+  const first = await destination.importPersonPlanner(
+    serialized,
+    preview.suggestedName,
+    preview.sameNamePerson!.id,
+  );
+  assert.equal(first.matchedExisting, true);
+  assert.equal(first.person.id, existingPerson.id);
+  assert.equal(first.person.name, existingPerson.name);
+  assert.equal(first.person.weightKg, 65);
+  assert.equal(first.entriesImported, 1);
+  assert.equal(first.activitiesImported, 1);
+  assert.equal((await destination.listPeople()).length, 1);
+  assert.equal((await destination.listMealEntries({ date, personId: existingPerson.id })).length, 1);
+  const mergedActivity = await destination.getDayActivity({ date, personId: existingPerson.id });
+  assert.equal(mergedActivity.activityType, 'rest');
+  assert.equal(mergedActivity.mealTimes?.lunch, '12:30');
+
+  const repeatedPreview = await destination.previewPersonPlannerImport(serialized);
+  assert.equal(repeatedPreview.matchedPerson?.id, existingPerson.id);
+  assert.equal(repeatedPreview.nameConflict, false);
+  const repeated = await destination.importPersonPlanner(serialized, repeatedPreview.suggestedName);
+  assert.equal(repeated.matchedExisting, true);
+  assert.equal(repeated.entriesImported, 0);
+  assert.equal(repeated.activitiesImported, 0);
+  assert.equal(repeated.foodsImported, 0);
+  assert.equal((await destination.listMealEntries({ date, personId: existingPerson.id })).length, 1);
+  assert.equal((await destination.listPeople()).length, 1);
+});
+
 test('all-people planner files add every profile and its history without replacing destination data', async () => {
   const source = createLocalStore(new MemoryStorage());
   const sourceDefault = (await source.listPeople()).find(person => person.isDefault)!;
@@ -1310,6 +1402,61 @@ test('all-people planner files add every profile and its history without replaci
   const untouched = await destination.listMealEntries({ date: '2020-05-11', personId: existingPerson.id });
   assert.equal(untouched.length, 1);
   assert.equal(untouched[0].food.id, unrelatedFood.id);
+});
+
+test('all-people planner imports link name conflicts once and automatically match stable IDs thereafter', async () => {
+  const source = createLocalStore(new MemoryStorage());
+  const sourceDefault = (await source.listPeople())[0];
+  const sourceOther = await source.createPerson(baselinePerson('Nila'));
+  const food = await source.createFood({
+    name: 'All-people identity food',
+    category: 'other',
+    caloriesPer100g: 125,
+    proteinPer100g: 7,
+    carbsPer100g: 17,
+    fatPer100g: 2,
+    fiberPer100g: 3,
+  });
+  const date = '2020-07-18';
+  await source.createMealEntry({ date, personId: sourceDefault.id, meal: 'breakfast', foodId: food.id, grams: 90 });
+  await source.createMealEntry({ date, personId: sourceOther.id, meal: 'lunch', foodId: food.id, grams: 110 });
+  const serialized = await source.exportAllPeoplePlanner();
+
+  const destination = createLocalStore(new MemoryStorage());
+  const existingDefault = (await destination.listPeople())[0];
+  const preview = await destination.previewAllPeoplePlannerImport(serialized);
+  assert.equal(preview.people[0].sameNamePerson?.id, existingDefault.id);
+  assert.equal(preview.people[0].matchedPerson, null);
+  assert.equal(preview.people[1].sameNamePerson, null);
+
+  const first = await destination.importAllPeoplePlanner(
+    serialized,
+    preview.people.map(person => person.suggestedName),
+    [existingDefault.id, null],
+  );
+  assert.deepEqual(first.matchedPeople.map(person => person.id), [existingDefault.id]);
+  assert.deepEqual(first.people.map(person => person.name), ['Nila']);
+  assert.equal(first.entriesImported, 2);
+  assert.equal((await destination.listPeople()).length, 2);
+
+  const repeatedPreview = await destination.previewAllPeoplePlannerImport(serialized);
+  assert.deepEqual(repeatedPreview.people.map(person => person.matchedPerson?.id), [
+    existingDefault.id,
+    first.people[0].id,
+  ]);
+  const repeated = await destination.importAllPeoplePlanner(
+    serialized,
+    repeatedPreview.people.map(person => person.suggestedName),
+    repeatedPreview.people.map(person => person.matchedPerson?.id ?? null),
+  );
+  assert.equal(repeated.people.length, 0);
+  assert.equal(repeated.matchedPeople.length, 2);
+  assert.equal(repeated.entriesImported, 0);
+  assert.equal(repeated.activitiesImported, 0);
+  assert.equal(repeated.foodsImported, 0);
+  assert.equal((await destination.listPeople()).length, 2);
+  assert.equal((await destination.listMealEntries({ date, personId: existingDefault.id })).length, 1);
+  assert.equal((await destination.listMealEntries({ date, personId: first.people[0].id })).length, 1);
 });
 
 test('food imports reject malformed files and preserve finite historical nutrition values atomically', async () => {

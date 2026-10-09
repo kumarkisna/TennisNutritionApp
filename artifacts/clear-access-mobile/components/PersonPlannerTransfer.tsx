@@ -54,6 +54,7 @@ export function PersonPlannerImport() {
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<PendingFile | null>(null);
   const [importName, setImportName] = useState('');
+  const [targetPersonId, setTargetPersonId] = useState<number | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const isPlannerQuery = (query: { queryKey: readonly unknown[] }) =>
@@ -64,12 +65,14 @@ export function PersonPlannerImport() {
     setError(null);
     setNotice(null);
     setPending(null);
+    setTargetPersonId(null);
     try {
       const file = await pickPersonPlannerFile();
       if (!file) return;
       const preview = await previewLocalPersonPlannerImport(file.serialized);
       setPending({ ...file, preview });
       setImportName(preview.suggestedName);
+      setTargetPersonId(preview.matchedPerson?.id ?? null);
     } catch (problem) {
       setError(problem instanceof Error ? problem : new Error(String(problem)));
     } finally {
@@ -83,11 +86,11 @@ export function PersonPlannerImport() {
     setError(null);
     try {
       await client.cancelQueries({ predicate: isPlannerQuery });
-      const result = await importLocalPersonPlanner(pending.serialized, importName);
+      const result = await importLocalPersonPlanner(pending.serialized, importName, targetPersonId ?? undefined);
       setPending(null);
       try {
         await client.invalidateQueries({ predicate: isPlannerQuery });
-        setNotice(`${result.person.name} was added with ${countLabel(result.entriesImported, 'meal', 'meals')}, ${countLabel(result.activitiesImported, 'planned day', 'planned days')}, ${countLabel(result.heightRecordsImported, 'height record', 'height records')}, ${countLabel(result.weightRecordsImported, 'weigh-in', 'weigh-ins')}, and ${countLabel(result.foodsImported, 'new food', 'new foods')}.`);
+        setNotice(`${result.person.name} was ${result.matchedExisting ? 'restored to the existing profile' : 'added as a new profile'} with ${countLabel(result.entriesImported, 'meal', 'meals')}, ${countLabel(result.activitiesImported, 'planned day', 'planned days')}, ${countLabel(result.heightRecordsImported, 'height record', 'height records')}, ${countLabel(result.weightRecordsImported, 'weigh-in', 'weigh-ins')}, and ${countLabel(result.foodsImported, 'new food', 'new foods')}.`);
       } catch {
         setError(new Error('The person was imported, but the planner could not refresh. Reopen the People screen to view the new profile.'));
       }
@@ -99,9 +102,14 @@ export function PersonPlannerImport() {
   }
 
   const preview = pending?.preview;
+  const selectedPerson = preview?.matchedPerson?.id === targetPersonId
+    ? preview.matchedPerson
+    : preview?.sameNamePerson?.id === targetPersonId
+      ? preview.sameNamePerson
+      : null;
   return <Card style={{ gap: 10 }}>
     <Eyebrow>Move one person’s planner</Eyebrow>
-    <Muted>Export one profile from its card, or import a person file here. Imports add a separate profile; they do not replace anyone already on this device.</Muted>
+    <Muted>Export one profile from its card, or import a person file here. Matching backup IDs restore to the same profile. A first import can be linked to an existing profile; existing settings and records are not replaced.</Muted>
     <Muted>A person file includes their profile, saved meals, dated activity, height records and weigh-ins, and foods used by those meals. Other people’s plans are not included.</Muted>
     <Btn icon="upload" label="Import person file" variant="ghost" disabled={busy} testID="button-import-person-planner" onPress={() => void chooseFile()} />
     {preview ? <View testID="person-import-preview" style={{ gap: 8 }}>
@@ -109,20 +117,32 @@ export function PersonPlannerImport() {
       <Muted>File: {pending.name}</Muted>
       <Text style={{ fontFamily: F.semi, color: c.foreground }}>From: {preview.personName}</Text>
       <Muted>{countLabel(preview.entries, 'meal', 'meals')} · {countLabel(preview.activities, 'planned day', 'planned days')} · {countLabel(preview.heightRecords, 'height record', 'height records')} · {countLabel(preview.weightRecords, 'weigh-in', 'weigh-ins')} · {countLabel(preview.foods, 'food record', 'food records')}</Muted>
-      {preview.nameConflict ? <Muted>A profile with this name already exists. This import creates a separate person; edit the name below if you prefer another one.</Muted> : null}
-      <Text style={{ fontFamily: F.semi, color: c.foreground }}>Name for the imported profile</Text>
-      <TextInput
-        testID="input-import-person-name"
-        value={importName}
-        onChangeText={setImportName}
-        placeholder="Enter a name"
-        placeholderTextColor={c.mutedForeground}
-        autoCapitalize="words"
-        maxLength={80}
-        style={{ minHeight: 46, paddingHorizontal: 12, borderWidth: 1, borderRadius: 12, borderColor: c.input, backgroundColor: c.card, fontFamily: F.medium, fontSize: 15, color: c.foreground }}
-      />
-      <Muted>Matching foods are reused. New foods are added to the shared library. Existing people, meals, and settings stay unchanged.</Muted>
-      <Btn icon="check" label="Import as new person" loading={busy} testID="button-confirm-import-person" onPress={() => void importPerson()} />
+      {selectedPerson ? <Muted>{preview.matchedPerson?.id === selectedPerson.id
+        ? `Backup ID matched ${selectedPerson.name}. Missing records will be added to this profile.`
+        : `Will restore into ${selectedPerson.name}. Existing settings and records stay unchanged.`}</Muted> : null}
+      {!selectedPerson && preview.sameNamePerson ? <View style={{ gap: 6 }}>
+        <Muted>The name matches an existing profile, but the backup IDs differ. Choose that profile if this is the same person, or import separately.</Muted>
+        <Btn small label={`Restore into ${preview.sameNamePerson.name}`} variant="ghost" testID="button-link-person-import" onPress={() => setTargetPersonId(preview.sameNamePerson!.id)} />
+      </View> : null}
+      {selectedPerson && !preview.matchedPerson && preview.sameNamePerson
+        ? <Btn small label="Import separately instead" variant="ghost" testID="button-unlink-person-import" onPress={() => setTargetPersonId(null)} />
+        : null}
+      {!selectedPerson && !preview.hasStableIdentity ? <Muted>This older file has no stable backup ID, so it cannot be matched automatically.</Muted> : null}
+      {!selectedPerson ? <>
+        <Text style={{ fontFamily: F.semi, color: c.foreground }}>Name for the new profile</Text>
+        <TextInput
+          testID="input-import-person-name"
+          value={importName}
+          onChangeText={setImportName}
+          placeholder="Enter a name"
+          placeholderTextColor={c.mutedForeground}
+          autoCapitalize="words"
+          maxLength={80}
+          style={{ minHeight: 46, paddingHorizontal: 12, borderWidth: 1, borderRadius: 12, borderColor: c.input, backgroundColor: c.card, fontFamily: F.medium, fontSize: 15, color: c.foreground }}
+        />
+      </> : null}
+      <Muted>Matching foods are reused. New foods are added to the shared library. Existing settings and records are preserved.</Muted>
+      <Btn icon="check" label={selectedPerson ? 'Restore to existing person' : 'Import as new person'} loading={busy} disabled={!selectedPerson && !importName.trim()} testID="button-confirm-import-person" onPress={() => void importPerson()} />
       <Btn variant="ghost" label="Cancel" disabled={busy} testID="button-cancel-import-person" onPress={() => { setPending(null); setError(null); }} />
     </View> : null}
     {busy && !pending ? <Muted>Preparing person file…</Muted> : null}

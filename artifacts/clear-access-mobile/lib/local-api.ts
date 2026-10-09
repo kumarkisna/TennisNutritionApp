@@ -126,10 +126,15 @@ export const previewLocalFoodImport = (serialized: string) => localStore.preview
 export const importLocalFoodLibrary = (serialized: string) => localStore.importFoodLibrary(serialized);
 export const exportLocalPersonPlanner = (personId: number) => localStore.exportPersonPlanner(personId);
 export const previewLocalPersonPlannerImport = (serialized: string) => localStore.previewPersonPlannerImport(serialized);
-export const importLocalPersonPlanner = (serialized: string, name: string) => localStore.importPersonPlanner(serialized, name);
+export const importLocalPersonPlanner = (serialized: string, name: string, targetPersonId?: number) =>
+  localStore.importPersonPlanner(serialized, name, targetPersonId);
 export const exportLocalAllPeoplePlanner = () => localStore.exportAllPeoplePlanner();
 export const previewLocalAllPeoplePlannerImport = (serialized: string) => localStore.previewAllPeoplePlannerImport(serialized);
-export const importLocalAllPeoplePlanner = (serialized: string, names?: string[]) => localStore.importAllPeoplePlanner(serialized, names);
+export const importLocalAllPeoplePlanner = (
+  serialized: string,
+  names?: string[],
+  targetPersonIds?: Array<number | null>,
+) => localStore.importAllPeoplePlanner(serialized, names, targetPersonIds);
 export const getListPeopleQueryKey = () => ['listPeople'] as const;
 export const getListFoodsQueryKey = (params?: ListFoodsParams) => ['listFoods', params] as const;
 export const getListHeightRecordsQueryKey = (params?: ListHeightRecordsParams) => ['listHeightRecords', params] as const;

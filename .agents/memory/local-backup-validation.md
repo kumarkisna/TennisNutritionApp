@@ -15,11 +15,11 @@ Preserve finite historical food nutrition values even when they exceed the limit
 
 **How to apply:** Test legacy migration through export, preview, restore and reload, not just round trips of newly created records. Count current-device records directly from trusted storage so an unsupported export cannot prevent restoring a separately valid backup.
 
-Keep three transfer scopes distinct: Foods-tab files contain the food library only; person planner files contain one profile, its dated planner records, and foods referenced by its meals; whole-device backups remain available separately. Person imports create a new profile, remap local IDs, reuse exact-match foods, and never replace existing profiles or records.
+Keep three transfer scopes distinct: Foods-tab files contain the food library only; person planner files contain one profile, its dated planner records, and foods referenced by its meals; whole-device backups remain available separately. Person planner files carry stable opaque backup IDs. Imports automatically match those IDs; a first import can explicitly link a same-name profile. Unmatched people are added separately, while matched restores add missing records without replacing profile settings or existing records.
 
-**Why:** Food and planner IDs are local to each device, and person names may collide. Additive imports preserve meal-to-food links without risking another profile’s records.
+**Why:** Numeric planner IDs are device-local, and display names alone cannot prove identity. Stable backup IDs support repeat restores; explicit first-time linking avoids silently merging two people who happen to share a name. Additive imports preserve current settings and records.
 
-**How to apply:** For transfer changes, test ID collisions, same-name profile suggestions, exact food reuse, and that unrelated profiles remain unchanged. Keep global reminder enablement on the destination device.
+**How to apply:** For transfer changes, test stable-ID matching, first-time same-name linking, repeat-import deduplication, exact food reuse, legacy files without IDs, and that unrelated profiles remain unchanged. Keep global reminder enablement on the destination device.
 
 On Android, every export must offer saving to a chosen device folder as well as sharing to another app. A share sheet alone is not a local-save option.
 
