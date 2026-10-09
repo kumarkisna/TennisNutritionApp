@@ -121,6 +121,12 @@ type PersonPlannerEnvelope = {
   exportedAt: string;
   data: StoreData;
 };
+type AllPeoplePlannerEnvelope = {
+  format: 'clear-access-all-people-planner';
+  version: 1;
+  exportedAt: string;
+  data: StoreData;
+};
 export type PersonPlannerImportPreview = {
   exportedAt: string;
   personName: string;
@@ -134,6 +140,27 @@ export type PersonPlannerImportPreview = {
 };
 export type PersonPlannerImportResult = {
   person: Person;
+  foodsImported: number;
+  entriesImported: number;
+  activitiesImported: number;
+  heightRecordsImported: number;
+  weightRecordsImported: number;
+};
+export type AllPeoplePlannerImportPreview = {
+  exportedAt: string;
+  people: Array<{
+    personName: string;
+    suggestedName: string;
+    nameConflict: boolean;
+    entries: number;
+    activities: number;
+    heightRecords: number;
+    weightRecords: number;
+  }>;
+  foods: number;
+};
+export type AllPeoplePlannerImportResult = {
+  people: Person[];
   foodsImported: number;
   entriesImported: number;
   activitiesImported: number;
@@ -649,7 +676,7 @@ function foodFingerprint(food: Food): string {
     food.ingredients ?? [],
   ]);
 }
-function suggestUniquePersonName(name: string, people: Person[]): string {
+function suggestUniquePersonName(name: string, people: readonly Pick<Person, 'name'>[]): string {
   const existingNames = new Set(people.map(person => person.name.trim().toLocaleLowerCase()));
   const normalized = name.trim();
   if (!existingNames.has(normalized.toLocaleLowerCase())) return normalized;
@@ -1388,6 +1415,94 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
       writeQueue = pending.then(() => undefined, () => undefined);
       return pending;
     },
+    async exportAllPeoplePlanner(): Promise<string> {
+      const pending = writeQueue.then(async () => {
+        const current = await load();
+        const sourcePeople = [...current.people].sort((left, right) =>
+          Number(right.isDefault) - Number(left.isDefault) || left.id - right.id);
+        if (sourcePeople.length === 0) fail('There are no people to export.');
+        const personIds = new Map(sourcePeople.map((person, index) => [person.id, index + 1]));
+        const ownEntries = current.entries
+          .filter(entry => personIds.has(entry.personId))
+          .sort((left, right) =>
+            left.personId - right.personId ||
+            left.date.localeCompare(right.date) ||
+            left.id - right.id);
+        const usedFoodIds = new Set(ownEntries.map(entry => entry.foodId));
+        const ownFoods = current.foods
+          .filter(food => usedFoodIds.has(food.id))
+          .sort((left, right) => left.name.localeCompare(right.name) || left.id - right.id);
+        const foodIds = new Map(ownFoods.map((food, index) => [food.id, index + 1]));
+        const foods = ownFoods.map((food, index) => ({ ...food, id: index + 1 }));
+        const entries: StoredEntry[] = ownEntries.map((entry, index) => {
+          const personId = personIds.get(entry.personId);
+          const foodId = foodIds.get(entry.foodId);
+          if (personId === undefined) fail('Could not export a meal because its person record is missing.');
+          if (foodId === undefined) fail('Could not export a meal because its food record is missing.');
+          return { ...entry, id: index + 1, personId, foodId };
+        });
+        const activities = current.activities
+          .filter(activity => personIds.has(activity.personId))
+          .sort((left, right) =>
+            left.personId - right.personId || left.date.localeCompare(right.date))
+          .map(activity => {
+            const personId = personIds.get(activity.personId);
+            if (personId === undefined) fail('Could not export an activity because its person record is missing.');
+            return { ...activity, personId };
+          });
+        const heightRecords = current.heightRecords
+          .filter(record => personIds.has(record.personId))
+          .sort((left, right) =>
+            left.personId - right.personId ||
+            left.date.localeCompare(right.date) ||
+            left.id - right.id)
+          .map((record, index) => {
+            const personId = personIds.get(record.personId);
+            if (personId === undefined) fail('Could not export a height record because its person record is missing.');
+            return { ...record, id: index + 1, personId };
+          });
+        const weightRecords = current.weightRecords
+          .filter(record => personIds.has(record.personId))
+          .sort((left, right) =>
+            left.personId - right.personId ||
+            left.date.localeCompare(right.date) ||
+            left.id - right.id)
+          .map((record, index) => {
+            const personId = personIds.get(record.personId);
+            if (personId === undefined) fail('Could not export a weigh-in because its person record is missing.');
+            return { ...record, id: index + 1, personId };
+          });
+        const data: StoreData = {
+          version: STORE_VERSION,
+          people: sourcePeople.map((person, index) => ({
+            ...person,
+            id: index + 1,
+            isDefault: index === 0,
+          })),
+          foods,
+          entries,
+          activities,
+          heightRecords,
+          weightRecords,
+          nextPersonId: sourcePeople.length + 1,
+          nextFoodId: foods.length + 1,
+          nextEntryId: entries.length + 1,
+          nextHeightRecordId: heightRecords.length + 1,
+          nextWeightRecordId: weightRecords.length + 1,
+        };
+        const envelope: AllPeoplePlannerEnvelope = {
+          format: 'clear-access-all-people-planner',
+          version: 1,
+          exportedAt: new Date().toISOString(),
+          data,
+        };
+        const serialized = JSON.stringify(envelope, null, 2);
+        parseAllPeoplePlanner(serialized);
+        return serialized;
+      });
+      writeQueue = pending.then(() => undefined, () => undefined);
+      return pending;
+    },
     async previewPersonPlannerImport(serialized: string): Promise<PersonPlannerImportPreview> {
       const incoming = parsePersonPlanner(serialized);
       await writeQueue;
@@ -1405,6 +1520,32 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
         activities: incoming.data.activities.length,
         heightRecords: incoming.data.heightRecords.length,
         weightRecords: incoming.data.weightRecords.length,
+      };
+    },
+    async previewAllPeoplePlannerImport(serialized: string): Promise<AllPeoplePlannerImportPreview> {
+      const incoming = parseAllPeoplePlanner(serialized);
+      await writeQueue;
+      const current = await load();
+      const usedPeople: Pick<Person, 'name'>[] = [...current.people];
+      const people = incoming.data.people.map(person => {
+        const nameConflict = usedPeople.some(candidate =>
+          candidate.name.trim().toLocaleLowerCase() === person.name.trim().toLocaleLowerCase());
+        const suggestedName = suggestUniquePersonName(person.name, usedPeople);
+        usedPeople.push({ name: suggestedName });
+        return {
+          personName: person.name,
+          suggestedName,
+          nameConflict,
+          entries: incoming.data.entries.filter(entry => entry.personId === person.id).length,
+          activities: incoming.data.activities.filter(activity => activity.personId === person.id).length,
+          heightRecords: incoming.data.heightRecords.filter(record => record.personId === person.id).length,
+          weightRecords: incoming.data.weightRecords.filter(record => record.personId === person.id).length,
+        };
+      });
+      return {
+        exportedAt: incoming.envelope.exportedAt,
+        people,
+        foods: incoming.data.foods.length,
       };
     },
     async importPersonPlanner(serialized: string, importedName: string): Promise<PersonPlannerImportResult> {
@@ -1480,6 +1621,108 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
         }
         return {
           person,
+          foodsImported,
+          entriesImported: incoming.entries.length,
+          activitiesImported: incoming.activities.length,
+          heightRecordsImported: incoming.heightRecords.length,
+          weightRecordsImported: incoming.weightRecords.length,
+        };
+      });
+    },
+    async importAllPeoplePlanner(
+      serialized: string,
+      importedNames?: string[],
+    ): Promise<AllPeoplePlannerImportResult> {
+      const incoming = parseAllPeoplePlanner(serialized).data;
+      if (importedNames && importedNames.length !== incoming.people.length) {
+        fail('Choose a name for every imported person.');
+      }
+      return transact(draft => {
+        const importedPeople: Person[] = [];
+        const personIds = new Map<number, number>();
+        for (let index = 0; index < incoming.people.length; index += 1) {
+          const sourcePerson = incoming.people[index];
+          const importedName = importedNames?.[index] ?? suggestUniquePersonName(sourcePerson.name, draft.people);
+          const personFields = validatePersonInput({
+            name: importedName,
+            weightKg: sourcePerson.weightKg,
+            targetWeightKg: sourcePerson.targetWeightKg,
+            dateOfBirth: sourcePerson.dateOfBirth,
+            growthReferenceSex: sourcePerson.growthReferenceSex,
+            nutritionGoal: sourcePerson.nutritionGoal,
+            ironGoalMg: sourcePerson.ironGoalMg,
+            ironGoalSource: sourcePerson.ironGoalSource,
+            ironGoalReviewedOn: sourcePerson.ironGoalReviewedOn,
+            fatGoalG: sourcePerson.fatGoalG,
+            fatGoalSource: sourcePerson.fatGoalSource,
+            fatGoalReviewedOn: sourcePerson.fatGoalReviewedOn,
+            activityLevel: sourcePerson.activityLevel,
+            baselineCalories: sourcePerson.baselineCalories,
+          });
+          if (draft.people.some(candidate =>
+            candidate.name.trim().toLocaleLowerCase() === personFields.name.trim().toLocaleLowerCase())) {
+            fail('An imported profile name already exists. Review the suggested names and try again.');
+          }
+          const person: Person = {
+            id: draft.nextPersonId++,
+            isDefault: false,
+            ...personFields,
+          };
+          draft.people.push(person);
+          importedPeople.push(person);
+          personIds.set(sourcePerson.id, person.id);
+        }
+
+        const foodFingerprints = new Map<string, number>();
+        for (const food of draft.foods) {
+          const fingerprint = foodFingerprint(publicFood(food));
+          if (!foodFingerprints.has(fingerprint)) foodFingerprints.set(fingerprint, food.id);
+        }
+        const importedFoodIds = new Map<number, number>();
+        let foodsImported = 0;
+        for (const food of incoming.foods) {
+          const fingerprint = foodFingerprint(publicFood(food));
+          let targetId = foodFingerprints.get(fingerprint);
+          if (targetId === undefined) {
+            targetId = draft.nextFoodId++;
+            draft.foods.push({ ...food, id: targetId });
+            foodFingerprints.set(fingerprint, targetId);
+            foodsImported += 1;
+          }
+          importedFoodIds.set(food.id, targetId);
+        }
+        for (const entry of incoming.entries) {
+          const personId = personIds.get(entry.personId);
+          const foodId = importedFoodIds.get(entry.foodId);
+          if (personId === undefined) fail('Planner file references a missing person.');
+          if (foodId === undefined) fail('Planner file references a missing food record.');
+          draft.entries.push({ ...entry, id: draft.nextEntryId++, personId, foodId });
+        }
+        for (const activity of incoming.activities) {
+          const personId = personIds.get(activity.personId);
+          if (personId === undefined) fail('Planner file references a missing person.');
+          draft.activities.push({ ...activity, personId });
+        }
+        for (const record of incoming.heightRecords) {
+          const personId = personIds.get(record.personId);
+          if (personId === undefined) fail('Planner file references a missing person.');
+          draft.heightRecords.push({
+            ...record,
+            id: draft.nextHeightRecordId++,
+            personId,
+          });
+        }
+        for (const record of incoming.weightRecords) {
+          const personId = personIds.get(record.personId);
+          if (personId === undefined) fail('Planner file references a missing person.');
+          draft.weightRecords.push({
+            ...record,
+            id: draft.nextWeightRecordId++,
+            personId,
+          });
+        }
+        return {
+          people: importedPeople,
           foodsImported,
           entriesImported: incoming.entries.length,
           activitiesImported: incoming.activities.length,
@@ -1845,6 +2088,25 @@ function parsePersonPlanner(serialized: string): { envelope: PersonPlannerEnvelo
   const data = validateBackupData(parsed.data);
   if (data.people.length !== 1) fail('Person planner file must contain exactly one person.');
   return { envelope: parsed as unknown as PersonPlannerEnvelope, data };
+}
+
+function parseAllPeoplePlanner(serialized: string): { envelope: AllPeoplePlannerEnvelope; data: StoreData } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(serialized);
+  } catch {
+    fail('All-people planner file is not valid JSON.');
+  }
+  if (!isRecord(parsed) || !hasExactKeys(parsed, ['format', 'version', 'exportedAt', 'data'])) {
+    fail('All-people planner file has an invalid envelope.');
+  }
+  if (parsed.format !== 'clear-access-all-people-planner' || parsed.version !== 1) {
+    fail(`Unsupported all-people planner format or version (${String(parsed.version)}).`);
+  }
+  if (!isISODateTime(parsed.exportedAt)) fail('All-people planner file has an invalid export timestamp.');
+  const data = validateBackupData(parsed.data);
+  if (data.people.length === 0) fail('All-people planner file must contain at least one person.');
+  return { envelope: parsed as unknown as AllPeoplePlannerEnvelope, data };
 }
 
 function parseBackup(serialized: string): { envelope: BackupEnvelope; data: StoreData } {

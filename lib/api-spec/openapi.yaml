@@ -13,6 +13,7 @@ tags:
   - name: people
   - name: planner
   - name: preferences
+  - name: mobile-backups
 paths:
   /healthz:
     get:
@@ -366,6 +367,82 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DayActivity"
+  /mobile-backups/me:
+    get:
+      operationId: getMyMobileBackup
+      tags: [mobile-backups]
+      summary: Get the signed-in mobile account's cloud backup status
+      responses:
+        "200":
+          description: The latest backup status for this account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MobileBackupStatus"
+    put:
+      operationId: saveMyMobileBackup
+      tags: [mobile-backups]
+      summary: Replace this account's latest opt-in mobile backup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MobileBackupUploadInput"
+      responses:
+        "200":
+          description: Backup saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MobileBackupStatus"
+    delete:
+      operationId: deleteMyMobileBackup
+      tags: [mobile-backups]
+      summary: Delete this account's cloud backup
+      responses:
+        "204":
+          description: Backup deleted
+  /mobile-backups/me/download:
+    get:
+      operationId: downloadMyMobileBackup
+      tags: [mobile-backups]
+      summary: Download this account's latest mobile backup for restore
+      responses:
+        "200":
+          description: The signed-in account's latest backup
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MobileBackupEnvelope"
+        "404":
+          description: No cloud backup exists for this account
+  /mobile-backups/admin/access:
+    get:
+      operationId: getMobileBackupAdminAccess
+      tags: [mobile-backups]
+      summary: Check whether the signed-in account may export all mobile backups
+      responses:
+        "200":
+          description: Admin access result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MobileBackupAdminAccess"
+  /mobile-backups/admin/export:
+    get:
+      operationId: downloadMobileBackupAdminArchive
+      tags: [mobile-backups]
+      summary: Download the latest mobile backups submitted by participating users
+      responses:
+        "200":
+          description: Combined archive of users who opted in and uploaded a backup
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MobileBackupAdminArchive"
+        "403":
+          description: Administrator access is required
 components:
   schemas:
     HealthStatus:
@@ -602,3 +679,54 @@ components:
           items:
             $ref: "#/components/schemas/MealSummary"
       required: [date, personId, targetCalories, totals, entryCount, meals]
+    MobileBackupEnvelope:
+      type: object
+      properties:
+        format: { type: string, enum: [clear-access-local-backup] }
+        version: { type: integer, enum: [1] }
+        createdAt: { type: string, format: date-time }
+        data:
+          type: object
+          additionalProperties: true
+      required: [format, version, createdAt, data]
+    MobileBackupUploadInput:
+      type: object
+      properties:
+        consentVersion: { type: string, enum: [mobile-backup-v1] }
+        backup:
+          $ref: "#/components/schemas/MobileBackupEnvelope"
+      required: [consentVersion, backup]
+    MobileBackupStatus:
+      type: object
+      properties:
+        hasBackup: { type: boolean }
+        uploadedAt: { type: ["string", "null"], format: date-time }
+        consentVersion: { type: ["string", "null"] }
+      required: [hasBackup, uploadedAt, consentVersion]
+    MobileBackupAdminAccess:
+      type: object
+      properties:
+        isAdmin: { type: boolean }
+      required: [isAdmin]
+    MobileBackupAdminArchiveItem:
+      type: object
+      properties:
+        userId: { type: string }
+        uploadedAt: { type: string, format: date-time }
+        consentedAt: { type: string, format: date-time }
+        consentVersion: { type: string }
+        backup:
+          $ref: "#/components/schemas/MobileBackupEnvelope"
+      required: [userId, uploadedAt, consentedAt, consentVersion, backup]
+    MobileBackupAdminArchive:
+      type: object
+      properties:
+        format: { type: string, enum: [clear-access-mobile-admin-backup] }
+        version: { type: integer, enum: [1] }
+        exportedAt: { type: string, format: date-time }
+        backupCount: { type: integer, minimum: 0 }
+        backups:
+          type: array
+          items:
+            $ref: "#/components/schemas/MobileBackupAdminArchiveItem"
+      required: [format, version, exportedAt, backupCount, backups]
