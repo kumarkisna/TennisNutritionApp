@@ -99,6 +99,8 @@ export const saveFoodLibraryFile = (serialized: string) =>
   saveJsonFile(serialized, 'clear-access-foods', 'Save your food library');
 export const savePersonPlannerFile = (serialized: string) =>
   saveJsonFile(serialized, 'clear-access-person-planner', 'Save this person’s planner file');
+export const saveAllPeoplePlannerFile = (serialized: string) =>
+  saveJsonFile(serialized, 'clear-access-all-people-planner', 'Save all people’s planner file');
 
 async function pickJsonFile(): Promise<{ name: string; serialized: string } | null> {
   if (Platform.OS === 'web') {
@@ -148,3 +150,4 @@ async function pickJsonFile(): Promise<{ name: string; serialized: string } | nu
 export const pickBackupFile = pickJsonFile;
 export const pickFoodLibraryFile = pickJsonFile;
 export const pickPersonPlannerFile = pickJsonFile;
+export const pickAllPeoplePlannerFile = pickJsonFile;

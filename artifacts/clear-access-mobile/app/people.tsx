@@ -7,6 +7,7 @@ import { usePlanner } from '@/contexts/PlannerProvider';
 import { useColors } from '@/hooks/useColors';
 import { Btn, Card, ErrorBox, Eyebrow, F, Muted, Screen, Title, success, warn, tap } from '@/components/ui';
 import { PersonPlannerExportButton, PersonPlannerImport } from '@/components/PersonPlannerTransfer';
+import { AllPeoplePlannerTransfer } from '@/components/AllPeoplePlannerTransfer';
 import { n, today } from '@/lib/format';
 import { getAgeOnDate } from '@/lib/planning-targets';
 
@@ -30,6 +31,7 @@ function People() {
   return <Screen title="People">
     <Eyebrow>This device / separate plans</Eyebrow>
     <Title sub="Everyone has their own meals and body details for daily planning estimates. Your food library stays shared on this device.">People in your planner.</Title>
+    <AllPeoplePlannerTransfer />
     <PersonPlannerImport />
     {people.map(p => {
       const on = p.id === person.id;
