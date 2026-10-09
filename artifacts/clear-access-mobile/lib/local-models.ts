@@ -200,14 +200,18 @@ export type TennisPlan = {
   experienceRating?: number;
 };
 export type TennisDiet = { id: string; phase: 'before' | 'during' | 'between' | 'after'; time: string };
+export type TennisFoodImportRef = { sourcePersonBackupId: string; sourceDate: string; sourceDietId: string };
 export type TennisDietInput = { date: string; personId: number; id?: string; phase: TennisDiet['phase']; time: string };
 export type TennisDietDeleteInput = { date: string; personId: number; id: string };
 export type CopyTennisFoodPlanInput = {
   sourcePersonId: number; sourceDate: string;
   targetPersonId: number; targetDate: string;
-  expectedSource: string; expectedTargetName: string;
+  expectedSource: string; expectedTarget: string; expectedTargetName: string;
+  mergeExisting?: boolean;
 };
-export type CopyTennisFoodPlanResult = { personId: number; date: string; copiedSlots: number; copiedFoods: number };
+export type CopyTennisFoodPlanResult = {
+  personId: number; date: string; copiedSlots: number; copiedFoods: number; matchedSlots: number; addedSlots: number;
+};
 export type TennisFoodPlanDate = { date: string; slots: number; foods: number };
 export type TennisPlanInput = { date: string; personId: number; plan: TennisPlan | null };
 export type TennisPlanRatingInput = { date: string; personId: number; rating: number | null };
@@ -224,8 +228,11 @@ export type MealTimes = Record<Meal, string>;
 export type MealTimeInput = { date: string; personId: number; meal: Meal; time: string };
 export type MealAlert = { id: string; minutesBefore: number; enabled: boolean };
 export type MealAlertInput = { date: string; personId: number; meal: Meal; alerts: MealAlert[] };
-export type DayActivity = { date: string; personId: number; activityType: DayActivityType; tennis?: TennisPlan; mealTimes?: MealTimes; mealAlerts?: Partial<Record<Meal, MealAlert[]>> };
-export type DayActivityInput = Omit<DayActivity, 'tennis' | 'mealTimes' | 'mealAlerts'>;
+export type DayActivity = {
+  date: string; personId: number; activityType: DayActivityType; tennis?: TennisPlan; mealTimes?: MealTimes;
+  mealAlerts?: Partial<Record<Meal, MealAlert[]>>; tennisFoodImports?: TennisFoodImportRef[];
+};
+export type DayActivityInput = Omit<DayActivity, 'tennis' | 'mealTimes' | 'mealAlerts' | 'tennisFoodImports'>;
 
 export type MealSummary = { meal: Meal; count: number; nutrition: Nutrition };
 export type DailySummary = {

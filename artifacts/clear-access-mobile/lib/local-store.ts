@@ -3,7 +3,7 @@ import { calculatePlanningEstimates, getAgeOnDate } from './planning-targets';
 import { emptyTennisPlan, isTennisPlan, isTennisDiet, tennisPlanProblem, tennisActivityPlanProblem } from './tennis-planning';
 import { getMealTimes, isMealTimes } from './meal-scheduling';
 import { isMealAlerts, type ReminderSource } from './meal-reminders';
-import { getTennisFoodPlanFingerprint } from './tennis-copy';
+import { getTennisFoodDestinationFingerprint, getTennisFoodImportKey, getTennisFoodPlanFingerprint, mapTennisFoodSlots } from './tennis-copy';
 import { isFoodIngredientList } from './food-nutrition';
 import {
   ActivityLevel,
@@ -24,6 +24,7 @@ import {
   type TennisDietDeleteInput,
   type CopyTennisFoodPlanInput,
   type CopyTennisFoodPlanResult,
+  type TennisFoodImportRef,
   type TennisFoodPlanDate,
   type TennisDiet,
   type DailySummary,
@@ -199,6 +200,20 @@ function hasExactKeys(value: Record<string, unknown>, required: string[], option
 function isBackupId(value: unknown): value is string {
   return typeof value === 'string' && value.length >= 20 && value.length <= 128 &&
     /^[A-Za-z0-9_-]+$/.test(value);
+}
+function isTennisFoodImportRefs(value: unknown): value is TennisFoodImportRef[] {
+  if (!Array.isArray(value) || value.length > 2400) return false;
+  const seen = new Set<string>();
+  for (const ref of value) {
+    if (!isRecord(ref) || !hasExactKeys(ref, ['sourcePersonBackupId', 'sourceDate', 'sourceDietId']) ||
+      !isBackupId(ref.sourcePersonBackupId) || typeof ref.sourceDate !== 'string' ||
+      !isValidCalendarDate(ref.sourceDate) || typeof ref.sourceDietId !== 'string' ||
+      !ref.sourceDietId.trim() || ref.sourceDietId.length > 240) return false;
+    const key = JSON.stringify([ref.sourcePersonBackupId, ref.sourceDate, ref.sourceDietId]);
+    if (seen.has(key)) return false;
+    seen.add(key);
+  }
+  return true;
 }
 function createBackupId(existingIds: ReadonlySet<string> = new Set()): string {
   let id: string;
@@ -381,6 +396,7 @@ function validateStoredData(value: unknown): StoreData {
       !personIds.has(activity.personId as number) ||
       !DAY_ACTIVITIES.includes(activity.activityType as DayActivity['activityType']) ||
       (activity.tennis !== undefined && !isTennisPlan(activity.tennis)) ||
+      (activity.tennisFoodImports !== undefined && !isTennisFoodImportRefs(activity.tennisFoodImports)) ||
       (activity.mealTimes !== undefined && !isMealTimes(activity.mealTimes)) ||
       (activity.mealAlerts !== undefined && !isMealAlerts(activity.mealAlerts))) {
       fail('Local planner storage contains an invalid day activity. Your data was not changed.');
@@ -570,11 +586,12 @@ function validateBackupData(value: unknown): StoreData {
 
   const activityKeys = new Set<string>();
   for (const activity of value.activities) {
-    if (!isRecord(activity) || !hasExactKeys(activity, ['date', 'personId', 'activityType'], ['tennis', 'mealTimes', 'mealAlerts']) ||
+    if (!isRecord(activity) || !hasExactKeys(activity, ['date', 'personId', 'activityType'], ['tennis', 'mealTimes', 'mealAlerts', 'tennisFoodImports']) ||
       typeof activity.date !== 'string' || !isValidCalendarDate(activity.date) ||
       !Number.isSafeInteger(activity.personId) || !peopleById.has(activity.personId as number) ||
       !DAY_ACTIVITIES.includes(activity.activityType as DayActivity['activityType']) ||
       (Object.hasOwn(activity, 'tennis') && !isTennisPlan(activity.tennis)) ||
+      (Object.hasOwn(activity, 'tennisFoodImports') && !isTennisFoodImportRefs(activity.tennisFoodImports)) ||
       (Object.hasOwn(activity, 'mealTimes') && !isMealTimes(activity.mealTimes)) ||
       (Object.hasOwn(activity, 'mealAlerts') && !isMealAlerts(activity.mealAlerts))) {
       return invalid('day activity');
@@ -2162,6 +2179,7 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
         if (input.expectedTargetName !== targetPerson.name) fail('The destination person changed. Review your selection and try again.');
         const source = draft.activities.find(day => day.personId === sourcePerson.id && day.date === input.sourceDate)?.tennis;
         if (!source?.diets?.length) fail('The source date has no tennis food timetable. Choose another date.');
+        const sourceActivity = draft.activities.find(day => day.personId === sourcePerson.id && day.date === input.sourceDate);
         const sourceIds = new Set(source.diets.map(slot => slot.id));
         const entries = draft.entries.filter(entry => entry.personId === sourcePerson.id &&
           entry.date === input.sourceDate && entry.tennisDietId && sourceIds.has(entry.tennisDietId));
@@ -2169,29 +2187,55 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
           fail('The source food plan changed. Refresh the preview and review it before copying.');
         }
         let target = draft.activities.find(day => day.personId === targetPerson.id && day.date === input.targetDate);
-        if (target?.tennis?.diets?.length) fail('The destination already has a tennis food timetable. Choose another date; nothing was overwritten.');
+        const targetEntries = draft.entries.filter(entry => entry.personId === targetPerson.id && entry.date === input.targetDate);
+        if (input.expectedTarget !== getTennisFoodDestinationFingerprint(
+          target, targetEntries.map(entry => toMealEntry(draft, entry)), targetPerson.name,
+        )) fail('The destination changed since review. Nothing was changed; refresh and review again.');
+        const destinationDiets = target?.tennis?.diets ?? [];
+        const merge = input.mergeExisting === true;
+        if (merge && sourcePerson.id === targetPerson.id) fail('Merging is only available when copying to another person. Use the same-person copy flow for another date.');
+        if (merge && !destinationDiets.length) fail('The destination timetable changed or no longer has slots. Refresh and review the copy again.');
+        if (!merge && destinationDiets.length) fail('The destination already has a tennis food timetable. Choose another date or explicitly review a merge; nothing was overwritten.');
+        const importRefs: TennisFoodImportRef[] = source.diets.map(slot => ({
+          sourcePersonBackupId: sourcePerson.backupIds[0],
+          sourceDate: input.sourceDate,
+          sourceDietId: slot.id,
+        }));
+        const priorImports = new Set((target?.tennisFoodImports ?? []).map(getTennisFoodImportKey));
+        if (importRefs.some(ref => priorImports.has(getTennisFoodImportKey(ref)))) {
+          fail('This source timetable has already been imported to this day. Nothing was changed.');
+        }
         // No replacement or deletion: ordinary meals and all destination preferences survive.
         if (!target) {
           target = { date: input.targetDate, personId: targetPerson.id, activityType: 'rest' };
           draft.activities.push(target);
         }
+        const slotMap = merge ? mapTennisFoodSlots(source.diets, destinationDiets) :
+          source.diets.map(slot => ({ sourceId: slot.id, targetId: null }));
         const idMap = new Map<string, string>();
         const used = new Set(draft.activities.flatMap(day => day.tennis?.diets?.map(slot => slot.id) ?? []));
         const copyId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
         let sequence = 0;
-        const diets = source.diets.map(slot => {
+        const addedDiets = source.diets.flatMap(slot => {
+          const mappedId = slotMap.find(mapping => mapping.sourceId === slot.id)?.targetId;
+          if (mappedId) {
+            idMap.set(slot.id, mappedId);
+            return [];
+          }
           let id: string;
           do { id = `diet-copy-${copyId}-${(sequence++).toString(36)}`; } while (used.has(id));
           used.add(id); idMap.set(slot.id, id);
-          return { ...slot, id };
+          return [{ ...slot, id }];
         });
         // Existing practice/match sessions are independent of imported food times.
-        if (target.tennis) target.tennis = { ...target.tennis, diets };
+        const mappedSlots = slotMap.filter(mapping => mapping.targetId !== null).length;
+        if (target.tennis) target.tennis = { ...target.tennis, diets: [...(target.tennis.diets ?? []), ...addedDiets] };
         // A food-only container has no sessions. Active modes require sessions,
         // so use Rest without changing the separate destination activity.
         else target.tennis = {
-          ...emptyTennisPlan('rest'), diets,
+          ...emptyTennisPlan('rest'), diets: addedDiets,
         };
+        target.tennisFoodImports = [...(target.tennisFoodImports ?? []), ...importRefs];
         if (entries.length && !target.mealTimes) target.mealTimes = getMealTimes();
         for (const entry of entries) {
           draft.entries.push({
@@ -2200,7 +2244,10 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
             tennisDietId: idMap.get(entry.tennisDietId!)!,
           });
         }
-        return { personId: targetPerson.id, date: input.targetDate, copiedSlots: diets.length, copiedFoods: entries.length };
+        return {
+          personId: targetPerson.id, date: input.targetDate, copiedSlots: source.diets.length,
+          copiedFoods: entries.length, matchedSlots: mappedSlots, addedSlots: addedDiets.length,
+        };
       });
     },
     async exportForTests(): Promise<unknown> {

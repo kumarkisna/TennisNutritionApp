@@ -1,4 +1,4 @@
-import type { DayActivityType, MealEntry, TennisPlan, TennisPlanHistoryItem } from './local-models';
+import type { DayActivity, DayActivityType, MealEntry, TennisDiet, TennisFoodImportRef, TennisPlan, TennisPlanHistoryItem } from './local-models';
 
 export type TennisPlanHistoryFilter = {
   before: string;
@@ -36,4 +36,29 @@ export function getTennisFoodPlanFingerprint(plan: TennisPlan, entries: MealEntr
       food: entry.food,
     }));
   return JSON.stringify({ personName, plan, foods });
+}
+
+export function getTennisFoodImportKey(ref: TennisFoodImportRef): string {
+  return JSON.stringify([ref.sourcePersonBackupId, ref.sourceDate, ref.sourceDietId]);
+}
+
+export function mapTennisFoodSlots(source: TennisDiet[], destination: TennisDiet[]): Array<{
+  sourceId: string; targetId: string | null;
+}> {
+  return source.map(slot => ({
+    sourceId: slot.id,
+    targetId: destination.find(candidate => candidate.phase === slot.phase && candidate.time === slot.time)?.id ?? null,
+  }));
+}
+
+export function getTennisFoodDestinationFingerprint(
+  activity: DayActivity | undefined, entries: MealEntry[], personName: string,
+): string {
+  return JSON.stringify({
+    personName,
+    activity: activity ?? null,
+    entries: [...entries].sort((a, b) => a.id - b.id).map(entry => ({
+      id: entry.id, meal: entry.meal, grams: entry.grams, tennisDietId: entry.tennisDietId ?? null, food: entry.food,
+    })),
+  });
 }
