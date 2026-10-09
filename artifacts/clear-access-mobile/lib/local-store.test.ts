@@ -1216,6 +1216,102 @@ test('person planner files include linked records and foods, remap IDs, and leav
   assert.equal(untouchedEntries[0].food.caloriesPer100g, 190);
 });
 
+test('all-people planner files add every profile and its history without replacing destination data', async () => {
+  const source = createLocalStore(new MemoryStorage());
+  const sourceDefault = (await source.listPeople()).find(person => person.isDefault)!;
+  const sourceOther = await source.createPerson(baselinePerson('Ari'));
+  const foodInput = {
+    name: 'Shared transfer food',
+    category: 'other' as const,
+    caloriesPer100g: 115,
+    proteinPer100g: 7,
+    carbsPer100g: 16,
+    fatPer100g: 2,
+    fiberPer100g: 3,
+  };
+  const sourceFood = await source.createFood(foodInput);
+  const date = '2020-05-10';
+  await source.createMealEntry({ date, personId: sourceDefault.id, meal: 'breakfast', foodId: sourceFood.id, grams: 80 });
+  await source.createMealEntry({ date, personId: sourceOther.id, meal: 'lunch', foodId: sourceFood.id, grams: 120 });
+  await source.saveDayActivity({ date, personId: sourceDefault.id, activityType: 'training_60' });
+  await source.saveMealTime({ date, personId: sourceDefault.id, meal: 'breakfast', time: '07:30' });
+  await source.createHeightRecord({ date, personId: sourceDefault.id, heightCm: 168 });
+  await source.createWeightRecord({ date, personId: sourceOther.id, weightKg: 64 });
+
+  const serialized = await source.exportAllPeoplePlanner();
+  const file = JSON.parse(serialized);
+  assert.equal(file.format, 'clear-access-all-people-planner');
+  assert.equal(file.data.people.length, 2);
+  assert.equal(file.data.entries.length, 2);
+  assert.ok(file.data.activities.some((activity: { personId: number; activityType: string; mealTimes?: { breakfast?: string } }) =>
+    activity.personId === 1 && activity.activityType === 'training_60' && activity.mealTimes?.breakfast === '07:30'));
+  assert.equal(file.data.heightRecords.length, 1);
+  assert.equal(file.data.weightRecords.length, 1);
+  assert.equal(file.data.foods.length, 1);
+
+  const destination = createLocalStore(new MemoryStorage());
+  const existingPerson = (await destination.listPeople())[0];
+  const existingFood = await destination.createFood(foodInput);
+  const unrelatedFood = await destination.createFood({
+    name: 'Existing destination food',
+    category: 'other',
+    caloriesPer100g: 190,
+    proteinPer100g: 8,
+    carbsPer100g: 22,
+    fatPer100g: 4,
+    fiberPer100g: 5,
+  });
+  await destination.createMealEntry({
+    date: '2020-05-11',
+    personId: existingPerson.id,
+    meal: 'dinner',
+    foodId: unrelatedFood.id,
+    grams: 90,
+  });
+
+  const preview = await destination.previewAllPeoplePlannerImport(serialized);
+  assert.deepEqual(preview.people.map(person => person.personName), [sourceDefault.name, 'Ari']);
+  assert.equal(preview.people[0].suggestedName, `${sourceDefault.name} (Imported)`);
+  assert.equal(preview.people[0].nameConflict, true);
+  assert.equal(preview.people[1].suggestedName, 'Ari');
+  assert.equal(preview.foods, 1);
+
+  const beforeFailedImport = await destination.exportForTests();
+  await assert.rejects(
+    destination.importAllPeoplePlanner(serialized, preview.people.map(person => person.personName)),
+    /name already exists/i,
+  );
+  assert.deepEqual(await destination.exportForTests(), beforeFailedImport);
+
+  const result = await destination.importAllPeoplePlanner(
+    serialized,
+    preview.people.map(person => person.suggestedName),
+  );
+  assert.deepEqual(result.people.map(person => person.name), [`${sourceDefault.name} (Imported)`, 'Ari']);
+  assert.ok(result.people.every(person => !person.isDefault));
+  assert.equal(result.foodsImported, 0);
+  assert.equal(result.entriesImported, 2);
+  assert.equal(result.activitiesImported, file.data.activities.length);
+  assert.equal(result.heightRecordsImported, 1);
+  assert.equal(result.weightRecordsImported, 1);
+
+  const importedDefault = await destination.listMealEntries({ date, personId: result.people[0].id });
+  const importedOther = await destination.listMealEntries({ date, personId: result.people[1].id });
+  assert.equal(importedDefault.length, 1);
+  assert.equal(importedOther.length, 1);
+  assert.equal(importedDefault[0].food.id, existingFood.id);
+  assert.equal(importedOther[0].food.id, existingFood.id);
+  const importedActivity = await destination.getDayActivity({ date, personId: result.people[0].id });
+  assert.equal(importedActivity.activityType, 'training_60');
+  assert.equal(importedActivity.mealTimes?.breakfast, '07:30');
+  assert.equal((await destination.listHeightRecords({ personId: result.people[0].id }))[0].heightCm, 168);
+  assert.equal((await destination.listWeightRecords({ personId: result.people[1].id }))[0].weightKg, 64);
+
+  const untouched = await destination.listMealEntries({ date: '2020-05-11', personId: existingPerson.id });
+  assert.equal(untouched.length, 1);
+  assert.equal(untouched[0].food.id, unrelatedFood.id);
+});
+
 test('food imports reject malformed files and preserve finite historical nutrition values atomically', async () => {
   const source = createLocalStore(new MemoryStorage());
   const file = JSON.parse(await source.exportFoodLibrary());
