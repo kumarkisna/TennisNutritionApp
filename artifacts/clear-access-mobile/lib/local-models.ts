@@ -119,11 +119,24 @@ export type WeightRecordInput = {
 };
 export type WeightRecordUpdate = { date?: string; weightKg?: number };
 
+export type FoodIngredient = {
+  name: string;
+  grams: number;
+  caloriesPer100g: number;
+  proteinPer100g: number;
+  carbsPer100g: number;
+  fatPer100g: number;
+  fiberPer100g: number;
+  calciumMgPer100g: number | null;
+  ironMgPer100g: number | null;
+};
+
 export type Food = {
   id: number;
   name: string;
   brand?: string;
   sourceUrl?: string;
+  ingredients?: FoodIngredient[];
   category: FoodCategory;
   source: FoodSource;
   caloriesPer100g: number;
@@ -140,6 +153,7 @@ export type FoodSource = 'reference' | 'custom' | 'open_food_facts';
 export type FoodInput = {
   name: string;
   category: FoodCategory;
+  ingredients?: FoodIngredient[];
   caloriesPer100g: number;
   proteinPer100g: number;
   carbsPer100g: number;
