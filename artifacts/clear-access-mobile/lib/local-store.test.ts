@@ -52,6 +52,14 @@ const baselinePerson = (name: string): PersonInput => ({
   baselineCalories: 2000,
 });
 
+function withoutPersonBackupIds(value: unknown): unknown {
+  const data = value as { people: Array<Record<string, unknown>>; [key: string]: unknown };
+  return {
+    ...data,
+    people: data.people.map(({ backupIds: _backupIds, ...person }) => person),
+  };
+}
+
 test('custom-food ingredients calculate weighted per-100 g nutrition and round-trip through exports', async () => {
   const ingredients: FoodIngredient[] = [
     {
@@ -1306,6 +1314,96 @@ test('person planner import links a same-name profile, preserves its settings, a
   assert.equal(repeated.foodsImported, 0);
   assert.equal((await destination.listMealEntries({ date, personId: existingPerson.id })).length, 1);
   assert.equal((await destination.listPeople()).length, 1);
+});
+
+test('a linked backup identity can be reassigned without moving planner records or changing profile settings', async () => {
+  const source = createLocalStore(new MemoryStorage());
+  const sourcePerson = (await source.listPeople())[0];
+  const food = await source.createFood({
+    name: 'Reassigned identity food',
+    category: 'other',
+    caloriesPer100g: 120,
+    proteinPer100g: 6,
+    carbsPer100g: 18,
+    fatPer100g: 2,
+    fiberPer100g: 3,
+  });
+  await source.createMealEntry({
+    date: '2020-08-12', personId: sourcePerson.id, meal: 'lunch', foodId: food.id, grams: 110,
+  });
+  const serialized = await source.exportPersonPlanner(sourcePerson.id);
+
+  const destination = createLocalStore(new MemoryStorage());
+  const existingPerson = (await destination.listPeople())[0];
+  await destination.updatePerson(existingPerson.id, { weightKg: 65 });
+  const otherPerson = await destination.createPerson(baselinePerson('Another profile'));
+  const preview = await destination.previewPersonPlannerImport(serialized);
+  await destination.importPersonPlanner(serialized, preview.suggestedName, existingPerson.id);
+  const linkedPerson = (await destination.listPeople()).find(person => person.id === existingPerson.id)!;
+  const originalIdentity = linkedPerson.backupIds[0];
+  const importedIdentity = sourcePerson.backupIds[0];
+  assert.ok(linkedPerson.backupIds.includes(importedIdentity));
+
+  const before = await destination.exportForTests();
+  await assert.rejects(
+    destination.unlinkPersonBackupIdentity(existingPerson.id, originalIdentity),
+    /original backup identity/i,
+  );
+  await assert.rejects(
+    destination.reassignPersonBackupIdentity(existingPerson.id, originalIdentity, otherPerson.id),
+    /original backup identity/i,
+  );
+  assert.deepEqual(await destination.exportForTests(), before);
+
+  await destination.reassignPersonBackupIdentity(existingPerson.id, importedIdentity, otherPerson.id);
+  const after = await destination.exportForTests();
+  const people = await destination.listPeople();
+  assert.deepEqual(withoutPersonBackupIds(after), withoutPersonBackupIds(before));
+  assert.deepEqual(
+    people.find(person => person.id === existingPerson.id)?.backupIds,
+    [originalIdentity],
+  );
+  assert.deepEqual(
+    people.find(person => person.id === otherPerson.id)?.backupIds,
+    [...otherPerson.backupIds, importedIdentity],
+  );
+  assert.equal(people.find(person => person.id === existingPerson.id)?.weightKg, 65);
+  assert.equal((await destination.listMealEntries({
+    date: '2020-08-12',
+    personId: existingPerson.id,
+  })).length, 1);
+  assert.equal((await destination.listMealEntries({
+    date: '2020-08-12',
+    personId: otherPerson.id,
+  })).length, 0);
+  const nextPreview = await destination.previewPersonPlannerImport(serialized);
+  assert.equal(nextPreview.matchedPerson?.id, otherPerson.id);
+});
+
+test('unlinking an imported backup identity prevents automatic matching without changing planner data or settings', async () => {
+  const source = createLocalStore(new MemoryStorage());
+  const sourcePerson = (await source.listPeople())[0];
+  const serialized = await source.exportPersonPlanner(sourcePerson.id);
+  const destination = createLocalStore(new MemoryStorage());
+  const existingPerson = (await destination.listPeople())[0];
+  await destination.updatePerson(existingPerson.id, { weightKg: 68 });
+  const preview = await destination.previewPersonPlannerImport(serialized);
+  await destination.importPersonPlanner(serialized, preview.suggestedName, existingPerson.id);
+  const linkedPerson = (await destination.listPeople()).find(person => person.id === existingPerson.id)!;
+  const originalIdentity = linkedPerson.backupIds[0];
+  const importedIdentity = sourcePerson.backupIds[0];
+  const before = await destination.exportForTests();
+
+  await destination.unlinkPersonBackupIdentity(existingPerson.id, importedIdentity);
+  const after = await destination.exportForTests();
+  const unlinkedPerson = (await destination.listPeople()).find(person => person.id === existingPerson.id)!;
+  assert.deepEqual(withoutPersonBackupIds(after), withoutPersonBackupIds(before));
+  assert.deepEqual(unlinkedPerson.backupIds, [originalIdentity]);
+  assert.equal(unlinkedPerson.weightKg, 68);
+
+  const nextPreview = await destination.previewPersonPlannerImport(serialized);
+  assert.equal(nextPreview.matchedPerson, null);
+  assert.equal(nextPreview.sameNamePerson?.id, existingPerson.id);
 });
 
 test('all-people planner files add every profile and its history without replacing destination data', async () => {

@@ -207,6 +207,23 @@ export function useUpdatePerson() {
 export function useDeletePerson() {
   return useLocalMutation(({ id }: { id: number }) => localStore.deletePerson(id), PEOPLE_REFRESH);
 }
+export function useUnlinkPersonBackupIdentity() {
+  return useLocalMutation(
+    ({ personId, backupId }: { personId: number; backupId: string }) =>
+      localStore.unlinkPersonBackupIdentity(personId, backupId),
+    PEOPLE_REFRESH,
+  );
+}
+export function useReassignPersonBackupIdentity() {
+  return useLocalMutation(
+    ({ sourcePersonId, backupId, targetPersonId }: {
+      sourcePersonId: number;
+      backupId: string;
+      targetPersonId: number;
+    }) => localStore.reassignPersonBackupIdentity(sourcePersonId, backupId, targetPersonId),
+    PEOPLE_REFRESH,
+  );
+}
 
 export function useListHeightRecords(params: ListHeightRecordsParams & { personId: number }, options?: LocalQueryOptions<HeightRecord[]>) {
   return useLocalQuery(getListHeightRecordsQueryKey(params), () => localStore.listHeightRecords(params), options);

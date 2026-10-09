@@ -246,6 +246,7 @@ function findPersonByBackupIds(people: Person[], backupIds: string[]): Person | 
   }
   return matches[0];
 }
+// Same-name restores append imported identities; keep the first ID as the profile's original identity.
 function mergeBackupIds(target: Person, source: Person, people: Person[]): void {
   for (const backupId of source.backupIds) {
     if (people.some(person => person.id !== target.id && person.backupIds.includes(backupId))) {
@@ -1247,6 +1248,42 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
   return {
     async listPeople(): Promise<Person[]> {
       return read(current => current.people);
+    },
+    async unlinkPersonBackupIdentity(personId: number, backupId: string): Promise<Person> {
+      return transact(draft => {
+        const person = findPerson(draft, personId);
+        if (!isBackupId(backupId)) fail('Choose a valid imported backup identity.');
+        if (person.backupIds[0] === backupId) {
+          fail('The profile’s original backup identity cannot be removed.');
+        }
+        const identityIndex = person.backupIds.indexOf(backupId);
+        if (identityIndex < 1) fail('This imported backup identity is no longer linked to this profile.');
+        person.backupIds.splice(identityIndex, 1);
+        return person;
+      });
+    },
+    async reassignPersonBackupIdentity(
+      sourcePersonId: number,
+      backupId: string,
+      targetPersonId: number,
+    ): Promise<{ sourcePerson: Person; targetPerson: Person }> {
+      return transact(draft => {
+        const sourcePerson = findPerson(draft, sourcePersonId);
+        const targetPerson = findPerson(draft, targetPersonId);
+        if (sourcePerson.id === targetPerson.id) fail('Choose a different profile for this backup identity.');
+        if (!isBackupId(backupId)) fail('Choose a valid imported backup identity.');
+        if (sourcePerson.backupIds[0] === backupId) {
+          fail('The profile’s original backup identity cannot be moved.');
+        }
+        const identityIndex = sourcePerson.backupIds.indexOf(backupId);
+        if (identityIndex < 1) fail('This imported backup identity is no longer linked to this profile.');
+        if (targetPerson.backupIds.includes(backupId)) {
+          fail('This backup identity is already linked to the selected profile.');
+        }
+        sourcePerson.backupIds.splice(identityIndex, 1);
+        targetPerson.backupIds.push(backupId);
+        return { sourcePerson, targetPerson };
+      });
     },
     async createPerson(input: PersonInput): Promise<Person> {
       return transact(draft => {
