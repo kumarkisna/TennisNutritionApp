@@ -1316,6 +1316,66 @@ test('person planner import links a same-name profile, preserves its settings, a
   assert.equal((await destination.listPeople()).length, 1);
 });
 
+test('person planner restore preview is read-only and predicts additions, duplicate skips, and food reuse', async () => {
+  const source = createLocalStore(new MemoryStorage());
+  const sourcePerson = (await source.listPeople())[0];
+  const food = await source.createFood({
+    name: 'Person restore estimate food',
+    category: 'other',
+    caloriesPer100g: 125,
+    proteinPer100g: 7,
+    carbsPer100g: 18,
+    fatPer100g: 2,
+    fiberPer100g: 3,
+  });
+  const firstDate = '2021-03-10';
+  const nextDate = '2021-03-11';
+  await source.createMealEntry({ date: firstDate, personId: sourcePerson.id, meal: 'breakfast', foodId: food.id, grams: 100 });
+  await source.saveDayActivity({ date: firstDate, personId: sourcePerson.id, activityType: 'training_60' });
+  await source.createHeightRecord({ date: firstDate, personId: sourcePerson.id, heightCm: 166 });
+  await source.createWeightRecord({ date: firstDate, personId: sourcePerson.id, weightKg: 68 });
+
+  const destination = createLocalStore(new MemoryStorage());
+  const firstRestore = await destination.importPersonPlanner(
+    await source.exportPersonPlanner(sourcePerson.id),
+    'Restored person',
+  );
+
+  await source.createMealEntry({ date: nextDate, personId: sourcePerson.id, meal: 'lunch', foodId: food.id, grams: 120 });
+  await source.saveDayActivity({ date: nextDate, personId: sourcePerson.id, activityType: 'rest' });
+  await source.createHeightRecord({ date: nextDate, personId: sourcePerson.id, heightCm: 167 });
+  await source.createWeightRecord({ date: nextDate, personId: sourcePerson.id, weightKg: 67 });
+  const serialized = await source.exportPersonPlanner(sourcePerson.id);
+  const beforePreview = await destination.exportForTests();
+
+  const preview = await destination.previewPersonPlannerImport(serialized);
+  assert.deepEqual(preview.estimate, {
+    destination: 'existing',
+    targetPerson: { id: firstRestore.person.id, name: 'Restored person' },
+    foods: { incoming: 1, toAdd: 0, toSkip: 1 },
+    entries: { incoming: 2, toAdd: 1, toSkip: 1 },
+    activities: { incoming: 2, toAdd: 1, toSkip: 1 },
+    heightRecords: { incoming: 2, toAdd: 1, toSkip: 1 },
+    weightRecords: { incoming: 2, toAdd: 1, toSkip: 1 },
+  });
+  assert.deepEqual(await destination.exportForTests(), beforePreview);
+
+  const result = await destination.importPersonPlanner(serialized, preview.suggestedName);
+  assert.deepEqual({
+    foods: { incoming: preview.estimate.foods.incoming, toAdd: result.foodsImported },
+    entries: { incoming: preview.estimate.entries.incoming, toAdd: result.entriesImported },
+    activities: { incoming: preview.estimate.activities.incoming, toAdd: result.activitiesImported },
+    heightRecords: { incoming: preview.estimate.heightRecords.incoming, toAdd: result.heightRecordsImported },
+    weightRecords: { incoming: preview.estimate.weightRecords.incoming, toAdd: result.weightRecordsImported },
+  }, {
+    foods: { incoming: 1, toAdd: preview.estimate.foods.toAdd },
+    entries: { incoming: 2, toAdd: preview.estimate.entries.toAdd },
+    activities: { incoming: 2, toAdd: preview.estimate.activities.toAdd },
+    heightRecords: { incoming: 2, toAdd: preview.estimate.heightRecords.toAdd },
+    weightRecords: { incoming: 2, toAdd: preview.estimate.weightRecords.toAdd },
+  });
+});
+
 test('a linked backup identity can be reassigned without moving planner records or changing profile settings', async () => {
   const source = createLocalStore(new MemoryStorage());
   const sourcePerson = (await source.listPeople())[0];
@@ -1555,6 +1615,84 @@ test('all-people planner imports link name conflicts once and automatically matc
   assert.equal((await destination.listPeople()).length, 2);
   assert.equal((await destination.listMealEntries({ date, personId: existingDefault.id })).length, 1);
   assert.equal((await destination.listMealEntries({ date, personId: first.people[0].id })).length, 1);
+});
+
+test('all-people restore preview distinguishes matched and new profiles and predicts per-person merge counts', async () => {
+  const source = createLocalStore(new MemoryStorage());
+  const sourceDefault = (await source.listPeople())[0];
+  const sourceOther = await source.createPerson(baselinePerson('Ari'));
+  const food = await source.createFood({
+    name: 'All-people restore estimate food',
+    category: 'other',
+    caloriesPer100g: 135,
+    proteinPer100g: 8,
+    carbsPer100g: 19,
+    fatPer100g: 2,
+    fiberPer100g: 4,
+  });
+  const firstDate = '2021-04-20';
+  const nextDate = '2021-04-21';
+  await source.createMealEntry({ date: firstDate, personId: sourceDefault.id, meal: 'breakfast', foodId: food.id, grams: 100 });
+  await source.saveDayActivity({ date: firstDate, personId: sourceDefault.id, activityType: 'training_60' });
+  await source.createHeightRecord({ date: firstDate, personId: sourceDefault.id, heightCm: 167 });
+  await source.createWeightRecord({ date: firstDate, personId: sourceDefault.id, weightKg: 69 });
+  await source.createMealEntry({ date: firstDate, personId: sourceOther.id, meal: 'lunch', foodId: food.id, grams: 110 });
+
+  const destination = createLocalStore(new MemoryStorage());
+  const firstRestore = await destination.importPersonPlanner(
+    await source.exportPersonPlanner(sourceDefault.id),
+    'Restored default',
+  );
+  await source.createMealEntry({ date: nextDate, personId: sourceDefault.id, meal: 'dinner', foodId: food.id, grams: 125 });
+  await source.saveDayActivity({ date: nextDate, personId: sourceDefault.id, activityType: 'rest' });
+  await source.createHeightRecord({ date: nextDate, personId: sourceDefault.id, heightCm: 168 });
+  await source.createWeightRecord({ date: nextDate, personId: sourceDefault.id, weightKg: 68 });
+  const serialized = await source.exportAllPeoplePlanner();
+  const beforePreview = await destination.exportForTests();
+
+  const initialPreview = await destination.previewAllPeoplePlannerImport(serialized);
+  const importedNames = initialPreview.people.map(person => person.suggestedName);
+  const targetPersonIds = initialPreview.people.map(person => person.matchedPerson?.id ?? null);
+  const preview = await destination.previewAllPeoplePlannerImport(serialized, importedNames, targetPersonIds);
+  const defaultPreview = preview.people.find(person => person.personName === sourceDefault.name)!;
+  const otherPreview = preview.people.find(person => person.personName === sourceOther.name)!;
+  assert.equal(defaultPreview.estimate.destination, 'existing');
+  assert.equal(defaultPreview.estimate.targetPerson?.id, firstRestore.person.id);
+  assert.equal(otherPreview.estimate.destination, 'new');
+  assert.equal(otherPreview.estimate.targetPerson, null);
+  assert.deepEqual(defaultPreview.estimate.entries, { incoming: 2, toAdd: 1, toSkip: 1 });
+  assert.deepEqual(defaultPreview.estimate.activities, { incoming: 2, toAdd: 1, toSkip: 1 });
+  assert.deepEqual(defaultPreview.estimate.heightRecords, { incoming: 2, toAdd: 1, toSkip: 1 });
+  assert.deepEqual(defaultPreview.estimate.weightRecords, { incoming: 2, toAdd: 1, toSkip: 1 });
+  assert.deepEqual(otherPreview.estimate.entries, { incoming: 1, toAdd: 1, toSkip: 0 });
+  assert.deepEqual(otherPreview.estimate.activities, { incoming: 1, toAdd: 1, toSkip: 0 });
+  assert.deepEqual(preview.estimate, {
+    newProfiles: 1,
+    matchedProfiles: 1,
+    foods: { incoming: 1, toAdd: 0, toSkip: 1 },
+    entries: { incoming: 3, toAdd: 2, toSkip: 1 },
+    activities: { incoming: 3, toAdd: 2, toSkip: 1 },
+    heightRecords: { incoming: 2, toAdd: 1, toSkip: 1 },
+    weightRecords: { incoming: 2, toAdd: 1, toSkip: 1 },
+  });
+  assert.deepEqual(await destination.exportForTests(), beforePreview);
+
+  const result = await destination.importAllPeoplePlanner(serialized, importedNames, targetPersonIds);
+  assert.equal(result.people.length, preview.estimate.newProfiles);
+  assert.equal(result.matchedPeople.length, preview.estimate.matchedProfiles);
+  assert.deepEqual({
+    foodsImported: result.foodsImported,
+    entriesImported: result.entriesImported,
+    activitiesImported: result.activitiesImported,
+    heightRecordsImported: result.heightRecordsImported,
+    weightRecordsImported: result.weightRecordsImported,
+  }, {
+    foodsImported: preview.estimate.foods.toAdd,
+    entriesImported: preview.estimate.entries.toAdd,
+    activitiesImported: preview.estimate.activities.toAdd,
+    heightRecordsImported: preview.estimate.heightRecords.toAdd,
+    weightRecordsImported: preview.estimate.weightRecords.toAdd,
+  });
 });
 
 test('food imports reject malformed files and preserve finite historical nutrition values atomically', async () => {

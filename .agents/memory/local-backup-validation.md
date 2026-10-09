@@ -32,3 +32,9 @@ Android imports should use the system document picker’s per-file access, copy 
 **Why:** Android’s document picker grants access to the selected URI; broad storage access is unnecessary and is not a substitute for reading through a URI-compatible API.
 
 **How to apply:** Keep the cache copy available through parsing, then remove only the temporary app-cache file. Confirm provider-specific behavior on a physical Android device.
+
+Restore previews should estimate additions by applying the same additive merge logic to a deep clone of the destination state, rather than maintaining a separate prediction algorithm.
+
+**Why:** Separate counting rules drift from actual restores, especially when an existing activity day is enriched instead of inserted. A misleading estimate can cause users to misunderstand what the backup will change.
+
+**How to apply:** Resolve the same person destinations as the importer, simulate against a clone, report incoming/add/skip counts, and test that preview leaves persisted state unchanged and that predicted additions equal the eventual import result.

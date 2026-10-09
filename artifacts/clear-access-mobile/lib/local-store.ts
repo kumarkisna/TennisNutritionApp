@@ -128,6 +128,22 @@ type AllPeoplePlannerEnvelope = {
   exportedAt: string;
   data: StoreData;
 };
+export type ImportRecordEstimate = {
+  incoming: number;
+  toAdd: number;
+  toSkip: number;
+};
+export type PersonPlannerRestoreEstimate = {
+  destination: 'new' | 'existing';
+  targetPerson: Pick<Person, 'id' | 'name'> | null;
+  entries: ImportRecordEstimate;
+  activities: ImportRecordEstimate;
+  heightRecords: ImportRecordEstimate;
+  weightRecords: ImportRecordEstimate;
+};
+export type PersonPlannerImportEstimate = PersonPlannerRestoreEstimate & {
+  foods: ImportRecordEstimate;
+};
 export type PersonPlannerImportPreview = {
   exportedAt: string;
   personName: string;
@@ -141,6 +157,7 @@ export type PersonPlannerImportPreview = {
   activities: number;
   heightRecords: number;
   weightRecords: number;
+  estimate: PersonPlannerImportEstimate;
 };
 export type PersonPlannerImportResult = {
   person: Person;
@@ -164,8 +181,18 @@ export type AllPeoplePlannerImportPreview = {
     activities: number;
     heightRecords: number;
     weightRecords: number;
+    estimate: PersonPlannerRestoreEstimate;
   }>;
   foods: number;
+  estimate: {
+    newProfiles: number;
+    matchedProfiles: number;
+    foods: ImportRecordEstimate;
+    entries: ImportRecordEstimate;
+    activities: ImportRecordEstimate;
+    heightRecords: ImportRecordEstimate;
+    weightRecords: ImportRecordEstimate;
+  };
 };
 export type AllPeoplePlannerImportResult = {
   people: Person[];
@@ -931,6 +958,34 @@ function mergePlannerRecords(
     activitiesImported,
     heightRecordsImported,
     weightRecordsImported,
+  };
+}
+function estimateRecordImport(incoming: number, toAdd: number): ImportRecordEstimate {
+  return { incoming, toAdd, toSkip: incoming - toAdd };
+}
+function estimatePersonPlannerRecords(
+  current: StoreData,
+  incoming: StoreData,
+  sourcePersonId: number,
+  targetPersonId: number,
+): Omit<PersonPlannerRestoreEstimate, 'destination' | 'targetPerson'> {
+  const scopedIncoming: StoreData = {
+    ...incoming,
+    entries: incoming.entries.filter(entry => entry.personId === sourcePersonId),
+    activities: incoming.activities.filter(activity => activity.personId === sourcePersonId),
+    heightRecords: incoming.heightRecords.filter(record => record.personId === sourcePersonId),
+    weightRecords: incoming.weightRecords.filter(record => record.personId === sourcePersonId),
+  };
+  const counts = mergePlannerRecords(
+    clone(current),
+    scopedIncoming,
+    new Map([[sourcePersonId, targetPersonId]]),
+  );
+  return {
+    entries: estimateRecordImport(scopedIncoming.entries.length, counts.entriesImported),
+    activities: estimateRecordImport(scopedIncoming.activities.length, counts.activitiesImported),
+    heightRecords: estimateRecordImport(scopedIncoming.heightRecords.length, counts.heightRecordsImported),
+    weightRecords: estimateRecordImport(scopedIncoming.weightRecords.length, counts.weightRecordsImported),
   };
 }
 function validateImportedPerson(source: Person, name: string): Omit<Person, 'id' | 'isDefault' | 'backupIds'> {
@@ -1830,7 +1885,10 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
       writeQueue = pending.then(() => undefined, () => undefined);
       return pending;
     },
-    async previewPersonPlannerImport(serialized: string): Promise<PersonPlannerImportPreview> {
+    async previewPersonPlannerImport(
+      serialized: string,
+      targetPersonId?: number | null,
+    ): Promise<PersonPlannerImportPreview> {
       const incoming = parsePersonPlanner(serialized);
       await writeQueue;
       const current = await load();
@@ -1838,8 +1896,21 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
       const matchedPerson = incoming.envelope.version === 2
         ? findPersonByBackupIds(current.people, person.backupIds)
         : undefined;
+      const requestedTargetId = targetPersonId ?? undefined;
+      if (matchedPerson && requestedTargetId !== undefined && matchedPerson.id !== requestedTargetId) {
+        fail('This backup ID already matches a different person on this device.');
+      }
+      const target = requestedTargetId === undefined
+        ? matchedPerson
+        : findPerson(current, requestedTargetId);
       const sameNamePerson = matchedPerson ? undefined : current.people.find(candidate =>
         candidate.name.trim().toLocaleLowerCase() === person.name.trim().toLocaleLowerCase());
+      const targetId = target?.id ?? current.nextPersonId;
+      const counts = mergePlannerRecords(
+        clone(current),
+        incoming.data,
+        new Map([[person.id, targetId]]),
+      );
       return {
         exportedAt: incoming.envelope.exportedAt,
         personName: person.name,
@@ -1853,21 +1924,77 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
         activities: incoming.data.activities.length,
         heightRecords: incoming.data.heightRecords.length,
         weightRecords: incoming.data.weightRecords.length,
+        estimate: {
+          destination: target ? 'existing' : 'new',
+          targetPerson: target ? { id: target.id, name: target.name } : null,
+          foods: estimateRecordImport(incoming.data.foods.length, counts.foodsImported),
+          entries: estimateRecordImport(incoming.data.entries.length, counts.entriesImported),
+          activities: estimateRecordImport(incoming.data.activities.length, counts.activitiesImported),
+          heightRecords: estimateRecordImport(incoming.data.heightRecords.length, counts.heightRecordsImported),
+          weightRecords: estimateRecordImport(incoming.data.weightRecords.length, counts.weightRecordsImported),
+        },
       };
     },
-    async previewAllPeoplePlannerImport(serialized: string): Promise<AllPeoplePlannerImportPreview> {
+    async previewAllPeoplePlannerImport(
+      serialized: string,
+      importedNames?: string[],
+      targetPersonIds?: Array<number | null>,
+    ): Promise<AllPeoplePlannerImportPreview> {
       const incoming = parseAllPeoplePlanner(serialized);
+      if (importedNames && importedNames.length !== incoming.data.people.length) {
+        fail('Choose a name for every imported person.');
+      }
+      if (targetPersonIds && targetPersonIds.length !== incoming.data.people.length) {
+        fail('Choose a restore destination for every imported person.');
+      }
       await writeQueue;
       const current = await load();
-      const usedPeople: Pick<Person, 'name'>[] = [...current.people];
-      const people = incoming.data.people.map(person => {
+      const simulation = clone(current);
+      const usedTargetIds = new Set<number>();
+      const personIds = new Map<number, number>();
+      const people = incoming.data.people.map((person, index) => {
         const matchedPerson = incoming.envelope.version === 2
           ? findPersonByBackupIds(current.people, person.backupIds)
           : undefined;
+        const suggestedName = matchedPerson?.name ?? suggestUniquePersonName(person.name, simulation.people);
+        const requestedTargetId = targetPersonIds?.[index] ?? undefined;
+        if (matchedPerson && requestedTargetId !== undefined && matchedPerson.id !== requestedTargetId) {
+          fail('This backup ID already matches a different person on this device.');
+        }
+        const existingPerson = requestedTargetId === undefined
+          ? matchedPerson
+          : findPerson(simulation, requestedTargetId);
+        let targetPerson: Person;
+        let destination: 'new' | 'existing';
+        if (existingPerson) {
+          if (usedTargetIds.has(existingPerson.id)) {
+            fail('Two imported profiles cannot be restored into the same person.');
+          }
+          usedTargetIds.add(existingPerson.id);
+          targetPerson = existingPerson;
+          destination = 'existing';
+        } else {
+          const importedName = importedNames?.[index] ?? suggestedName;
+          const personFields = validateImportedPerson(person, importedName);
+          if (simulation.people.some(candidate =>
+            candidate.name.trim().toLocaleLowerCase() === personFields.name.trim().toLocaleLowerCase())) {
+            fail('An imported profile name already exists. Choose that person or use a different name.');
+          }
+          const existingBackupIds = new Set(simulation.people.flatMap(candidate => candidate.backupIds));
+          targetPerson = {
+            id: simulation.nextPersonId++,
+            backupIds: incoming.envelope.version === 2
+              ? [...person.backupIds]
+              : [createBackupId(existingBackupIds)],
+            isDefault: false,
+            ...personFields,
+          };
+          simulation.people.push(targetPerson);
+          destination = 'new';
+        }
+        personIds.set(person.id, targetPerson.id);
         const sameNamePerson = matchedPerson ? undefined : current.people.find(candidate =>
           candidate.name.trim().toLocaleLowerCase() === person.name.trim().toLocaleLowerCase());
-        const suggestedName = matchedPerson?.name ?? suggestUniquePersonName(person.name, usedPeople);
-        if (!matchedPerson) usedPeople.push({ name: suggestedName });
         return {
           personName: person.name,
           suggestedName,
@@ -1879,12 +2006,29 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
           activities: incoming.data.activities.filter(activity => activity.personId === person.id).length,
           heightRecords: incoming.data.heightRecords.filter(record => record.personId === person.id).length,
           weightRecords: incoming.data.weightRecords.filter(record => record.personId === person.id).length,
+          estimate: {
+            destination,
+            targetPerson: destination === 'existing'
+              ? { id: targetPerson.id, name: targetPerson.name }
+              : null,
+            ...estimatePersonPlannerRecords(current, incoming.data, person.id, targetPerson.id),
+          },
         };
       });
+      const counts = mergePlannerRecords(simulation, incoming.data, personIds);
       return {
         exportedAt: incoming.envelope.exportedAt,
         people,
         foods: incoming.data.foods.length,
+        estimate: {
+          newProfiles: people.filter(person => person.estimate.destination === 'new').length,
+          matchedProfiles: people.filter(person => person.estimate.destination === 'existing').length,
+          foods: estimateRecordImport(incoming.data.foods.length, counts.foodsImported),
+          entries: estimateRecordImport(incoming.data.entries.length, counts.entriesImported),
+          activities: estimateRecordImport(incoming.data.activities.length, counts.activitiesImported),
+          heightRecords: estimateRecordImport(incoming.data.heightRecords.length, counts.heightRecordsImported),
+          weightRecords: estimateRecordImport(incoming.data.weightRecords.length, counts.weightRecordsImported),
+        },
       };
     },
     async importPersonPlanner(

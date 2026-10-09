@@ -125,11 +125,18 @@ export const exportLocalFoodLibrary = () => localStore.exportFoodLibrary();
 export const previewLocalFoodImport = (serialized: string) => localStore.previewFoodLibraryImport(serialized);
 export const importLocalFoodLibrary = (serialized: string) => localStore.importFoodLibrary(serialized);
 export const exportLocalPersonPlanner = (personId: number) => localStore.exportPersonPlanner(personId);
-export const previewLocalPersonPlannerImport = (serialized: string) => localStore.previewPersonPlannerImport(serialized);
+export const previewLocalPersonPlannerImport = (
+  serialized: string,
+  targetPersonId?: number | null,
+) => localStore.previewPersonPlannerImport(serialized, targetPersonId);
 export const importLocalPersonPlanner = (serialized: string, name: string, targetPersonId?: number) =>
   localStore.importPersonPlanner(serialized, name, targetPersonId);
 export const exportLocalAllPeoplePlanner = () => localStore.exportAllPeoplePlanner();
-export const previewLocalAllPeoplePlannerImport = (serialized: string) => localStore.previewAllPeoplePlannerImport(serialized);
+export const previewLocalAllPeoplePlannerImport = (
+  serialized: string,
+  importedNames?: string[],
+  targetPersonIds?: Array<number | null>,
+) => localStore.previewAllPeoplePlannerImport(serialized, importedNames, targetPersonIds);
 export const importLocalAllPeoplePlanner = (
   serialized: string,
   names?: string[],

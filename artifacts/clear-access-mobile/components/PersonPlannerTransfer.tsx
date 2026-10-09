@@ -55,6 +55,7 @@ export function PersonPlannerImport() {
   const [pending, setPending] = useState<PendingFile | null>(null);
   const [importName, setImportName] = useState('');
   const [targetPersonId, setTargetPersonId] = useState<number | null>(null);
+  const [updatingPreview, setUpdatingPreview] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const isPlannerQuery = (query: { queryKey: readonly unknown[] }) =>
@@ -80,8 +81,26 @@ export function PersonPlannerImport() {
     }
   }
 
+  async function updateRestoreTarget(nextTargetPersonId: number | null) {
+    const file = pending;
+    if (!file || busy || updatingPreview) return;
+    setUpdatingPreview(true);
+    setError(null);
+    try {
+      const preview = await previewLocalPersonPlannerImport(file.serialized, nextTargetPersonId);
+      setPending(current => current?.serialized === file.serialized
+        ? { ...current, preview }
+        : current);
+      setTargetPersonId(nextTargetPersonId);
+    } catch (problem) {
+      setError(problem instanceof Error ? problem : new Error(String(problem)));
+    } finally {
+      setUpdatingPreview(false);
+    }
+  }
+
   async function importPerson() {
-    if (!pending || busy) return;
+    if (!pending || busy || updatingPreview) return;
     setBusy(true);
     setError(null);
     try {
@@ -111,21 +130,30 @@ export function PersonPlannerImport() {
     <Eyebrow>Move one person’s planner</Eyebrow>
     <Muted>Export one profile from its card, or import a person file here. Matching backup IDs restore to the same profile. A first import can be linked to an existing profile; existing settings and records are not replaced.</Muted>
     <Muted>A person file includes their profile, saved meals, dated activity, height records and weigh-ins, and foods used by those meals. Other people’s plans are not included.</Muted>
-    <Btn icon="upload" label="Import person file" variant="ghost" disabled={busy} testID="button-import-person-planner" onPress={() => void chooseFile()} />
+    <Btn icon="upload" label="Import person file" variant="ghost" disabled={busy || updatingPreview} testID="button-import-person-planner" onPress={() => void chooseFile()} />
     {preview ? <View testID="person-import-preview" style={{ gap: 8 }}>
       <Eyebrow>Review before importing</Eyebrow>
       <Muted>File: {pending.name}</Muted>
       <Text style={{ fontFamily: F.semi, color: c.foreground }}>From: {preview.personName}</Text>
-      <Muted>{countLabel(preview.entries, 'meal', 'meals')} · {countLabel(preview.activities, 'planned day', 'planned days')} · {countLabel(preview.heightRecords, 'height record', 'height records')} · {countLabel(preview.weightRecords, 'weigh-in', 'weigh-ins')} · {countLabel(preview.foods, 'food record', 'food records')}</Muted>
+      <View testID="person-import-restore-estimate" style={{ gap: 4, padding: 10, borderWidth: 1, borderColor: c.border, borderRadius: 12 }}>
+        <Muted>{preview.estimate.destination === 'existing'
+          ? `Destination: existing profile, ${preview.estimate.targetPerson?.name ?? 'selected person'}`
+          : `Destination: new profile, ${importName.trim() || preview.suggestedName}`}</Muted>
+        <Muted>Meals: {preview.estimate.entries.toAdd} to add · {preview.estimate.entries.toSkip} duplicates to skip</Muted>
+        <Muted>Activity days: {preview.estimate.activities.toAdd} to add or update · {preview.estimate.activities.toSkip} unchanged</Muted>
+        <Muted>Height records: {preview.estimate.heightRecords.toAdd} to add · {preview.estimate.heightRecords.toSkip} duplicates to skip</Muted>
+        <Muted>Weigh-ins: {preview.estimate.weightRecords.toAdd} to add · {preview.estimate.weightRecords.toSkip} duplicates to skip</Muted>
+        <Muted>Shared foods: {preview.estimate.foods.toAdd} new · {preview.estimate.foods.toSkip} matching foods to reuse</Muted>
+      </View>
       {selectedPerson ? <Muted>{preview.matchedPerson?.id === selectedPerson.id
         ? `Backup ID matched ${selectedPerson.name}. Missing records will be added to this profile.`
         : `Will restore into ${selectedPerson.name}. Existing settings and records stay unchanged.`}</Muted> : null}
       {!selectedPerson && preview.sameNamePerson ? <View style={{ gap: 6 }}>
         <Muted>The name matches an existing profile, but the backup IDs differ. Choose that profile if this is the same person, or import separately.</Muted>
-        <Btn small label={`Restore into ${preview.sameNamePerson.name}`} variant="ghost" testID="button-link-person-import" onPress={() => setTargetPersonId(preview.sameNamePerson!.id)} />
+        <Btn small label={`Restore into ${preview.sameNamePerson.name}`} variant="ghost" disabled={busy || updatingPreview} testID="button-link-person-import" onPress={() => void updateRestoreTarget(preview.sameNamePerson!.id)} />
       </View> : null}
       {selectedPerson && !preview.matchedPerson && preview.sameNamePerson
-        ? <Btn small label="Import separately instead" variant="ghost" testID="button-unlink-person-import" onPress={() => setTargetPersonId(null)} />
+        ? <Btn small label="Import separately instead" variant="ghost" disabled={busy || updatingPreview} testID="button-unlink-person-import" onPress={() => void updateRestoreTarget(null)} />
         : null}
       {!selectedPerson && !preview.hasStableIdentity ? <Muted>This older file has no stable backup ID, so it cannot be matched automatically.</Muted> : null}
       {!selectedPerson ? <>
@@ -142,8 +170,9 @@ export function PersonPlannerImport() {
         />
       </> : null}
       <Muted>Matching foods are reused. New foods are added to the shared library. Existing settings and records are preserved.</Muted>
-      <Btn icon="check" label={selectedPerson ? 'Restore to existing person' : 'Import as new person'} loading={busy} disabled={!selectedPerson && !importName.trim()} testID="button-confirm-import-person" onPress={() => void importPerson()} />
-      <Btn variant="ghost" label="Cancel" disabled={busy} testID="button-cancel-import-person" onPress={() => { setPending(null); setError(null); }} />
+      {updatingPreview ? <Muted>Updating restore estimate…</Muted> : null}
+      <Btn icon="check" label={selectedPerson ? 'Restore to existing person' : 'Import as new person'} loading={busy} disabled={updatingPreview || (!selectedPerson && !importName.trim())} testID="button-confirm-import-person" onPress={() => void importPerson()} />
+      <Btn variant="ghost" label="Cancel" disabled={busy || updatingPreview} testID="button-cancel-import-person" onPress={() => { setPending(null); setError(null); }} />
     </View> : null}
     {busy && !pending ? <Muted>Preparing person file…</Muted> : null}
     {error ? <ErrorBox error={error} /> : null}

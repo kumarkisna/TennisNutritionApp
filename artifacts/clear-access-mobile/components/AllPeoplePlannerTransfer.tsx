@@ -30,6 +30,7 @@ export function AllPeoplePlannerTransfer() {
   const [pending, setPending] = useState<PendingFile | null>(null);
   const [importNames, setImportNames] = useState<string[]>([]);
   const [targetPersonIds, setTargetPersonIds] = useState<Array<number | null>>([]);
+  const [updatingPreview, setUpdatingPreview] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const isPlannerQuery = (query: { queryKey: readonly unknown[] }) =>
@@ -70,8 +71,32 @@ export function AllPeoplePlannerTransfer() {
     }
   }
 
+  async function updateRestoreTarget(index: number, targetPersonId: number | null) {
+    const file = pending;
+    if (!file || busy || updatingPreview) return;
+    const nextTargetPersonIds = targetPersonIds.map((id, targetIndex) =>
+      targetIndex === index ? targetPersonId : id);
+    setUpdatingPreview(true);
+    setError(null);
+    try {
+      const preview = await previewLocalAllPeoplePlannerImport(
+        file.serialized,
+        importNames,
+        nextTargetPersonIds,
+      );
+      setTargetPersonIds(nextTargetPersonIds);
+      setPending(current => current?.serialized === file.serialized
+        ? { ...current, preview }
+        : current);
+    } catch (problem) {
+      setError(problem instanceof Error ? problem : new Error(String(problem)));
+    } finally {
+      setUpdatingPreview(false);
+    }
+  }
+
   async function importPeople() {
-    if (!pending || busy) return;
+    if (!pending || busy || updatingPreview) return;
     setBusy(true);
     setError(null);
     try {
@@ -109,31 +134,38 @@ export function AllPeoplePlannerTransfer() {
   const selectedTargets = targetPersonIds.filter((id): id is number => id !== null);
   const hasRepeatedTargets = new Set(selectedTargets).size !== selectedTargets.length;
   const preview = pending?.preview;
-  const mealCount = preview?.people.reduce((total, person) => total + person.entries, 0) ?? 0;
-  const activityCount = preview?.people.reduce((total, person) => total + person.activities, 0) ?? 0;
-  const heightCount = preview?.people.reduce((total, person) => total + person.heightRecords, 0) ?? 0;
-  const weightCount = preview?.people.reduce((total, person) => total + person.weightRecords, 0) ?? 0;
-
   return <Card style={{ gap: 10 }}>
     <Eyebrow>Move everyone in one file</Eyebrow>
     <Muted>Exports all profiles on this device, their meals, activities, height and weight history, and foods used in those meals. Unused food-library items and device reminder settings are not included. Keep the file private.</Muted>
     <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-      <Btn icon="download" label="Export all people" disabled={busy} loading={busy} testID="button-export-all-people" onPress={() => void exportPeople()} />
-      <Btn icon="upload" label="Import all-people file" variant="ghost" disabled={busy} testID="button-import-all-people" onPress={() => void chooseFile()} />
+      <Btn icon="download" label="Export all people" disabled={busy || updatingPreview} loading={busy} testID="button-export-all-people" onPress={() => void exportPeople()} />
+      <Btn icon="upload" label="Import all-people file" variant="ghost" disabled={busy || updatingPreview} testID="button-import-all-people" onPress={() => void chooseFile()} />
     </View>
     {preview ? <View testID="all-people-import-preview" style={{ gap: 9 }}>
       <Eyebrow>Review before importing</Eyebrow>
       <Muted>File: {pending.name}</Muted>
-      <Muted>
-        {countLabel(preview.people.length, 'profile', 'profiles')} · {countLabel(mealCount, 'meal', 'meals')} ·
-        {' '}{countLabel(activityCount, 'planned day', 'planned days')} · {countLabel(heightCount, 'height record', 'height records')} ·
-        {' '}{countLabel(weightCount, 'weigh-in', 'weigh-ins')} · {countLabel(preview.foods, 'food', 'foods')}
-      </Muted>
+      <View testID="all-people-restore-estimate" style={{ gap: 4, padding: 10, borderWidth: 1, borderColor: c.border, borderRadius: 12 }}>
+        <Muted>Profiles: {preview.estimate.newProfiles} new · {preview.estimate.matchedProfiles} restoring to existing profiles</Muted>
+        <Muted>Shared foods: {preview.estimate.foods.toAdd} new · {preview.estimate.foods.toSkip} matching foods to reuse</Muted>
+        <Muted>Meals: {preview.estimate.entries.toAdd} to add · {preview.estimate.entries.toSkip} duplicates to skip</Muted>
+        <Muted>Activity days: {preview.estimate.activities.toAdd} to add or update · {preview.estimate.activities.toSkip} unchanged</Muted>
+        <Muted>Height records: {preview.estimate.heightRecords.toAdd} to add · {preview.estimate.heightRecords.toSkip} duplicates to skip</Muted>
+        <Muted>Weigh-ins: {preview.estimate.weightRecords.toAdd} to add · {preview.estimate.weightRecords.toSkip} duplicates to skip</Muted>
+      </View>
       <Muted>Matching backup IDs restore into the same people. For a first import, you can link a same-name profile or import separately. Existing profile settings and records are preserved; missing records are added.</Muted>
       {preview.people.map((person, index) => <View key={`${person.personName}-${index}`} style={{ gap: 5 }}>
         <Text style={{ fontFamily: F.semi, color: c.foreground }}>
           {person.personName}{person.nameConflict ? ' · name conflict' : ''}
         </Text>
+        <View testID={`all-people-profile-estimate-${index}`} style={{ gap: 3, padding: 9, borderWidth: 1, borderColor: c.border, borderRadius: 10 }}>
+          <Muted>{person.estimate.destination === 'existing'
+            ? `Destination: existing profile, ${person.estimate.targetPerson?.name ?? 'selected person'}`
+            : `Destination: new profile, ${importNames[index]?.trim() || person.suggestedName}`}</Muted>
+          <Muted>Meals: {person.estimate.entries.toAdd} to add · {person.estimate.entries.toSkip} duplicates to skip</Muted>
+          <Muted>Activity days: {person.estimate.activities.toAdd} to add or update · {person.estimate.activities.toSkip} unchanged</Muted>
+          <Muted>Height records: {person.estimate.heightRecords.toAdd} to add · {person.estimate.heightRecords.toSkip} duplicates to skip</Muted>
+          <Muted>Weigh-ins: {person.estimate.weightRecords.toAdd} to add · {person.estimate.weightRecords.toSkip} duplicates to skip</Muted>
+        </View>
         {person.matchedPerson && targetPersonIds[index] === person.matchedPerson.id
           ? <Muted>Backup ID matched {person.matchedPerson.name}; missing records will be restored there.</Muted>
           : null}
@@ -144,17 +176,17 @@ export function AllPeoplePlannerTransfer() {
               small
               label={`Restore into ${person.sameNamePerson.name}`}
               variant={targetPersonIds[index] === person.sameNamePerson.id ? 'primary' : 'ghost'}
+              disabled={busy || updatingPreview}
               testID={`button-link-all-people-${index}`}
-              onPress={() => setTargetPersonIds(current => current.map((id, targetIndex) =>
-                targetIndex === index ? person.sameNamePerson!.id : id))}
+              onPress={() => void updateRestoreTarget(index, person.sameNamePerson!.id)}
             />
             <Btn
               small
               label="Import separately"
               variant={targetPersonIds[index] == null ? 'primary' : 'ghost'}
+              disabled={busy || updatingPreview}
               testID={`button-unlink-all-people-${index}`}
-              onPress={() => setTargetPersonIds(current => current.map((id, targetIndex) =>
-                targetIndex === index ? null : id))}
+              onPress={() => void updateRestoreTarget(index, null)}
             />
           </View>
         </View> : null}
@@ -165,6 +197,7 @@ export function AllPeoplePlannerTransfer() {
           testID={`input-all-people-import-name-${index}`}
           value={importNames[index] ?? ''}
           onChangeText={value => setImportNames(current => current.map((name, nameIndex) => nameIndex === index ? value : name))}
+          editable={!busy && !updatingPreview}
           placeholder="Name on this device"
           placeholderTextColor={c.mutedForeground}
           autoCapitalize="words"
@@ -174,8 +207,9 @@ export function AllPeoplePlannerTransfer() {
       </View>)}
       {hasInvalidNames ? <Muted>Each new profile needs a unique name.</Muted> : null}
       {hasRepeatedTargets ? <Muted>Each existing profile can be selected only once.</Muted> : null}
-      <Btn icon="check" label="Restore people" loading={busy} disabled={hasInvalidNames || hasRepeatedTargets} testID="button-confirm-import-all-people" onPress={() => void importPeople()} />
-      <Btn variant="ghost" label="Cancel" disabled={busy} testID="button-cancel-import-all-people" onPress={() => { setPending(null); setError(null); }} />
+      {updatingPreview ? <Muted>Updating restore estimate…</Muted> : null}
+      <Btn icon="check" label="Restore people" loading={busy} disabled={updatingPreview || hasInvalidNames || hasRepeatedTargets} testID="button-confirm-import-all-people" onPress={() => void importPeople()} />
+      <Btn variant="ghost" label="Cancel" disabled={busy || updatingPreview} testID="button-cancel-import-all-people" onPress={() => { setPending(null); setError(null); }} />
     </View> : null}
     {busy && !pending ? <Muted>Preparing all-people file…</Muted> : null}
     {error ? <ErrorBox error={error} /> : null}
