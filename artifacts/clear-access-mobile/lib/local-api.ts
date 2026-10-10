@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   useMutation,
+  useQueries,
   useQuery,
   useQueryClient,
   type QueryKey,
@@ -299,6 +300,15 @@ export function useGetDailySummary(params: GetDailySummaryParams, options?: Loca
 }
 export function useGetDayActivity(params: GetDayActivityParams, options?: LocalQueryOptions<DayActivity>) {
   return useLocalQuery(getGetDayActivityQueryKey(params), () => localStore.getDayActivity(params), options);
+}
+export function useDayActivitiesForDates(personId: number, dates: string[]) {
+  return useQueries({
+    queries: dates.map(date => ({
+      queryKey: getGetDayActivityQueryKey({ personId, date }),
+      queryFn: () => localStore.getDayActivity({ personId, date }),
+      networkMode: 'always' as const,
+    })),
+  });
 }
 export function useSaveDayActivity() {
   return useLocalMutation(({ data }: { data: DayActivityInput }) =>

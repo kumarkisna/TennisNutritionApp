@@ -587,7 +587,7 @@ test('a failed measurement persistence leaves committed and durable records unch
   assert.deepEqual(await createLocalStore(storage).listWeightRecords(), [savedWeight]);
 });
 
-test('device-local height query and mutation hooks are configured to run while offline', () => {
+test('device-local query and mutation hooks are configured to run while offline', () => {
   const apiPath = [
     resolve(process.cwd(), 'lib/local-api.ts'),
     resolve(process.cwd(), 'artifacts/clear-access-mobile/lib/local-api.ts'),
@@ -595,7 +595,7 @@ test('device-local height query and mutation hooks are configured to run while o
   assert.ok(apiPath, 'local API source should be available to the regression test');
   const apiSource = readFileSync(apiPath, 'utf8');
   assert.match(apiSource, /networkMode:\s*'always'/);
-  assert.equal((apiSource.match(/networkMode:\s*'always'/g) ?? []).length, 2);
+  assert.equal((apiSource.match(/networkMode:\s*'always'/g) ?? []).length, 3);
   assert.match(apiSource, /useListHeightRecords[\s\S]*?useLocalQuery/);
   assert.match(apiSource, /useCreateHeightRecord[\s\S]*?useLocalMutation/);
   assert.match(apiSource, /useListWeightRecords[\s\S]*?useLocalQuery/);
