@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 // @ts-ignore Node's built-in test modules are used only by the direct regression suite.
 import test from 'node:test';
-import { estimateSessionSweatRate, hydrationReference } from './hydration';
+import { estimateSessionSweatRate, hydrationReference, hydrationTotals, mergeHydrationSchedule } from './hydration';
 import { buildReminders } from './meal-reminders';
 
 test('hydration daily references distinguish total water from beverage intake', () => {
@@ -21,6 +21,20 @@ test('session sweat-rate estimate includes fluid consumed and urine output', () 
   assert.equal(estimateSessionSweatRate({
     durationMinutes: 0, preWeightKg: 70, postWeightKg: 69, fluidMl: 0, urineMl: 0,
   }), null);
+});
+
+test('schedule reuse copies only planned amounts and preserves destination actual logs', () => {
+  const current = [{ id: 'dest', time: '09:00', plannedMl: 200, actualMl: 150, alertEnabled: false }];
+  const source = [
+    { id: 'source-1', time: '09:00', plannedMl: 300, actualMl: 290, alertEnabled: true },
+    { id: 'source-2', time: '11:00', plannedMl: 250, actualMl: 250, alertEnabled: false },
+  ];
+  const merged = mergeHydrationSchedule(current, source, index => `new-${index}`);
+  assert.deepEqual(merged, [
+    { id: 'dest', time: '09:00', plannedMl: 300, actualMl: 150, alertEnabled: true },
+    { id: 'new-1', time: '11:00', plannedMl: 250, actualMl: null, alertEnabled: false },
+  ]);
+  assert.deepEqual(hydrationTotals({ entries: merged, sessions: [] }), { plannedMl: 550, actualMl: 150 });
 });
 
 test('hydration alerts use their planned date/time and stop once actual intake is logged', () => {

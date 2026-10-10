@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useDeleteTennisDiet, useListMealEntries, useSaveTennisDiet, type Person, type TennisDiet, type TennisPlan } from '@/lib/local-api';
+import type { HydrationLog } from '@/lib/local-models';
 import { dietPhaseLabels, isClockTime, tennisDietChoiceFromFuelWindow, timeMinutes, type TennisFuelWindow } from '@/lib/tennis-planning';
 import { useColors } from '@/hooks/useColors';
 import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, LoadingBlock, Muted, success, tap, warn } from '@/components/ui';
@@ -10,8 +11,8 @@ import { n } from '@/lib/format';
 const phaseOptions = (Object.keys(dietPhaseLabels) as TennisDiet['phase'][]).map(value => ({ value, label: dietPhaseLabels[value] }));
 type Editor = { id?: string; phase: TennisDiet['phase']; time: string; suggestionTitle?: string };
 
-export function TennisDietSchedule({ person, date, plan, suggestions, showDetails = true }: {
-  person: Person; date: string; plan: TennisPlan; suggestions: TennisFuelWindow[]; showDetails?: boolean;
+export function TennisDietSchedule({ person, date, plan, suggestions, hydration, showDetails = true }: {
+  person: Person; date: string; plan: TennisPlan; suggestions: TennisFuelWindow[]; hydration?: HydrationLog; showDetails?: boolean;
 }) {
   const c = useColors();
   const router = useRouter();
@@ -25,6 +26,10 @@ export function TennisDietSchedule({ person, date, plan, suggestions, showDetail
   const [showTimingOptions, setShowTimingOptions] = useState(false);
   const busy = save.isPending || del.isPending;
   const diets = useMemo(() => [...(plan.diets ?? [])].sort((a, b) => timeMinutes(a.time) - timeMinutes(b.time) || a.id.localeCompare(b.id)), [plan.diets]);
+  const timeline = useMemo(() => [
+    ...diets.map(diet => ({ kind: 'food' as const, time: diet.time, diet })),
+    ...(hydration?.entries ?? []).map(entry => ({ kind: 'hydration' as const, time: entry.time, entry })),
+  ].sort((a, b) => timeMinutes(a.time) - timeMinutes(b.time)), [diets, hydration?.entries]);
   const timingOptions = useMemo(() => suggestions.flatMap((window, index) => {
     const choice = tennisDietChoiceFromFuelWindow(window);
     return choice ? [{ ...choice, window, index }] : [];
@@ -48,12 +53,24 @@ export function TennisDietSchedule({ person, date, plan, suggestions, showDetail
   }
 
   return <View testID="tennis-diet-schedule" style={{ gap: 10, borderTopWidth: 1, borderTopColor: c.border, paddingTop: 12 }}>
-    <Eyebrow>Your food timetable</Eyebrow>
-    <Text style={{ fontFamily: F.bold, fontSize: 17, letterSpacing: -0.4, color: c.foreground }}>When you will actually eat</Text>
-    {showDetails ? <Muted>Set your own times around play. Foods you attach are the same portions as in Breakfast, Lunch, Dinner and Snack, shown in both places. Their nutrition is counted once in day totals. Your times never change targets.</Muted> : null}
+    <Eyebrow>Your food & hydration timetable</Eyebrow>
+    <Text style={{ fontFamily: F.bold, fontSize: 17, letterSpacing: -0.4, color: c.foreground }}>When you will eat and drink</Text>
+    {showDetails ? <Muted>Set your own times around play. Food portions are shared with Breakfast, Lunch, Dinner and Snack and count once in day totals. Planned hydration appears alongside them here and remains available on rest days.</Muted> : null}
     {entries.isLoading ? <LoadingBlock rows={1} height={70} /> : entries.isError ? <ErrorBox error={entries.error} onRetry={() => entries.refetch()} /> : <>
-      {showDetails && diets.length === 0 && !editor ? <View testID="tennis-diet-empty"><Muted>No food slots yet. Add a before-play, during-play or recovery time to build your timetable.</Muted></View> : null}
-      {diets.map(d => {
+      {showDetails && timeline.length === 0 && !editor ? <View testID="tennis-diet-empty"><Muted>No food or hydration slots yet. Add food timing here and use the daily hydration plan for drinks.</Muted></View> : null}
+      {timeline.map(item => {
+        if (item.kind === 'hydration') return <View key={`hydration-${item.entry.id}`} testID={`tennis-hydration-${item.entry.id}`} style={{ flexDirection: 'row', gap: 12 }}>
+          <View style={{ alignItems: 'center', width: 58 }}>
+            <Text style={{ fontFamily: F.bold, fontSize: 18, letterSpacing: -0.5, color: c.primary }}>{item.time}</Text>
+            <View style={{ flex: 1, width: 2, marginTop: 4, borderRadius: 1, backgroundColor: c.accentBorder }} />
+          </View>
+          <View style={{ flex: 1, backgroundColor: c.mint, borderColor: c.border, borderWidth: 1, borderRadius: 16, padding: 12, gap: 5 }}>
+            <Text style={{ fontFamily: F.bold, fontSize: 15, color: c.foreground }}>Hydration · {item.entry.plannedMl} mL planned</Text>
+            <Muted>{item.entry.actualMl === null ? 'Not recorded yet' : `${item.entry.actualMl} mL recorded`}{item.entry.alertEnabled && item.entry.actualMl === null ? ' · reminder on' : ''}</Muted>
+            {showDetails ? <Muted>Edit the drink time and amount in the daily Hydration plan. It remains available on rest days too.</Muted> : null}
+          </View>
+        </View>;
+        const d = item.diet;
         const list = (entries.data ?? []).filter(e => e.tennisDietId === d.id);
         const tot = list.reduce((t, e) => ({ k: t.k + e.nutrition.calories, p: t.p + e.nutrition.protein, cb: t.cb + e.nutrition.carbs, f: t.f + e.nutrition.fat }), { k: 0, p: 0, cb: 0, f: 0 });
         return <View key={d.id} testID={`tennis-diet-${d.id}`} style={{ flexDirection: 'row', gap: 12 }}>

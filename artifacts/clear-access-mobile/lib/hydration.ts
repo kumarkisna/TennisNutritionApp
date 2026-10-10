@@ -1,5 +1,5 @@
 import { getAgeOnDate } from './planning-targets';
-import type { HydrationLog, HydrationSession } from './local-models';
+import type { HydrationEntry, HydrationLog, HydrationSession } from './local-models';
 
 export const HYDRATION_REMINDER_PREFIX = 'clear-access-hydration:';
 export const MAX_HYDRATION_ENTRIES = 20;
@@ -35,4 +35,20 @@ export function hydrationTotals(log?: HydrationLog) {
     plannedMl: total.plannedMl + entry.plannedMl,
     actualMl: total.actualMl + (entry.actualMl ?? 0),
   }), { plannedMl: 0, actualMl: 0 });
+}
+
+export function mergeHydrationSchedule(current: HydrationEntry[], source: HydrationEntry[], createId: (index: number) => string) {
+  const merged = [...current];
+  source.forEach((entry, index) => {
+    const existingIndex = merged.findIndex(existing => existing.time === entry.time);
+    if (existingIndex >= 0) {
+      merged[existingIndex] = { ...merged[existingIndex], plannedMl: entry.plannedMl, alertEnabled: entry.alertEnabled };
+    } else {
+      merged.push({
+        id: createId(index), time: entry.time, plannedMl: entry.plannedMl,
+        actualMl: null, alertEnabled: entry.alertEnabled,
+      });
+    }
+  });
+  return merged;
 }

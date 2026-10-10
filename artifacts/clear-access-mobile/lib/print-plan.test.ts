@@ -54,6 +54,22 @@ test('print HTML includes the person, date, portions, and safely escaped names',
   assert.match(html, /Plan experience<\/span><span class="value">Not rated/);
 });
 
+test('hydration appears as timed entries in the printed food timetable', () => {
+  const html = buildPlannedDietHtml({
+    personName: 'Me',
+    date: '2026-10-05',
+    activityType: 'rest',
+    entries: [entry(1, 'breakfast', 'Oats')],
+    mealTimes,
+    hydration: {
+      entries: [{ id: 'water-1', time: '10:30', plannedMl: 300, actualMl: 200, alertEnabled: true }],
+      sessions: [],
+    },
+  });
+  assert.ok(html.indexOf('08:00</td><td>Breakfast') < html.indexOf('10:30</td><td>Hydration'));
+  assert.match(html, /300 mL planned · 200 mL recorded/);
+});
+
 test('print HTML includes saved sleep times, calculated duration, rating, and escaped notes', () => {
   const html = buildPlannedDietHtml({
     personName: 'Me',

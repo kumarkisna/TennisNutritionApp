@@ -171,7 +171,7 @@ export function TennisPlanPanel({ person, date, showDetails = true }: { person: 
           : null}
         {ratingError ? <ErrorBox error={ratingError} /> : null}
       </View>
-      <TennisDietSchedule person={person} date={date} plan={saved} suggestions={windows} showDetails={showDetails} />
+      <TennisDietSchedule person={person} date={date} plan={saved} suggestions={windows} hydration={day.data?.hydration} showDetails={showDetails} />
       {windows.map((w, i) => <View key={i} testID={`row-tennis-window-${i}`} style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 10, gap: 2 }}>
         <Text style={{ fontFamily: F.bold, fontSize: 12, color: c.primary }}>{w.time}</Text>
         <Text style={{ fontFamily: F.semi, fontSize: 14, color: c.foreground }}>{w.title}</Text>

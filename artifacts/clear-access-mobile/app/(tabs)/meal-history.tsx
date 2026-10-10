@@ -10,6 +10,7 @@ import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, Muted, Screen, Title, su
 import { dietPhaseLabels, fuelLabels } from '@/lib/tennis-planning';
 import type { MealPlanReview, TennisPlan } from '@/lib/local-models';
 import { filterMealReviews, sortMealReviews, type MealReviewSort } from '@/lib/meal-review-sort';
+import { HydrationWeekCard } from '@/components/HydrationWeekCard';
 
 const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const planModeLabels = { training: 'Training day', tournament: 'Tournament day', rest: 'Rest day' } as const;
@@ -174,6 +175,7 @@ export default function MealHistory() {
   return <Screen title="Meal history">
     <Eyebrow>Meal history · {person.name}</Eyebrow>
     <Title sub="Review the meals you tried, find the combinations that worked, and reuse them on another day.">Your meal combinations.</Title>
+    <HydrationWeekCard personId={person.id} personName={person.name} />
     <Card>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <Btn small variant="ghost" label="Previous month" testID="button-meal-calendar-previous" onPress={() => setMonth(monthShift(month, -1))} />

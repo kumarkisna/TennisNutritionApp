@@ -119,7 +119,16 @@ export function buildPlannedDietHtml({
       · ${escapeHtml(intensityLabels[session.intensity])}
     </li>`)
     .join('');
-  const rows = items.map(item => {
+  const timetable = [
+    ...items.map(item => ({ kind: 'food' as const, time: item.time, item })),
+    ...(hydration?.entries ?? []).map(entry => ({ kind: 'hydration' as const, time: entry.time, entry })),
+  ].sort((a, b) => a.time.localeCompare(b.time));
+  const rows = timetable.map(row => {
+    if (row.kind === 'hydration') {
+      const actual = row.entry.actualMl === null ? 'not recorded' : `${row.entry.actualMl} mL recorded`;
+      return `<tr><td class="time">${escapeHtml(row.time)}</td><td>Hydration</td><td>${row.entry.plannedMl} mL planned · ${escapeHtml(actual)}${row.entry.alertEnabled && row.entry.actualMl === null ? ' · reminder on' : ''}</td><td class="portion">${row.entry.plannedMl} mL</td></tr>`;
+    }
+    const item = row.item;
     const section = item.phase ? `${dietPhaseLabels[item.phase]} · ` : '';
     const portion = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(item.grams);
     return `<tr>
@@ -147,8 +156,8 @@ export function buildPlannedDietHtml({
        ${sleepLog.note ? `<p><strong>Notes:</strong> ${escapeHtml(sleepLog.note)}</p>` : ''}`
     : '<p class="empty">No sleep record saved for this date.</p>';
   const hydrationSection = hydration?.entries.length || hydration?.sessions.length
-    ? `<ul>${hydration.entries.map(e => `<li>${escapeHtml(e.time)} · planned ${e.plannedMl} mL · actual ${e.actualMl === null ? 'not logged' : `${e.actualMl} mL`}${e.alertEnabled && e.actualMl === null ? ' · alert on' : ''}</li>`).join('')}</ul>
-      ${hydration.sessions.map(s => `<p>${escapeHtml(s.activity)} · estimated sweat rate ${(Math.max(0, s.preWeightKg - s.postWeightKg + (s.fluidMl - s.urineMl) / 1000) / (s.durationMinutes / 60)).toFixed(2)} L/hour</p>`).join('')}`
+    ? `<p>Planned and recorded hydration appears in the timed meal table above.</p>
+      ${hydration.sessions.map(s => { const rate = (s.preWeightKg - s.postWeightKg + (s.fluidMl - s.urineMl) / 1000) / (s.durationMinutes / 60); return `<p>${escapeHtml(s.activity)} · ${rate > 0 ? `estimated sweat rate ${rate.toFixed(2)} L/hour` : 'no net fluid loss measured; check inputs'} (session estimate, not a daily target)</p>`; }).join('')}`
     : '<p class="empty">No hydration plan saved for this date.</p>';
 
   return `<!DOCTYPE html>

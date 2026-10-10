@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Linking, Switch, Text, View } from 'react-native';
-import { useSaveHydrationLog } from '@/lib/local-api';
+import { useGetDayActivity, useSaveHydrationLog } from '@/lib/local-api';
 import type { DayActivity, HydrationEntry, HydrationSession } from '@/lib/local-models';
-import { estimateSessionSweatRate, hydrationReference, hydrationTotals, MAX_HYDRATION_ENTRIES, MAX_HYDRATION_SESSIONS } from '@/lib/hydration';
+import { estimateSessionSweatRate, hydrationReference, hydrationTotals, mergeHydrationSchedule, MAX_HYDRATION_ENTRIES, MAX_HYDRATION_SESSIONS } from '@/lib/hydration';
+import { isIsoDate, shiftDate } from '@/lib/format';
 import { useColors } from '@/hooks/useColors';
 import { Btn, Card, Eyebrow, F, Field, Muted } from '@/components/ui';
 
@@ -17,10 +18,17 @@ export function HydrationCard({ personId, date, personName, dateOfBirth, sex, da
   const [draft, setDraft] = useState(blank);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [copyDate, setCopyDate] = useState(() => shiftDate(date, -1));
+  const [copyPreview, setCopyPreview] = useState<HydrationEntry[] | null>(null);
+  const sourceDay = useGetDayActivity({ personId, date: copyDate }, { query: { enabled: false } });
   useEffect(() => setDraft({
     entries: (day?.hydration?.entries ?? []).map(e => ({ id: e.id, time: e.time, planned: String(e.plannedMl), actual: e.actualMl === null ? '' : String(e.actualMl), alert: e.alertEnabled })),
     sessions: (day?.hydration?.sessions ?? []).map(s => ({ id: s.id, activity: s.activity, minutes: String(s.durationMinutes), pre: String(s.preWeightKg), post: String(s.postWeightKg), fluid: String(s.fluidMl), urine: String(s.urineMl) })),
   }), [day?.hydration, personId, date]);
+  useEffect(() => {
+    setCopyDate(shiftDate(date, -1));
+    setCopyPreview(null);
+  }, [personId, date]);
   const updateEntry = (id: string, key: keyof EntryDraft, value: string | boolean) => setDraft(v => ({ ...v, entries: v.entries.map(e => e.id === id ? { ...e, [key]: value } : e) }));
   const updateSession = (id: string, key: keyof SessionDraft, value: string) => setDraft(v => ({ ...v, sessions: v.sessions.map(s => s.id === id ? { ...s, [key]: value } : s) }));
   const reference = hydrationReference(dateOfBirth, sex, date);
@@ -35,6 +43,31 @@ export function HydrationCard({ personId, date, personName, dateOfBirth, sex, da
       setNotice('Hydration plan saved.');
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not save hydration data.'); }
   }
+  async function loadCopySchedule() {
+    setError(''); setNotice(''); setCopyPreview(null);
+    if (!isIsoDate(copyDate) || copyDate === date) { setError('Choose a valid source date different from this day.'); return; }
+    try {
+      const result = await sourceDay.refetch();
+      const entries = result.data?.hydration?.entries ?? [];
+      if (!entries.length) { setError('No planned hydration schedule was found on that date.'); return; }
+      setCopyPreview(entries);
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not load the source schedule.'); }
+  }
+  function applyCopySchedule() {
+    if (!copyPreview) return;
+    const current = draft.entries.map(entry => ({
+      id: entry.id, time: entry.time, plannedMl: Number(entry.planned),
+      actualMl: entry.actual.trim() ? Number(entry.actual) : null, alertEnabled: entry.alert,
+    }));
+    const merged = mergeHydrationSchedule(current, copyPreview, index => `hydration-copy-${Date.now().toString(36)}-${index}`);
+    if (merged.length > MAX_HYDRATION_ENTRIES) { setError(`This would exceed the ${MAX_HYDRATION_ENTRIES}-drink limit. Remove some entries first.`); return; }
+    setDraft(v => ({ ...v, entries: merged.map(entry => ({
+      id: entry.id, time: entry.time, planned: String(entry.plannedMl),
+      actual: entry.actualMl === null ? '' : String(entry.actualMl), alert: entry.alertEnabled,
+    })) }));
+    setCopyPreview(null);
+    setNotice('Schedule added to this date. Existing recorded amounts were kept; review the plan and save.');
+  }
   const input = (label: string, value: string, onChangeText: (value: string) => void, placeholder: string, testID: string, numeric = false) =>
     <Field label={label} value={value} onChangeText={onChangeText} placeholder={placeholder} testID={testID} keyboardType={numeric ? 'decimal-pad' : 'numbers-and-punctuation'} />;
   return <Card>
@@ -44,6 +77,15 @@ export function HydrationCard({ personId, date, personName, dateOfBirth, sex, da
     <Text accessibilityRole="link" onPress={() => void Linking.openURL('https://www.nationalacademies.org/read/10925/chapter/2')} style={{ color: c.primary, fontFamily: F.medium, fontSize: 12 }}>Source: National Academies water reference (2005)</Text>
     <Muted>{day && ((day.tennis?.sessions.length ?? 0) > 0 || day.activityType !== 'rest') ? 'Activity is logged today. Exercise may change fluid needs, but duration alone cannot determine a safe extra daily amount.' : 'Drink to thirst and adjust to conditions; avoid forcing a fixed volume.'}</Muted>
     <Text style={{ fontFamily: F.semi, color: c.foreground }}>Planned drinks</Text>
+    <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
+      <View style={{ flex: 1 }}>{input('Reuse schedule from date', copyDate, setCopyDate, 'YYYY-MM-DD', 'input-copy-hydration-date')}</View>
+      <Btn small variant="ghost" label={sourceDay.isFetching ? 'Loading…' : 'Load'} testID="button-load-hydration-schedule" disabled={sourceDay.isFetching} onPress={() => void loadCopySchedule()} />
+    </View>
+    {copyPreview ? <View style={{ gap: 5, borderTopWidth: 1, borderColor: c.border, paddingTop: 8 }}>
+      <Muted>Review {copyPreview.length} planned drinks from {copyDate}. Completed amounts are not copied.</Muted>
+      {copyPreview.map(entry => <Muted key={entry.id}>{entry.time} · {entry.plannedMl} mL planned{entry.alertEnabled ? ' · reminder enabled' : ''}</Muted>)}
+      <Btn small label="Add this schedule" testID="button-apply-hydration-schedule" onPress={applyCopySchedule} />
+    </View> : null}
     {draft.entries.map((e, i) => <View key={e.id} style={{ gap: 6, borderTopWidth: 1, borderColor: c.border, paddingTop: 8 }}>
       <View style={{ flexDirection: 'row', gap: 6 }}>{input('Time', e.time, v => updateEntry(e.id, 'time', v), '12:00', `input-hydration-time-${i}`)}{input('Planned mL', e.planned, v => updateEntry(e.id, 'planned', v), '250', `input-hydration-planned-${i}`, true)}</View>
       <View style={{ flexDirection: 'row', gap: 6 }}>{input('Actual mL (optional)', e.actual, v => updateEntry(e.id, 'actual', v), 'Not logged', `input-hydration-actual-${i}`, true)}
