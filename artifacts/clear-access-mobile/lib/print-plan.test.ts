@@ -66,9 +66,33 @@ test('print HTML includes saved sleep times, calculated duration, rating, and es
   assert.match(html, /Sleep log/);
   assert.match(html, /Bedtime:<\/strong> 22:30/);
   assert.match(html, /Wake time:<\/strong> 06:45/);
-  assert.match(html, /Duration:<\/strong> 8 hr 15 min/);
+  assert.match(html, /Total logged sleep:<\/strong> 8 hr 15 min/);
   assert.match(html, /Quality:<\/strong> 4\/5/);
   assert.match(html, /Quiet &amp; &lt;cool&gt;/);
+});
+
+test('printed sleep log includes naps, wake-ups, and overlap-aware total sleep', () => {
+  const html = buildPlannedDietHtml({
+    personName: 'Me',
+    date: '2026-10-05',
+    activityType: 'rest',
+    entries: [],
+    mealTimes,
+    sleepLog: {
+      bedtime: '22:00',
+      wakeTime: '06:00',
+      quality: 4,
+      note: '',
+      naps: [{ startTime: '13:00', endTime: '14:00' }, { startTime: '13:30', endTime: '14:30' }],
+      wakeUps: [{ startTime: '02:00', endTime: '02:30' }],
+    },
+  });
+  assert.match(html, /Overnight interval:<\/strong> 8 hr/);
+  assert.match(html, /Total logged sleep:<\/strong> 9 hr/);
+  assert.match(html, /Naps/);
+  assert.match(html, /13:00–14:00/);
+  assert.match(html, /Overnight wake-ups/);
+  assert.match(html, /awake 30 min/);
 });
 
 test('print HTML includes tennis plan type, sorted sessions, intensity, and rating', () => {

@@ -1,5 +1,6 @@
 import { isClockTime } from './tennis-planning';
 import { ageInCalendarMonths } from './growth';
+import type { SleepInterval, SleepLog } from './local-models';
 
 export type SleepReference = { label: string; minMinutes: number; maxMinutes: number | null; includesNaps: boolean };
 
@@ -37,8 +38,77 @@ export function sleepDurationMinutes(bedtime: string, wakeTime: string): number 
   return (wakeMinutes - bedtimeMinutes + 1440) % 1440;
 }
 
+function minuteOfDay(time: string): number {
+  return Number(time.slice(0, 2)) * 60 + Number(time.slice(3));
+}
+
+export function intervalDurationMinutes(interval: SleepInterval): number | null {
+  if (!isClockTime(interval.startTime) || !isClockTime(interval.endTime) || interval.startTime === interval.endTime) return null;
+  return (minuteOfDay(interval.endTime) - minuteOfDay(interval.startTime) + 1440) % 1440;
+}
+
+function mergeIntervals(intervals: [number, number][]): [number, number][] {
+  const sorted = intervals.filter(([start, end]) => end > start).sort((a, b) => a[0] - b[0]);
+  const merged: [number, number][] = [];
+  for (const [start, end] of sorted) {
+    const last = merged[merged.length - 1];
+    if (!last || start > last[1]) merged.push([start, end]);
+    else last[1] = Math.max(last[1], end);
+  }
+  return merged;
+}
+
+function intervalTotal(intervals: [number, number][]): number {
+  return intervals.reduce((sum, [start, end]) => sum + end - start, 0);
+}
+
+export function calculateTotalSleepMinutes(sleep: Pick<SleepLog, 'bedtime' | 'wakeTime'> & Partial<Pick<SleepLog, 'naps' | 'wakeUps'>>): number | null {
+  const nightMinutes = sleepDurationMinutes(sleep.bedtime, sleep.wakeTime);
+  if (nightMinutes === null) return null;
+  const bedMinute = minuteOfDay(sleep.bedtime);
+  const nightEnd = bedMinute + nightMinutes;
+  const wakeUps = sleep.wakeUps ?? [];
+  const naps = sleep.naps ?? [];
+  if (!Array.isArray(wakeUps) || !Array.isArray(naps)) return null;
+
+  const awakeRanges: [number, number][] = [];
+  for (const wakeUp of wakeUps) {
+    const duration = intervalDurationMinutes(wakeUp);
+    if (duration === null) return null;
+    const offset = (minuteOfDay(wakeUp.startTime) - bedMinute + 1440) % 1440;
+    const start = bedMinute + offset;
+    const end = start + duration;
+    if (start < bedMinute || start >= nightEnd || end > nightEnd) return null;
+    awakeRanges.push([start, end]);
+  }
+  const mergedAwake = mergeIntervals(awakeRanges);
+  const awakeMinutes = intervalTotal(mergedAwake);
+  const overnightRanges: [number, number][] = [];
+  let cursor = bedMinute;
+  for (const [start, end] of mergedAwake) {
+    if (start > cursor) overnightRanges.push([cursor, start]);
+    cursor = Math.max(cursor, end);
+  }
+  if (cursor < nightEnd) overnightRanges.push([cursor, nightEnd]);
+
+  // The planner date is the morning/wake date, so naps shift one day forward
+  // on a night that crossed midnight.
+  const dayOffset = minuteOfDay(sleep.wakeTime) <= bedMinute ? 1440 : 0;
+  const napRanges: [number, number][] = [];
+  for (const nap of naps) {
+    const duration = intervalDurationMinutes(nap);
+    if (duration === null) return null;
+    const start = dayOffset + minuteOfDay(nap.startTime);
+    napRanges.push([start, start + duration]);
+  }
+  const allSleepRanges = mergeIntervals([...overnightRanges, ...napRanges]);
+  const total = intervalTotal(allSleepRanges);
+  return Number.isFinite(awakeMinutes) && total > 0 && total <= 1440 ? total : null;
+}
+
 export function formatSleepDuration(minutes: number): string {
   const hours = Math.floor(minutes / 60);
   const remainder = minutes % 60;
+  if (hours === 0) return `${remainder} min`;
   return remainder ? `${hours} hr ${remainder} min` : `${hours} hr`;
 }

@@ -165,7 +165,11 @@ test('sleep logs are separate by person and date and survive local backup restor
   const person = await store.createPerson({ ...baselinePerson('Sleep log user'), dateOfBirth: '2012-01-01' });
   const first = { personId: person.id, date: '2026-10-09' };
   const second = { personId: person.id, date: '2026-10-10' };
-  const sleep = { bedtime: '22:30', wakeTime: '06:45', quality: 4, note: 'Training day' };
+  const sleep = {
+    bedtime: '22:30', wakeTime: '06:45', quality: 4, note: 'Training day',
+    naps: [{ startTime: '13:00', endTime: '13:45' }],
+    wakeUps: [{ startTime: '03:10', endTime: '03:20' }],
+  };
 
   await store.saveSleepRecord({ ...first, sleep });
   await store.saveDayActivity({ ...second, activityType: 'training_60' });
@@ -182,6 +186,8 @@ test('sleep logs are separate by person and date and survive local backup restor
 
   await assert.rejects(store.saveSleepRecord({ ...first, sleep: { ...sleep, bedtime: '25:00' } }), /valid bedtime/i);
   await assert.rejects(store.saveSleepRecord({ ...first, sleep: { ...sleep, quality: 6 } }), /valid bedtime/i);
+  await assert.rejects(store.saveSleepRecord({ ...first, sleep: { ...sleep, wakeUps: [{ startTime: '06:40', endTime: '07:00' }] } }), /valid bedtime/i);
+  await assert.rejects(store.saveSleepRecord({ ...first, sleep: { ...sleep, naps: Array.from({ length: 11 }, () => ({ startTime: '13:00', endTime: '13:30' })) } }), /valid bedtime/i);
 });
 
 test('hydrates from the versioned seed and preserves changes across store restarts', async () => {

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Linking, Text, View } from 'react-native';
 import { useDayActivitiesForDates, useGetDayActivity, useSaveSleepRecord } from '@/lib/local-api';
-import { formatSleepDuration, sleepDurationMinutes, sleepReferenceForDate, sleepWeekDates } from '@/lib/sleep-tracking';
 import { getAgeOnDate } from '@/lib/planning-targets';
 import { today } from '@/lib/format';
+import type { SleepInterval } from '@/lib/local-models';
+import { calculateTotalSleepMinutes, formatSleepDuration, sleepDurationMinutes, sleepReferenceForDate, sleepWeekDates } from '@/lib/sleep-tracking';
 import { useColors } from '@/hooks/useColors';
 import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, Muted } from '@/components/ui';
 
@@ -15,6 +16,31 @@ const qualityChoices = [
   { value: '4', label: '4' },
   { value: '5', label: '5 · Great' },
 ];
+
+function SleepIntervalEditor({ label, testPrefix, intervals, onChange, startHint, endHint, maxEntries }: {
+  label: string;
+  testPrefix: string;
+  intervals: SleepInterval[];
+  onChange: (intervals: SleepInterval[]) => void;
+  startHint: string;
+  endHint: string;
+  maxEntries: number;
+}) {
+  const c = useColors();
+  return <View style={{ gap: 6 }}>
+    <Text style={{ fontFamily: F.semi, color: c.foreground }}>{label}</Text>
+    {intervals.map((interval, index) => <View key={`${testPrefix}-${index}`} style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6 }}>
+      <View style={{ flex: 1 }}>
+        <Field label={`Start ${index + 1}`} value={interval.startTime} onChangeText={value => onChange(intervals.map((item, i) => i === index ? { ...item, startTime: value } : item))} placeholder={startHint} maxLength={5} keyboardType="numbers-and-punctuation" testID={`input-${testPrefix}-${index}-start`} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Field label={`End ${index + 1}`} value={interval.endTime} onChangeText={value => onChange(intervals.map((item, i) => i === index ? { ...item, endTime: value } : item))} placeholder={endHint} maxLength={5} keyboardType="numbers-and-punctuation" testID={`input-${testPrefix}-${index}-end`} />
+      </View>
+      <Btn small variant="ghost" icon="trash-2" label="Remove" testID={`button-remove-${testPrefix}-${index}`} onPress={() => onChange(intervals.filter((_, i) => i !== index))} />
+    </View>)}
+    <Btn small variant="ghost" icon="plus" label={`Add ${testPrefix === 'nap' ? 'nap' : 'wake-up'}`} disabled={intervals.length >= maxEntries} testID={`button-add-${testPrefix}`} onPress={() => onChange([...intervals, { startTime: '', endTime: '' }])} />
+  </View>;
+}
 
 function sleepRange(ageYears: number | null) {
   if (ageYears === null) return 'Age-based daily guidance: 4–12 months, 12–16 hours (including naps); 1–2 years, 11–14; 3–5 years, 10–13; 6–12 years, 9–12; 13–17 years, 8–10; adults 18–60, at least 7 hours. Add a date of birth for the selected person’s range.';
@@ -36,7 +62,7 @@ function SleepWeekSummary({ personId, date, dateOfBirth }: { personId: number; d
   const days = useDayActivitiesForDates(personId, dates);
   const records = dates.map((dayDate, index) => {
     const sleep = days[index]?.data?.sleep;
-    const minutes = sleep ? sleepDurationMinutes(sleep.bedtime, sleep.wakeTime) : null;
+    const minutes = sleep ? calculateTotalSleepMinutes(sleep) : null;
     const reference = sleepReferenceForDate(dateOfBirth, dayDate);
     const comparison = minutes === null ? null : reference === null ? 'Add date of birth for an age-based comparison.' :
       minutes < reference.minMinutes ? `Below daily reference (${reference.label})` :
@@ -79,7 +105,7 @@ function SleepWeekSummary({ personId, date, dateOfBirth }: { personId: number; d
       </View>
       {record.comparison ? <Muted>{record.comparison}{record.reference?.includesNaps ? ' · reference includes naps' : ''}</Muted> : null}
     </View>)}
-    <Muted>Age-based daily ranges are a reference, not a diagnosis. This log records the overnight interval only; naps and wake-ups are not included.</Muted>
+    <Muted>Age-based daily ranges are a reference, not a diagnosis. Totals include entered naps and subtract entered wake-ups; unrecorded sleep is not inferred.</Muted>
   </View>;
 }
 
@@ -91,9 +117,12 @@ export function SleepLogCard({ personId, personName, date, dateOfBirth }: { pers
   const [wakeTime, setWakeTime] = useState('');
   const [quality, setQuality] = useState('unrated');
   const [note, setNote] = useState('');
+  const [naps, setNaps] = useState<SleepInterval[]>([]);
+  const [wakeUps, setWakeUps] = useState<SleepInterval[]>([]);
   const [error, setError] = useState<unknown>(null);
   const [notice, setNotice] = useState('');
   const duration = sleepDurationMinutes(bedtime, wakeTime);
+  const totalDuration = calculateTotalSleepMinutes({ bedtime, wakeTime, naps, wakeUps });
   const age = dateOfBirth ? getAgeOnDate(dateOfBirth, date) : null;
 
   useEffect(() => {
@@ -102,6 +131,8 @@ export function SleepLogCard({ personId, personName, date, dateOfBirth }: { pers
     setWakeTime(day.data.sleep?.wakeTime ?? '');
     setQuality(day.data.sleep ? String(day.data.sleep.quality) : 'unrated');
     setNote(day.data.sleep?.note ?? '');
+    setNaps(day.data.sleep?.naps?.map(interval => ({ ...interval })) ?? []);
+    setWakeUps(day.data.sleep?.wakeUps?.map(interval => ({ ...interval })) ?? []);
     setError(null);
     setNotice('');
   }, [personId, date, day.data, day.isSuccess]);
@@ -112,7 +143,7 @@ export function SleepLogCard({ personId, personName, date, dateOfBirth }: { pers
     try {
       await save.mutateAsync({ data: {
         personId, date, sleep: {
-          bedtime, wakeTime, quality: Number(quality), note: note.trim(),
+          bedtime, wakeTime, quality: Number(quality), note: note.trim(), naps, wakeUps,
         },
       } });
       setNotice(`Sleep record saved for ${date}.`);
@@ -128,11 +159,11 @@ export function SleepLogCard({ personId, personName, date, dateOfBirth }: { pers
     } catch (problem) { setError(problem); }
   }
 
-  const canSave = duration !== null && quality !== 'unrated' && note.length <= 1000 && !save.isPending;
+  const canSave = totalDuration !== null && quality !== 'unrated' && note.length <= 1000 && !save.isPending;
   return <Card>
     <Eyebrow>Sleep · {personName} · {date}</Eyebrow>
     <Text style={{ fontFamily: F.bold, fontSize: 18, color: c.foreground }}>Sleep log for this date</Text>
-    <Muted>Each date has its own sleep record. Enter times in 24-hour format; duration is calculated, including sleep that crosses midnight.</Muted>
+    <Muted>Each date has its own sleep record. Enter 24-hour times; add naps and awake periods for a fuller total. Overlapping intervals count only once.</Muted>
     {day.isLoading ? <Muted>Loading sleep record…</Muted> : day.isError ? <ErrorBox error={day.error} onRetry={() => day.refetch()} /> : <>
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <View style={{ flex: 1 }}><Field label="Bedtime (HH:MM)" value={bedtime} onChangeText={setBedtime} placeholder="22:30" maxLength={5} keyboardType="numbers-and-punctuation" testID="input-sleep-bedtime" /></View>
@@ -140,6 +171,10 @@ export function SleepLogCard({ personId, personName, date, dateOfBirth }: { pers
       </View>
       {duration !== null ? <Muted>Calculated duration: <Text style={{ fontFamily: F.semi, color: c.foreground }}>{formatSleepDuration(duration)}</Text></Muted> :
         <Muted>Enter two different valid times to calculate sleep duration.</Muted>}
+      <SleepIntervalEditor label="Naps (optional)" testPrefix="nap" intervals={naps} onChange={setNaps} startHint="13:00" endHint="14:00" maxEntries={10} />
+      <SleepIntervalEditor label="Overnight wake-ups (optional)" testPrefix="wake-up" intervals={wakeUps} onChange={setWakeUps} startHint="02:00" endHint="02:15" maxEntries={20} />
+      {totalDuration !== null ? <Muted>Total sleep after subtracting wake-ups and counting overlapping intervals once: <Text style={{ fontFamily: F.semi, color: c.foreground }}>{formatSleepDuration(totalDuration)}</Text></Muted> :
+        duration !== null ? <Muted>Check the added interval times. Overnight wake-ups must fall between bedtime and wake time.</Muted> : null}
       <Text style={{ fontFamily: F.semi, color: c.foreground }}>Sleep quality</Text>
       <Chips testPrefix="select-sleep-quality" value={quality} onChange={setQuality} options={qualityChoices} />
       <Field label="Notes (optional)" value={note} onChangeText={setNote} placeholder="Anything to remember about this night" maxLength={1000} multiline testID="input-sleep-note" />

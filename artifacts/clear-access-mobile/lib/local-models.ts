@@ -245,7 +245,15 @@ export type MealTimes = Record<Meal, string>;
 export type MealTimeInput = { date: string; personId: number; meal: Meal; time: string };
 export type MealAlert = { id: string; minutesBefore: number; enabled: boolean };
 export type MealAlertInput = { date: string; personId: number; meal: Meal; alerts: MealAlert[] };
-export type SleepLog = { bedtime: string; wakeTime: string; quality: number; note: string };
+export type SleepInterval = { startTime: string; endTime: string };
+export type SleepLog = {
+  bedtime: string;
+  wakeTime: string;
+  quality: number;
+  note: string;
+  naps?: SleepInterval[];
+  wakeUps?: SleepInterval[];
+};
 export type SleepLogInput = { date: string; personId: number; sleep: SleepLog | null };
 export type DayActivity = {
   date: string; personId: number; activityType: DayActivityType; tennis?: TennisPlan; mealTimes?: MealTimes;

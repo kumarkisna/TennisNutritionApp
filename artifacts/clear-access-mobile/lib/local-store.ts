@@ -5,6 +5,7 @@ import { getMealTimes, isMealTimes } from './meal-scheduling';
 import { isMealAlerts, type ReminderSource } from './meal-reminders';
 import { getTennisFoodDestinationFingerprint, getTennisFoodImportKey, getTennisFoodPlanFingerprint, mapTennisFoodSlots } from './tennis-copy';
 import { isFoodIngredientList } from './food-nutrition';
+import { calculateTotalSleepMinutes } from './sleep-tracking';
 import {
   ActivityLevel,
   DayActivityType,
@@ -225,10 +226,16 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
 function isSleepLog(value: unknown): value is DayActivity['sleep'] {
-  return isRecord(value) && hasExactKeys(value, ['bedtime', 'wakeTime', 'quality', 'note']) &&
+  const isIntervalList = (intervals: unknown, max: number) => Array.isArray(intervals) && intervals.length <= max &&
+    intervals.every(interval => isRecord(interval) && hasExactKeys(interval, ['startTime', 'endTime']) &&
+      isClockTime(interval.startTime) && isClockTime(interval.endTime) && interval.startTime !== interval.endTime);
+  return isRecord(value) && hasExactKeys(value, ['bedtime', 'wakeTime', 'quality', 'note'], ['naps', 'wakeUps']) &&
     isClockTime(value.bedtime) && isClockTime(value.wakeTime) && value.bedtime !== value.wakeTime &&
     Number.isInteger(value.quality) && isFiniteInRange(value.quality, 1, 5) &&
-    typeof value.note === 'string' && value.note.length <= 1000;
+    typeof value.note === 'string' && value.note.length <= 1000 &&
+    (value.naps === undefined || isIntervalList(value.naps, 10)) &&
+    (value.wakeUps === undefined || isIntervalList(value.wakeUps, 20)) &&
+    calculateTotalSleepMinutes(value as Parameters<typeof calculateTotalSleepMinutes>[0]) !== null;
 }
 function isMealReviewList(value: unknown, personIds: ReadonlySet<number>): value is MealPlanReview[] {
   if (!Array.isArray(value) || value.length > 10000) return false;
@@ -2359,14 +2366,22 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
         if (!isValidCalendarDate(input.date)) fail('Choose a valid date for the sleep record.');
         findPerson(draft, input.personId);
         const existing = draft.activities.find(activity => activity.date === input.date && activity.personId === input.personId);
-        if (input.sleep !== null && !isSleepLog(input.sleep)) fail('Enter valid bedtime and wake time, a quality rating from 1 to 5, and a note of at most 1000 characters.');
+        if (input.sleep !== null && !isSleepLog(input.sleep)) fail('Enter valid bedtime and wake time, valid nap and wake-up intervals, a quality rating from 1 to 5, and a note of at most 1000 characters.');
         if (existing) {
           if (input.sleep === null) delete existing.sleep;
-          else existing.sleep = { ...input.sleep };
+          else existing.sleep = {
+            ...input.sleep,
+            naps: input.sleep.naps?.map(interval => ({ ...interval })),
+            wakeUps: input.sleep.wakeUps?.map(interval => ({ ...interval })),
+          };
           return existing;
         }
         const activity: DayActivity = { date: input.date, personId: input.personId, activityType: 'rest' };
-        if (input.sleep !== null) activity.sleep = { ...input.sleep };
+        if (input.sleep !== null) activity.sleep = {
+          ...input.sleep,
+          naps: input.sleep.naps?.map(interval => ({ ...interval })),
+          wakeUps: input.sleep.wakeUps?.map(interval => ({ ...interval })),
+        };
         draft.activities.push(activity);
         return activity;
       });

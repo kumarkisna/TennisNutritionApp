@@ -1,7 +1,7 @@
 import type { DayActivityType, Meal, MealEntry, MealTimes, SleepLog, TennisDiet, TennisPlan } from './local-models';
 import { sportsActivities } from './planning-targets';
 import { dietPhaseLabels } from './tennis-planning';
-import { formatSleepDuration, sleepDurationMinutes } from './sleep-tracking';
+import { calculateTotalSleepMinutes, formatSleepDuration, intervalDurationMinutes, sleepDurationMinutes } from './sleep-tracking';
 
 export type PlannedDietItem = {
   entryId: number;
@@ -128,9 +128,20 @@ export function buildPlannedDietHtml({
     </tr>`;
   }).join('');
   const sleepMinutes = sleepLog ? sleepDurationMinutes(sleepLog.bedtime, sleepLog.wakeTime) : null;
-  const sleepSection = sleepLog && sleepMinutes !== null
+  const totalSleepMinutes = sleepLog ? calculateTotalSleepMinutes(sleepLog) : null;
+  const napRows = sleepLog?.naps?.map(nap => {
+    const minutes = intervalDurationMinutes(nap);
+    return minutes === null ? '' : `<li>${escapeHtml(nap.startTime)}–${escapeHtml(nap.endTime)} · ${escapeHtml(formatSleepDuration(minutes))}</li>`;
+  }).join('') ?? '';
+  const wakeUpRows = sleepLog?.wakeUps?.map(wakeUp => {
+    const minutes = intervalDurationMinutes(wakeUp);
+    return minutes === null ? '' : `<li>${escapeHtml(wakeUp.startTime)}–${escapeHtml(wakeUp.endTime)} · awake ${escapeHtml(formatSleepDuration(minutes))}</li>`;
+  }).join('') ?? '';
+  const sleepSection = sleepLog && sleepMinutes !== null && totalSleepMinutes !== null
     ? `<p><strong>Bedtime:</strong> ${escapeHtml(sleepLog.bedtime)} &nbsp; <strong>Wake time:</strong> ${escapeHtml(sleepLog.wakeTime)}</p>
-       <p><strong>Duration:</strong> ${escapeHtml(formatSleepDuration(sleepMinutes))} &nbsp; <strong>Quality:</strong> ${sleepLog.quality}/5</p>
+       <p><strong>Overnight interval:</strong> ${escapeHtml(formatSleepDuration(sleepMinutes))} &nbsp; <strong>Total logged sleep:</strong> ${escapeHtml(formatSleepDuration(totalSleepMinutes))} &nbsp; <strong>Quality:</strong> ${sleepLog.quality}/5</p>
+       ${napRows ? `<p><strong>Naps</strong></p><ul>${napRows}</ul>` : ''}
+       ${wakeUpRows ? `<p><strong>Overnight wake-ups</strong></p><ul>${wakeUpRows}</ul>` : ''}
        ${sleepLog.note ? `<p><strong>Notes:</strong> ${escapeHtml(sleepLog.note)}</p>` : ''}`
     : '<p class="empty">No sleep record saved for this date.</p>';
 
