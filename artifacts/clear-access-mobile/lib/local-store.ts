@@ -46,6 +46,9 @@ import {
   type MealEntry,
   type MealEntryInput,
   type MealEntryUpdate,
+  type MealCombination,
+  type MealCombinationInput,
+  type MealCombinationApplyInput,
   type MealSummary,
   type Nutrition,
   type Person,
@@ -54,7 +57,7 @@ import {
 } from './local-models';
 
 export const LOCAL_STORAGE_KEY = 'clear-access-mobile:planner:v1';
-const STORE_VERSION = 6;
+const STORE_VERSION = 7;
 const MEALS = Object.values(Meal);
 const ACTIVITY_LEVELS = Object.values(ActivityLevel);
 const DAY_ACTIVITIES = Object.values(DayActivityType);
@@ -74,6 +77,7 @@ export type AsyncKeyValueStorage = {
 
 type StoredFood = Food & { referenceKey?: string };
 type StoredEntry = { id: number; date: string; personId: number; meal: MealEntryInput['meal']; grams: number; foodId: number; tennisDietId?: string };
+type StoredMealCombination = MealCombination;
 type StoredHeightRecord = HeightRecord;
 type StoredWeightRecord = WeightRecord;
 type StoreData = {
@@ -84,6 +88,7 @@ type StoreData = {
   activities: DayActivity[];
   heightRecords: StoredHeightRecord[];
   weightRecords: StoredWeightRecord[];
+  mealCombinations: StoredMealCombination[];
   nextPersonId: number;
   nextFoodId: number;
   nextEntryId: number;
@@ -218,6 +223,24 @@ function isFiniteInRange(value: unknown, min: number, max: number): value is num
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
+function isMealCombinationList(value: unknown, foodIds: ReadonlySet<number>): value is StoredMealCombination[] {
+  if (!Array.isArray(value) || value.length > 500) return false;
+  const ids = new Set<string>();
+  for (const combo of value) {
+    if (!isRecord(combo) || !hasExactKeys(combo, ['id', 'name', 'keyword', 'rating', 'notes', 'portions']) ||
+      typeof combo.id !== 'string' || !combo.id.trim() || combo.id.length > 128 || ids.has(combo.id) ||
+      typeof combo.name !== 'string' || !combo.name.trim() || combo.name.length > 80 ||
+      typeof combo.keyword !== 'string' || !combo.keyword.trim() || combo.keyword.length > 40 ||
+      !isFiniteInRange(combo.rating, 1, 10) || !Number.isInteger(combo.rating) ||
+      typeof combo.notes !== 'string' || combo.notes.length > 1000 ||
+      !Array.isArray(combo.portions) || combo.portions.length < 1 || combo.portions.length > 200 ||
+      combo.portions.some(item => !isRecord(item) || !hasExactKeys(item, ['meal', 'foodId', 'grams']) ||
+        !MEALS.includes(item.meal as MealEntryInput['meal']) || !foodIds.has(item.foodId as number) ||
+        !isFiniteInRange(item.grams, 1, 3000))) return false;
+    ids.add(combo.id);
+  }
+  return true;
+}
 
 function hasExactKeys(value: Record<string, unknown>, required: string[], optional: string[] = []): boolean {
   const keys = Object.keys(value);
@@ -339,6 +362,7 @@ function seedStore(): StoreData {
     activities: [],
     heightRecords: [],
     weightRecords: [],
+    mealCombinations: [],
     nextPersonId: 2,
     nextFoodId: foods.length + 1,
     nextEntryId: 1,
@@ -353,11 +377,13 @@ function validateStoredData(value: unknown): StoreData {
     fail(`Unsupported local planner storage version (${String(value.version)}). Your data was not changed.`);
   }
   const { people, foods, entries, activities, heightRecords, weightRecords, nextPersonId, nextFoodId, nextEntryId, nextHeightRecordId, nextWeightRecordId } = value;
+  const mealCombinations = value.mealCombinations === undefined ? [] : value.mealCombinations;
   if (value.mealAlertsEnabled !== undefined && typeof value.mealAlertsEnabled !== 'boolean') fail('Local reminder settings are invalid. Your data was not changed.');
   if (
     !Array.isArray(people) || !Array.isArray(foods) || !Array.isArray(entries) || !Array.isArray(activities) ||
     !Array.isArray(heightRecords) ||
     !Array.isArray(weightRecords) ||
+    !Array.isArray(mealCombinations) ||
     !Number.isSafeInteger(nextPersonId) || !Number.isSafeInteger(nextFoodId) || !Number.isSafeInteger(nextEntryId) ||
     !Number.isSafeInteger(nextHeightRecordId) ||
     !Number.isSafeInteger(nextWeightRecordId) ||
@@ -408,6 +434,7 @@ function validateStoredData(value: unknown): StoreData {
     }
     foodIds.add(food.id as number);
   }
+  if (!isMealCombinationList(mealCombinations, foodIds)) fail('Local planner storage contains an invalid meal combination. Your data was not changed.');
   const entryIds = new Set<number>();
   for (const entry of entries) {
     if (!isRecord(entry) || !Number.isSafeInteger(entry.id) || (entry.id as number) < 1 ||
@@ -485,15 +512,16 @@ function validateStoredData(value: unknown): StoreData {
     (weightRecordIds.size && (nextWeightRecordId as number) <= Math.max(...weightRecordIds))) {
     fail('Local planner storage has invalid next-ID counters. Your data was not changed.');
   }
-  return value as unknown as StoreData;
+  return { ...value, mealCombinations } as unknown as StoreData;
 }
 
 function validateBackupData(value: unknown): StoreData {
   const invalid = (kind: string): never => fail(`Backup contains an invalid ${kind}.`);
-  if (isRecord(value) && [2, 3, 4, 5].includes(value.version as number) && Array.isArray(value.people)) {
+  if (isRecord(value) && [2, 3, 4, 5, 6].includes(value.version as number) && Array.isArray(value.people)) {
     return validateBackupData({
       ...value,
       version: STORE_VERSION,
+      mealCombinations: [],
       people: addMissingBackupIds(value.people.map(person => isRecord(person) ? {
         ...person,
         ...(value.version === 2 ? { nutritionGoal: null } : {}),
@@ -506,10 +534,11 @@ function validateBackupData(value: unknown): StoreData {
   }
   if (!isRecord(value) || !hasExactKeys(value, [
     'version', 'people', 'foods', 'entries', 'activities', 'heightRecords', 'weightRecords',
-    'nextPersonId', 'nextFoodId', 'nextEntryId', 'nextHeightRecordId', 'nextWeightRecordId',
+    'nextPersonId', 'nextFoodId', 'nextEntryId', 'nextHeightRecordId', 'nextWeightRecordId', 'mealCombinations',
   ], ['mealAlertsEnabled']) || (Object.hasOwn(value, 'mealAlertsEnabled') && typeof value.mealAlertsEnabled !== 'boolean') || value.version !== STORE_VERSION ||
     !Array.isArray(value.people) || !Array.isArray(value.foods) || !Array.isArray(value.entries) ||
-    !Array.isArray(value.activities) || !Array.isArray(value.heightRecords) || !Array.isArray(value.weightRecords)) {
+    !Array.isArray(value.activities) || !Array.isArray(value.heightRecords) || !Array.isArray(value.weightRecords) ||
+    !Array.isArray(value.mealCombinations)) {
     return invalid('data structure');
   }
   const counters = [value.nextPersonId, value.nextFoodId, value.nextEntryId, value.nextHeightRecordId, value.nextWeightRecordId];
@@ -598,6 +627,7 @@ function validateBackupData(value: unknown): StoreData {
     }
     foodIds.add(food.id as number);
   }
+  if (!isMealCombinationList(value.mealCombinations, foodIds)) return invalid('meal combination');
 
   const entryIds = new Set<number>();
   for (const entry of value.entries) {
