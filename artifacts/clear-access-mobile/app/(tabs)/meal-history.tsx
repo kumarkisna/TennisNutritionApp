@@ -8,7 +8,7 @@ import {
 import { isIsoDate, shiftDate } from '@/lib/format';
 import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, Muted, Screen, Title, success, warn } from '@/components/ui';
 import { dietPhaseLabels, fuelLabels } from '@/lib/tennis-planning';
-import type { TennisPlan } from '@/lib/local-models';
+import type { MealPlanReview, TennisPlan } from '@/lib/local-models';
 import { filterMealReviews, sortMealReviews, type MealReviewSort } from '@/lib/meal-review-sort';
 
 const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -20,6 +20,51 @@ const monthShift = (key: string, amount: number) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
 const dateFor = (month: string, day: number) => `${month}-${String(day).padStart(2, '0')}`;
+
+function ComparedMealReview({ review, personId, targetPersonId, targetDate, copyPending, onOpenDate, onReuse }: {
+  review: MealPlanReview;
+  personId: number;
+  targetPersonId: number;
+  targetDate: string;
+  copyPending: boolean;
+  onOpenDate: () => void;
+  onReuse: (sourceDate: string) => void;
+}) {
+  const c = useColors();
+  const entries = useListMealEntries({ personId, date: review.date });
+  const activity = useGetDayActivity({ personId, date: review.date });
+  const tennis = activity.data?.tennis;
+  return <Card>
+    <Eyebrow>{review.date} · {review.rating}/10</Eyebrow>
+    <Text style={{ fontFamily: F.bold, fontSize: 18, color: c.foreground }}>{review.keyword}</Text>
+    {review.note ? <Muted>{review.note}</Muted> : <Muted>No note saved for this meal combination.</Muted>}
+    <View style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 9, gap: 6 }}>
+      <Text style={{ fontFamily: F.semi, color: c.foreground }}>Meals and portions</Text>
+      {entries.isLoading ? <Muted>Loading portions…</Muted> : entries.isError ? <ErrorBox error={entries.error} /> :
+        entries.data?.length ? entries.data.map(item => <Muted key={item.id}>{item.meal} · {item.food.name} · {item.grams} g</Muted>) :
+          <Muted>No meal portions are saved for this date.</Muted>}
+    </View>
+    <View style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 9, gap: 6 }}>
+      <Text style={{ fontFamily: F.semi, color: c.foreground }}>Tennis plan</Text>
+      {activity.isLoading ? <Muted>Loading tennis details…</Muted> : activity.isError ? <ErrorBox error={activity.error} /> :
+        tennis ? <>
+          <Muted>{planModeLabels[tennis.mode]}{tennis.experienceRating !== undefined ? ` · Tennis-plan rating ${tennis.experienceRating}/10` : ''}</Muted>
+          {tennis.sessions.length ? tennis.sessions.map((session, index) =>
+            <Muted key={`${session.kind}-${index}`}>{sessionLabels[session.kind]} · {session.startTime} · {session.durationMinutes} min · {session.intensity}</Muted>) :
+            <Muted>No court sessions scheduled.</Muted>}
+          {(tennis.diets?.length ?? 0) ? <Muted>Timed food: {[...(tennis.diets ?? [])].sort((a, b) => a.time.localeCompare(b.time)).map(slot => `${dietPhaseLabels[slot.phase]} ${slot.time}`).join(' · ')}</Muted> : null}
+          {(['before', 'during', 'between', 'after', 'hydration'] as const).filter(key => tennis.fuel[key].trim()).map(key =>
+            <Muted key={key}>{fuelLabels[key]}: {tennis.fuel[key]}</Muted>)}
+        </> : <Muted>No tennis plan saved for this date.</Muted>}
+    </View>
+    <View style={{ flexDirection: 'row', gap: 8 }}>
+      <Btn small variant="ghost" label="Open date" testID={`button-compare-open-${review.date}`} onPress={onOpenDate} />
+      <Btn small icon="copy" label="Reuse meals" loading={copyPending}
+        disabled={entries.isLoading || !entries.data?.length || (targetPersonId === personId && targetDate === review.date)}
+        testID={`button-compare-reuse-${review.date}`} onPress={() => onReuse(review.date)} />
+    </View>
+  </Card>;
+}
 
 export default function MealHistory() {
   const c = useColors();
@@ -37,6 +82,7 @@ export default function MealHistory() {
   const [search, setSearch] = useState('');
   const [reviewSort, setReviewSort] = useState<MealReviewSort>('recent');
   const [minimumRating, setMinimumRating] = useState('all');
+  const [comparisonDates, setComparisonDates] = useState<string[]>([]);
   const [targetPersonId, setTargetPersonId] = useState(person.id);
   const [targetDate, setTargetDate] = useState(shiftDate(date, 1));
   const [includeTennis, setIncludeTennis] = useState(false);
@@ -44,6 +90,8 @@ export default function MealHistory() {
   const [sessionDurations, setSessionDurations] = useState<string[]>([]);
   const [error, setError] = useState<unknown>(null);
   const [notice, setNotice] = useState('');
+  const [comparisonError, setComparisonError] = useState<unknown>(null);
+  const [comparisonNotice, setComparisonNotice] = useState('');
   const review = reviews.data?.find(item => item.date === date);
   const tennis = activity.data?.tennis;
   const filteredReviews = useMemo(() => filterMealReviews(reviews.data ?? [], search, minimumRating === 'all' ? null : Number(minimumRating)),
@@ -51,6 +99,9 @@ export default function MealHistory() {
   const sortedReviews = useMemo(() => sortMealReviews(filteredReviews, reviewSort),
   [filteredReviews, reviewSort]);
   const reviewByDate = useMemo(() => new Map((reviews.data ?? []).map(item => [item.date, item])), [reviews.data]);
+  const comparisonReviews = useMemo(() => comparisonDates
+    .map(comparisonDate => reviewByDate.get(comparisonDate))
+    .filter((item): item is MealPlanReview => Boolean(item)), [comparisonDates, reviewByDate]);
   const [year, monthNumber] = month.split('-').map(Number);
   const firstWeekday = new Date(year, monthNumber - 1, 1).getDay();
   const daysCount = new Date(year, monthNumber, 0).getDate();
@@ -64,6 +115,7 @@ export default function MealHistory() {
     setNotice('');
   }, [date, review?.rating, review?.keyword, review?.note]);
   useEffect(() => { setTargetPersonId(person.id); }, [person.id]);
+  useEffect(() => { setComparisonDates([]); }, [person.id]);
   useEffect(() => {
     setIncludeTennis(false);
     setSessionTimes(tennis?.sessions.map(session => session.startTime) ?? []);
@@ -102,6 +154,21 @@ export default function MealHistory() {
         ? `${count ? `${count} meal portions and ` : ''}The edited tennis plan was copied. The source rating was not copied.`
         : `${count} meal portions added. Existing meals and destination settings were kept.`);
     } catch (problem) { setError(problem); warn(); }
+  }
+  async function reuseCompared(sourceDate: string) {
+    setComparisonError(null);
+    setComparisonNotice('');
+    if (!isIsoDate(targetDate)) { setComparisonError(new Error('Enter a valid destination date.')); return; }
+    try {
+      const count = await copy.mutateAsync({ data: { sourcePersonId: person.id, sourceDate, targetPersonId, targetDate } });
+      success();
+      setComparisonNotice(`${count} meal portions from ${sourceDate} added. The comparison and current date were left unchanged.`);
+    } catch (problem) { setComparisonError(problem); warn(); }
+  }
+  function toggleComparison(reviewDate: string) {
+    setComparisonDates(current => current.includes(reviewDate)
+      ? current.filter(item => item !== reviewDate)
+      : [...current, reviewDate]);
   }
 
   return <Screen title="Meal history">
@@ -211,11 +278,30 @@ export default function MealHistory() {
         options={[{ value: 'all', label: 'Any rating' }, ...Array.from({ length: 10 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}+` }))]} />
       <Chips testPrefix="select-meal-history-sort" value={reviewSort} onChange={value => setReviewSort(value as MealReviewSort)}
         options={[{ value: 'recent', label: 'Newest first' }, { value: 'rating', label: 'Highest rated' }]} />
-      {sortedReviews.length ? sortedReviews.map(item => <Pressable key={`${item.personId}:${item.date}`} onPress={() => { setDate(item.date); setMonth(item.date.slice(0, 7)); }}
-        style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 9, gap: 3 }}>
-        <Text style={{ fontFamily: F.bold, color: c.foreground }}>{item.date} · {item.rating}/10</Text>
-        <Muted>{item.keyword}{item.note ? ` · ${item.note}` : ''}</Muted>
-      </Pressable>) : <Muted>No rated meal combinations match these filters yet.</Muted>}
+      {sortedReviews.length ? sortedReviews.map(item => <View key={`${item.personId}:${item.date}`}
+        style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 9, gap: 6 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Pressable style={{ flex: 1, gap: 3 }} onPress={() => { setDate(item.date); setMonth(item.date.slice(0, 7)); }}>
+            <Text style={{ fontFamily: F.bold, color: c.foreground }}>{item.date} · {item.rating}/10</Text>
+            <Muted>{item.keyword}{item.note ? ` · ${item.note}` : ''}</Muted>
+          </Pressable>
+          <Btn small variant="ghost" label={comparisonDates.includes(item.date) ? 'Remove' : 'Compare'}
+            testID={`button-meal-history-compare-${item.date}`} onPress={() => toggleComparison(item.date)} />
+        </View>
+      </View>) : <Muted>No rated meal combinations match these filters yet.</Muted>}
+      {comparisonDates.length === 1 ? <Muted>Select one more saved date to compare meal portions, notes, and tennis details.</Muted> : null}
     </Card>
+    {comparisonReviews.length >= 2 ? <>
+      <Text style={{ fontFamily: F.bold, fontSize: 20, color: c.foreground }}>Compare saved combinations</Text>
+      <Muted>Use the destination person and date in Reuse above. Reuse copies from a comparison card without changing the date open in the calendar.</Muted>
+      {comparisonReviews.map(item => <ComparedMealReview key={item.date} review={item} personId={person.id}
+        targetPersonId={targetPersonId} targetDate={targetDate} copyPending={copy.isPending}
+        onOpenDate={() => { setDate(item.date); setMonth(item.date.slice(0, 7)); }}
+        onReuse={sourceDate => void reuseCompared(sourceDate)} />)}
+      {comparisonNotice ? <Muted>{comparisonNotice}</Muted> : null}
+      {comparisonError ? <ErrorBox error={comparisonError} /> : null}
+    </> : null}
+    {notice ? <Muted>{notice}</Muted> : null}
+    {error ? <ErrorBox error={error} /> : null}
   </Screen>;
 }
