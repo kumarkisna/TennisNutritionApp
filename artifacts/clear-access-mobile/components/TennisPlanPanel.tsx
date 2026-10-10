@@ -42,7 +42,7 @@ function buildPlan(d: Draft): { plan: TennisPlan | null; problem: string | null 
   return { plan: problem ? null : plan, problem };
 }
 
-export function TennisPlanPanel({ person, date }: { person: Person; date: string }) {
+export function TennisPlanPanel({ person, date, showDetails = true }: { person: Person; date: string; showDetails?: boolean }) {
   const c = useColors();
   const router = useRouter();
   const day = useGetDayActivity({ personId: person.id, date });
@@ -103,7 +103,7 @@ export function TennisPlanPanel({ person, date }: { person: Person; date: string
     <Eyebrow>Tennis plan</Eyebrow>
     <Text style={{ fontFamily: F.bold, fontSize: 19, letterSpacing: -0.6, color: c.foreground }}>Court time and fuel timing</Text>
   </View>;
-  const explain = <Muted>Tennis plans are timing notes for this person and date. Notes do not count toward day totals, and a tennis schedule does not change the daily target or activity reference. Add real foods as portions to track them.</Muted>;
+  const explain = showDetails ? <Muted>Tennis plans are timing notes for this person and date. Notes do not count toward day totals, and a tennis schedule does not change the daily target or activity reference. Add real foods as portions to track them.</Muted> : null;
 
   if (day.isLoading) return <Card>{header}<View testID="tennis-loading"><LoadingBlock rows={1} height={90} /></View></Card>;
   if (day.isError) return <Card>{header}<ErrorBox error={day.error} onRetry={() => day.refetch()} /></Card>;
@@ -147,7 +147,7 @@ export function TennisPlanPanel({ person, date }: { person: Person; date: string
     {header}
     {notice ? <View accessibilityLiveRegion="polite" testID="status-tennis-saved" style={{ backgroundColor: c.accent, borderColor: c.accentBorder, borderWidth: 1, borderRadius: 12, padding: 10 }}><Text style={{ fontFamily: F.semi, fontSize: 13, color: c.accentForeground }}>{notice}</Text></View> : null}
     {!saved ? <>
-      <Muted>Plan practice, gym, matches or a rest day to see general timing ideas for fuel and fluids.</Muted>
+      {showDetails ? <Muted>Plan practice, gym, matches or a rest day to see general timing ideas for fuel and fluids.</Muted> : null}
       <Btn icon="plus" label="Plan tennis day" testID="button-create-tennis-plan" onPress={() => open(emptyTennisPlan())} />
     </> : <>
       <Text testID="value-tennis-mode" style={{ fontFamily: F.bold, fontSize: 16, color: c.primary }}>{saved.mode === 'rest' ? 'Rest day' : saved.mode === 'tournament' ? 'Tournament day' : 'Training day'}</Text>
@@ -155,7 +155,7 @@ export function TennisPlanPanel({ person, date }: { person: Person; date: string
       {saved.mode !== 'rest' ? <Muted>Planned workload: <Text testID="value-tennis-workload" style={{ fontFamily: F.bold, color: c.foreground }}>{Math.floor(workload / 60)} h {workload % 60} min</Text> across {saved.sessions.length} {saved.sessions.length === 1 ? 'session' : 'sessions'}</Muted> : null}
       <View testID="tennis-experience-rating" style={{ gap: 8, borderTopWidth: 1, borderTopColor: c.border, paddingTop: 12 }}>
         <Eyebrow>Rate this day's plan</Eyebrow>
-        <Muted>Your experience of this whole plan on {date}. 0 is lowest; 10 is highest. You can change it later.</Muted>
+        {showDetails ? <Muted>Your experience of this whole plan on {date}. 0 is lowest; 10 is highest. You can change it later.</Muted> : null}
         <Chips
           testPrefix="tennis-experience-rating"
           value={saved.experienceRating === undefined ? 'unrated' : String(saved.experienceRating)}
@@ -171,17 +171,17 @@ export function TennisPlanPanel({ person, date }: { person: Person; date: string
           : null}
         {ratingError ? <ErrorBox error={ratingError} /> : null}
       </View>
-      <TennisDietSchedule person={person} date={date} plan={saved} suggestions={windows} />
+      <TennisDietSchedule person={person} date={date} plan={saved} suggestions={windows} showDetails={showDetails} />
       {windows.map((w, i) => <View key={i} testID={`row-tennis-window-${i}`} style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 10, gap: 2 }}>
         <Text style={{ fontFamily: F.bold, fontSize: 12, color: c.primary }}>{w.time}</Text>
         <Text style={{ fontFamily: F.semi, fontSize: 14, color: c.foreground }}>{w.title}</Text>
-        <Muted>{w.detail}</Muted>
+        {showDetails ? <Muted>{w.detail}</Muted> : null}
       </View>)}
       {phases.some(k => saved.fuel[k]) ? <View style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 10, gap: 6 }}>
         <Eyebrow>Your notes</Eyebrow>
         {phases.filter(k => saved.fuel[k]).map(k => <View key={k} testID={`value-tennis-note-${k}`}><Text style={{ fontFamily: F.bold, fontSize: 12.5, color: c.foreground }}>{fuelLabels[k]}</Text><Muted>{saved.fuel[k]}</Muted></View>)}
       </View> : null}
-      <Muted>Hydration: have fluids available and drink regularly, adjusting for heat, humidity, sweat and comfort. This is general advice, not a prescribed amount.</Muted>
+      {showDetails ? <Muted>Hydration: have fluids available and drink regularly, adjusting for heat, humidity, sweat and comfort. This is general advice, not a prescribed amount.</Muted> : null}
       <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
         <Btn small icon="plus" label="Add lunch portion" testID="button-tennis-add-lunch" onPress={() => router.push({ pathname: '/portion', params: { meal: 'lunch' } })} />
         <Btn small icon="plus" label="Add snack portion" testID="button-tennis-add-snack" onPress={() => router.push({ pathname: '/portion', params: { meal: 'snack' } })} />
@@ -200,7 +200,7 @@ export function TennisPlanPanel({ person, date }: { person: Person; date: string
     {!saved ? explain : null}
     <TennisFoodPlanCopy person={person} date={date} />
     {young ? <View testID="tennis-young-warning"><Muted>Children and teenagers have individual energy and growth needs. Check targets and fueling with a qualified professional rather than relying on these timing examples.</Muted></View> : null}
-    <Muted>Based on general USTA nutrition timing guidance. Works offline; the source opens only when you tap.</Muted>
+    {showDetails ? <Muted>Based on general USTA nutrition timing guidance. Works offline; the source opens only when you tap.</Muted> : null}
     <View style={{ alignSelf: 'flex-start' }}><Btn small variant="ghost" icon="external-link" label="Open USTA source" testID="button-tennis-source" onPress={() => { tap(); setSourceError(null); Linking.openURL(TENNIS_SOURCE_URL).catch(() => setSourceError(new Error('Could not open the USTA source. An internet connection and a browser are needed to view the external page. Your saved tennis plan still works offline.'))); }} /></View>
     {sourceError ? <ErrorBox error={sourceError} /> : null}
   </Card>;

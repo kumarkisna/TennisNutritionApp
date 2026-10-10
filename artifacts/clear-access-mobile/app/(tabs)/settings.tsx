@@ -3,6 +3,7 @@ import { PlanningTargets } from '@/components/PlanningTargets';
 import { MealAlertSettings } from '@/components/MealAlertSettings';
 import { LocalBackup } from '@/components/LocalBackup';
 import { ThemePicker } from '@/components/ThemePicker';
+import { PlannerLayoutPicker } from '@/components/PlannerLayoutPicker';
 import { usePlanner } from '@/contexts/PlannerProvider';
 import { Btn, Card, Eyebrow, Muted, Screen, Title } from '@/components/ui';
 
@@ -12,6 +13,7 @@ export default function Settings() {
   return <Screen tabs>
     <Eyebrow>04 / Settings</Eyebrow>
     <Title sub="Each person keeps their own details. Estimates are for planning only, never medical requirements.">{`${person.name}'s details.`}</Title>
+    <PlannerLayoutPicker />
     <ThemePicker />
     <MealAlertSettings />
     <LocalBackup />

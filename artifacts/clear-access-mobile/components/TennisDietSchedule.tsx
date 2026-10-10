@@ -10,7 +10,9 @@ import { n } from '@/lib/format';
 const phaseOptions = (Object.keys(dietPhaseLabels) as TennisDiet['phase'][]).map(value => ({ value, label: dietPhaseLabels[value] }));
 type Editor = { id?: string; phase: TennisDiet['phase']; time: string; suggestionTitle?: string };
 
-export function TennisDietSchedule({ person, date, plan, suggestions }: { person: Person; date: string; plan: TennisPlan; suggestions: TennisFuelWindow[] }) {
+export function TennisDietSchedule({ person, date, plan, suggestions, showDetails = true }: {
+  person: Person; date: string; plan: TennisPlan; suggestions: TennisFuelWindow[]; showDetails?: boolean;
+}) {
   const c = useColors();
   const router = useRouter();
   const entries = useListMealEntries({ personId: person.id, date });
@@ -48,9 +50,9 @@ export function TennisDietSchedule({ person, date, plan, suggestions }: { person
   return <View testID="tennis-diet-schedule" style={{ gap: 10, borderTopWidth: 1, borderTopColor: c.border, paddingTop: 12 }}>
     <Eyebrow>Your food timetable</Eyebrow>
     <Text style={{ fontFamily: F.bold, fontSize: 17, letterSpacing: -0.4, color: c.foreground }}>When you will actually eat</Text>
-    <Muted>Set your own times around play. Foods you attach are the same portions as in Breakfast, Lunch, Dinner and Snack, shown in both places. Their nutrition is counted once in day totals. Your times never change targets.</Muted>
+    {showDetails ? <Muted>Set your own times around play. Foods you attach are the same portions as in Breakfast, Lunch, Dinner and Snack, shown in both places. Their nutrition is counted once in day totals. Your times never change targets.</Muted> : null}
     {entries.isLoading ? <LoadingBlock rows={1} height={70} /> : entries.isError ? <ErrorBox error={entries.error} onRetry={() => entries.refetch()} /> : <>
-      {diets.length === 0 && !editor ? <View testID="tennis-diet-empty"><Muted>No food slots yet. Add a before-play, during-play or recovery time to build your timetable.</Muted></View> : null}
+      {showDetails && diets.length === 0 && !editor ? <View testID="tennis-diet-empty"><Muted>No food slots yet. Add a before-play, during-play or recovery time to build your timetable.</Muted></View> : null}
       {diets.map(d => {
         const list = (entries.data ?? []).filter(e => e.tennisDietId === d.id);
         const tot = list.reduce((t, e) => ({ k: t.k + e.nutrition.calories, p: t.p + e.nutrition.protein, cb: t.cb + e.nutrition.carbs, f: t.f + e.nutrition.fat }), { k: 0, p: 0, cb: 0, f: 0 });

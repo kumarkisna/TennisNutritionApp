@@ -7,6 +7,7 @@ import { Stack } from 'expo-router';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { PlannerProvider } from '@/contexts/PlannerProvider';
 import { MealReminderProvider } from '@/contexts/MealReminderProvider';
+import { PlannerLayoutProvider } from '@/contexts/PlannerLayoutProvider';
 import { ThemeProvider } from '@/contexts/ThemeProvider';
 import { useColors } from '@/hooks/useColors';
 import { StatusBar } from 'expo-status-bar';
@@ -59,19 +60,21 @@ function ThemeReadyApp() {
   }, [c.background]);
   return <>
     <StatusBar style={c.isDark ? 'light' : 'dark'} />
-    <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <PlannerProvider>
-          <MealReminderProvider>
-          <GestureHandlerRootView style={{ flex: 1 }}>
-            <KeyboardProvider>
-              <RootLayoutNav />
-            </KeyboardProvider>
-          </GestureHandlerRootView>
-          </MealReminderProvider>
-        </PlannerProvider>
-      </QueryClientProvider>
-    </ErrorBoundary>
+    <PlannerLayoutProvider>
+      <ErrorBoundary>
+        <QueryClientProvider client={queryClient}>
+          <PlannerProvider>
+            <MealReminderProvider>
+            <GestureHandlerRootView style={{ flex: 1 }}>
+              <KeyboardProvider>
+                <RootLayoutNav />
+              </KeyboardProvider>
+            </GestureHandlerRootView>
+            </MealReminderProvider>
+          </PlannerProvider>
+        </QueryClientProvider>
+      </ErrorBoundary>
+    </PlannerLayoutProvider>
   </>;
 }
 

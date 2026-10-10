@@ -7,7 +7,7 @@ import { useMealReminders } from '@/contexts/MealReminderProvider';
 import { useColors } from '@/hooks/useColors';
 import { Btn, F, Muted, warn } from '@/components/ui';
 
-type Props = { meal: Meal; personId: number; date: string; mealTime: string; alerts?: MealAlert[]; loading?: boolean; error?: boolean };
+type Props = { meal: Meal; personId: number; date: string; mealTime: string; alerts?: MealAlert[]; loading?: boolean; error?: boolean; showDetails?: boolean };
 
 const newId = () => `alert-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 function when(date: string, mealTime: string, minutes: number) {
@@ -21,7 +21,7 @@ function when(date: string, mealTime: string, minutes: number) {
 }
 const valid = (v: string) => /^\d{1,3}$/.test(v.trim()) && Number(v) <= 180;
 
-function Inner({ meal, personId, date, mealTime, alerts, loading, error }: Props) {
+function Inner({ meal, personId, date, mealTime, alerts, loading, error, showDetails = true }: Props) {
   const c = useColors();
   const master = useMealReminders();
   const save = useSaveMealAlerts();
@@ -95,7 +95,7 @@ function Inner({ meal, personId, date, mealTime, alerts, loading, error }: Props
       <Btn small variant="ghost" icon="plus" label="Add alert" testID={`button-add-alert-${meal}`} disabled={off} onPress={() => { setProblem(null); setConfirm(null); setEdit({ id: newId(), value: '10', isNew: true }); }} />
     </View> : null}
     {list.length >= MAX_MEAL_ALERTS ? <Muted>Maximum of {MAX_MEAL_ALERTS} alerts per meal.</Muted> : null}
-    <Muted>Alerts follow the meal time, so they move when you change it.</Muted>
+    {showDetails ? <Muted>Alerts follow the meal time, so they move when you change it.</Muted> : null}
   </View>;
 }
 
