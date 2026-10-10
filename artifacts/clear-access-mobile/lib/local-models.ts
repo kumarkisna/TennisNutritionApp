@@ -255,7 +255,7 @@ export type SleepLog = {
   wakeUps?: SleepInterval[];
 };
 export type SleepLogInput = { date: string; personId: number; sleep: SleepLog | null };
-export type HydrationEntry = { id: string; time: string; plannedMl: number; actualMl: number | null; alertEnabled: boolean };
+export type HydrationEntry = { id: string; time: string; plannedMl: number; actualMl: number | null; alertEnabled: boolean; tennisDietId?: string };
 export type HydrationSession = { id: string; activity: string; durationMinutes: number; preWeightKg: number; postWeightKg: number; fluidMl: number; urineMl: number };
 export type HydrationLog = { entries: HydrationEntry[]; sessions: HydrationSession[] };
 export type HydrationLogInput = { date: string; personId: number; hydration: HydrationLog | null };

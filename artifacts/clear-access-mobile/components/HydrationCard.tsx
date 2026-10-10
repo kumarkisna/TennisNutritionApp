@@ -8,7 +8,7 @@ import { useColors } from '@/hooks/useColors';
 import { Btn, Card, Eyebrow, F, Field, Muted } from '@/components/ui';
 
 type Props = { personId: number; date: string; personName: string; dateOfBirth: string | null; sex: 'male' | 'female' | null; day?: DayActivity };
-type EntryDraft = { id: string; time: string; planned: string; actual: string; alert: boolean };
+type EntryDraft = { id: string; time: string; planned: string; actual: string; alert: boolean; tennisDietId?: string };
 type SessionDraft = { id: string; activity: string; minutes: string; pre: string; post: string; fluid: string; urine: string };
 const blank = () => ({ entries: [] as EntryDraft[], sessions: [] as SessionDraft[] });
 
@@ -22,7 +22,7 @@ export function HydrationCard({ personId, date, personName, dateOfBirth, sex, da
   const [copyPreview, setCopyPreview] = useState<HydrationEntry[] | null>(null);
   const sourceDay = useGetDayActivity({ personId, date: copyDate }, { query: { enabled: false } });
   useEffect(() => setDraft({
-    entries: (day?.hydration?.entries ?? []).map(e => ({ id: e.id, time: e.time, planned: String(e.plannedMl), actual: e.actualMl === null ? '' : String(e.actualMl), alert: e.alertEnabled })),
+    entries: (day?.hydration?.entries ?? []).map(e => ({ id: e.id, time: e.time, planned: String(e.plannedMl), actual: e.actualMl === null ? '' : String(e.actualMl), alert: e.alertEnabled, ...(e.tennisDietId ? { tennisDietId: e.tennisDietId } : {}) })),
     sessions: (day?.hydration?.sessions ?? []).map(s => ({ id: s.id, activity: s.activity, minutes: String(s.durationMinutes), pre: String(s.preWeightKg), post: String(s.postWeightKg), fluid: String(s.fluidMl), urine: String(s.urineMl) })),
   }), [day?.hydration, personId, date]);
   useEffect(() => {
@@ -37,7 +37,7 @@ export function HydrationCard({ personId, date, personName, dateOfBirth, sex, da
   async function persist() {
     setError(''); setNotice('');
     try {
-      const entries: HydrationEntry[] = draft.entries.map(e => ({ id: e.id, time: e.time, plannedMl: Number(e.planned), actualMl: e.actual.trim() ? Number(e.actual) : null, alertEnabled: e.alert }));
+      const entries: HydrationEntry[] = draft.entries.map(e => ({ id: e.id, time: e.time, plannedMl: Number(e.planned), actualMl: e.actual.trim() ? Number(e.actual) : null, alertEnabled: e.alert, ...(e.tennisDietId ? { tennisDietId: e.tennisDietId } : {}) }));
       const sessions: HydrationSession[] = draft.sessions.map(s => ({ id: s.id, activity: s.activity.trim(), durationMinutes: Number(s.minutes), preWeightKg: Number(s.pre), postWeightKg: Number(s.post), fluidMl: Number(s.fluid), urineMl: Number(s.urine) }));
       await save.mutateAsync({ data: { personId, date, hydration: { entries, sessions } } });
       setNotice('Hydration plan saved.');
@@ -58,12 +58,14 @@ export function HydrationCard({ personId, date, personName, dateOfBirth, sex, da
     const current = draft.entries.map(entry => ({
       id: entry.id, time: entry.time, plannedMl: Number(entry.planned),
       actualMl: entry.actual.trim() ? Number(entry.actual) : null, alertEnabled: entry.alert,
+      ...(entry.tennisDietId ? { tennisDietId: entry.tennisDietId } : {}),
     }));
     const merged = mergeHydrationSchedule(current, copyPreview, index => `hydration-copy-${Date.now().toString(36)}-${index}`);
     if (merged.length > MAX_HYDRATION_ENTRIES) { setError(`This would exceed the ${MAX_HYDRATION_ENTRIES}-drink limit. Remove some entries first.`); return; }
     setDraft(v => ({ ...v, entries: merged.map(entry => ({
       id: entry.id, time: entry.time, planned: String(entry.plannedMl),
       actual: entry.actualMl === null ? '' : String(entry.actualMl), alert: entry.alertEnabled,
+      ...(entry.tennisDietId ? { tennisDietId: entry.tennisDietId } : {}),
     })) }));
     setCopyPreview(null);
     setNotice('Schedule added to this date. Existing recorded amounts were kept; review the plan and save.');
@@ -87,6 +89,7 @@ export function HydrationCard({ personId, date, personName, dateOfBirth, sex, da
       <Btn small label="Add this schedule" testID="button-apply-hydration-schedule" onPress={applyCopySchedule} />
     </View> : null}
     {draft.entries.map((e, i) => <View key={e.id} style={{ gap: 6, borderTopWidth: 1, borderColor: c.border, paddingTop: 8 }}>
+      {e.tennisDietId ? <Muted>Linked to a tennis food slot at {e.time}. Remove or edit it here; it will stay attached to that slot.</Muted> : null}
       <View style={{ flexDirection: 'row', gap: 6 }}>{input('Time', e.time, v => updateEntry(e.id, 'time', v), '12:00', `input-hydration-time-${i}`)}{input('Planned mL', e.planned, v => updateEntry(e.id, 'planned', v), '250', `input-hydration-planned-${i}`, true)}</View>
       <View style={{ flexDirection: 'row', gap: 6 }}>{input('Actual mL (optional)', e.actual, v => updateEntry(e.id, 'actual', v), 'Not logged', `input-hydration-actual-${i}`, true)}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><Text style={{ color: c.foreground, fontFamily: F.medium }}>Alert</Text><Switch value={e.alert} onValueChange={v => updateEntry(e.id, 'alert', v)} testID={`switch-hydration-alert-${i}`} /></View></View>

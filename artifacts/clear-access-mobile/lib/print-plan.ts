@@ -126,7 +126,9 @@ export function buildPlannedDietHtml({
   const rows = timetable.map(row => {
     if (row.kind === 'hydration') {
       const actual = row.entry.actualMl === null ? 'not recorded' : `${row.entry.actualMl} mL recorded`;
-      return `<tr><td class="time">${escapeHtml(row.time)}</td><td>Hydration</td><td>${row.entry.plannedMl} mL planned · ${escapeHtml(actual)}${row.entry.alertEnabled && row.entry.actualMl === null ? ' · reminder on' : ''}</td><td class="portion">${row.entry.plannedMl} mL</td></tr>`;
+      const linkedSlot = row.entry.tennisDietId ? tennisDiets?.find(slot => slot.id === row.entry.tennisDietId) : undefined;
+      const label = linkedSlot ? `Hydration · ${dietPhaseLabels[linkedSlot.phase]}` : 'Hydration';
+      return `<tr><td class="time">${escapeHtml(row.time)}</td><td>${escapeHtml(label)}</td><td>${row.entry.plannedMl} mL planned · ${escapeHtml(actual)}${row.entry.alertEnabled && row.entry.actualMl === null ? ' · reminder on' : ''}</td><td class="portion">${row.entry.plannedMl} mL</td></tr>`;
     }
     const item = row.item;
     const section = item.phase ? `${dietPhaseLabels[item.phase]} · ` : '';

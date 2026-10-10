@@ -241,8 +241,9 @@ function isSleepLog(value: unknown): value is DayActivity['sleep'] {
 function isHydrationLog(value: unknown): value is DayActivity['hydration'] {
   return isRecord(value) && hasExactKeys(value, ['entries', 'sessions']) &&
     Array.isArray(value.entries) && value.entries.length <= 20 &&
-    value.entries.every(entry => isRecord(entry) && hasExactKeys(entry, ['id', 'time', 'plannedMl', 'actualMl', 'alertEnabled']) &&
+     value.entries.every(entry => isRecord(entry) && hasExactKeys(entry, ['id', 'time', 'plannedMl', 'actualMl', 'alertEnabled'], ['tennisDietId']) &&
       typeof entry.id === 'string' && /^hydration-[a-z0-9-]{1,80}$/.test(entry.id) &&
+       (entry.tennisDietId === undefined || (typeof entry.tennisDietId === 'string' && entry.tennisDietId.length <= 100)) &&
       isClockTime(entry.time) && Number.isInteger(entry.plannedMl) && isFiniteInRange(entry.plannedMl, 1, 5000) &&
       (entry.actualMl === null || (Number.isInteger(entry.actualMl) && isFiniteInRange(entry.actualMl, 0, 5000))) &&
       typeof entry.alertEnabled === 'boolean') &&
@@ -2486,6 +2487,9 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
           for (const entry of draft.entries) {
             if (entry.date === input.date && entry.personId === input.personId) delete entry.tennisDietId;
           }
+          for (const day of draft.activities.filter(item => item.date === input.date && item.personId === input.personId)) {
+            for (const entry of day.hydration?.entries ?? []) delete entry.tennisDietId;
+          }
         } else {
           const plan = clone(input.plan);
           // Schedule editing has its own transaction. A stale session editor cannot erase timed foods.
@@ -2518,7 +2522,8 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
       return transact(draft => {
         if (!isValidCalendarDate(input.date)) fail('Choose a valid date.');
         findPerson(draft, input.personId);
-        const plan = draft.activities.find(activity => activity.date === input.date && activity.personId === input.personId)?.tennis;
+        const activity = draft.activities.find(item => item.date === input.date && item.personId === input.personId);
+        const plan = activity?.tennis;
         if (!plan) fail('Save a tennis day plan before scheduling food.');
         const diets = plan.diets ?? [];
         const existing = input.id === undefined ? undefined : diets.find(diet => diet.id === input.id);
@@ -2528,7 +2533,10 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
         if (!existing && diets.some(diet => diet.id === id)) fail('Could not create a unique timed diet. Please try again.');
         const diet = { id, phase: input.phase, time: input.time };
         if (!isTennisDiet(diet)) fail('Choose a stage and a valid 24-hour HH:MM time.');
-        if (existing) Object.assign(existing, diet);
+        if (existing) {
+          Object.assign(existing, diet);
+          for (const entry of activity?.hydration?.entries ?? []) if (entry.tennisDietId === diet.id) entry.time = diet.time;
+        }
         else diets.push(diet);
         plan.diets = diets;
         return diet;
@@ -2545,6 +2553,8 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
         for (const entry of draft.entries) {
           if (entry.personId === input.personId && entry.date === input.date && entry.tennisDietId === input.id) delete entry.tennisDietId;
         }
+        const activity = draft.activities.find(day => day.personId === input.personId && day.date === input.date);
+        for (const entry of activity?.hydration?.entries ?? []) if (entry.tennisDietId === input.id) delete entry.tennisDietId;
       });
     },
     async listTennisFoodPlanDates(personId: number): Promise<TennisFoodPlanDate[]> {

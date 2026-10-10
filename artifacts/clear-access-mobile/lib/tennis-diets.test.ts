@@ -67,6 +67,26 @@ test('time and stage edits preserve food links; stale session editor does not er
   assert.equal((await store.listMealEntries({ date, personId }))[0].grams, 75);
 });
 
+test('hydration can be linked to a tennis food slot and is preserved but unlinked when the slot is removed', async () => {
+  const store = createLocalStore(new MemoryStorage());
+  await prepareActiveDay(store);
+  await store.saveTennisPlan({ date, personId, plan: plan() });
+  const slot = await store.saveTennisDiet({ date, personId, phase: 'before', time: '08:00' });
+  await store.saveHydrationLog({ date, personId, hydration: {
+    entries: [{ id: 'hydration-linked', time: '08:00', plannedMl: 250, actualMl: null, alertEnabled: false, tennisDietId: slot.id }],
+    sessions: [],
+  } });
+  await store.saveTennisDiet({ date, personId, id: slot.id, phase: 'before', time: '08:30' });
+  let log = (await store.getDayActivity({ date, personId })).hydration!;
+  assert.equal(log.entries[0].time, '08:30');
+  assert.equal(log.entries[0].tennisDietId, slot.id);
+  await store.deleteTennisDiet({ date, personId, id: slot.id });
+  log = (await store.getDayActivity({ date, personId })).hydration!;
+  assert.equal(log.entries[0].tennisDietId, undefined);
+  assert.equal(log.entries[0].plannedMl, 250);
+  assert.equal(log.entries.length, 1);
+});
+
 test('removing a schedule or whole tennis plan unschedules but never removes food portions or changes totals', async () => {
   const store = createLocalStore(new MemoryStorage());
   await store.saveDayActivity({ date, personId, activityType: 'adolescent_athletes' });
