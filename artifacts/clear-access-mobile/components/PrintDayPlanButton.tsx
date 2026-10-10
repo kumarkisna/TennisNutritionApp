@@ -15,6 +15,7 @@ export function PrintDayPlanButton({
   mealTimes,
   tennisDiets,
   sleepLog,
+  hydration,
   disabled = false,
 }: {
   personName: string;
@@ -25,6 +26,7 @@ export function PrintDayPlanButton({
   mealTimes: MealTimes;
   tennisDiets: TennisDiet[];
   sleepLog?: SleepLog;
+  hydration?: DayActivity['hydration'];
   disabled?: boolean;
 }) {
   const [printing, setPrinting] = useState(false);
@@ -35,7 +37,7 @@ export function PrintDayPlanButton({
     setError(null);
     setPrinting(true);
     try {
-      const html = buildPlannedDietHtml({ personName, date, activityType, tennisPlan, entries, mealTimes, tennisDiets, sleepLog });
+      const html = buildPlannedDietHtml({ personName, date, activityType, tennisPlan, entries, mealTimes, tennisDiets, sleepLog, hydration });
       if (Platform.OS === 'web') printHtmlInBrowserWindow(html);
       else await Print.printAsync({ html });
     } catch (caught) {

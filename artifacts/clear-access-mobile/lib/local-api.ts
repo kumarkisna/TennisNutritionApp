@@ -15,6 +15,7 @@ import type {
   MealTimeInput,
   MealAlertInput,
   SleepLogInput,
+  HydrationLogInput,
   TennisPlanInput,
   TennisPlanRatingInput,
   TennisPlanHistoryItem,
@@ -328,6 +329,10 @@ export function useSaveMealAlerts() {
 export function useSaveSleepRecord() {
   return useLocalMutation(({ data }: { data: SleepLogInput }) =>
     localStore.saveSleepRecord(data), [['getDayActivity']]);
+}
+export function useSaveHydrationLog() {
+  return useLocalMutation(({ data }: { data: HydrationLogInput }) =>
+    localStore.saveHydrationLog(data), [['getDayActivity'], ['getMealReminderSource']]);
 }
 export function useSaveTennisPlan() {
   return useLocalMutation(({ data }: { data: TennisPlanInput }) =>

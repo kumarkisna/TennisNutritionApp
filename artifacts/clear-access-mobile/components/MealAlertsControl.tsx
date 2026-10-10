@@ -63,7 +63,7 @@ function Inner({ meal, personId, date, mealTime, alerts, loading, error, showDet
       <Feather name="bell" size={15} color={c.primary} />
       <Text style={{ fontFamily: F.bold, fontSize: 13, color: c.foreground, flex: 1 }}>Optional alerts</Text>
     </View>
-    {!master.enabled ? <Text testID={`status-alerts-paused-${meal}`} style={{ fontFamily: F.semi, fontSize: 12, color: c.mutedForeground }}>Paused: all meal alerts are off in Settings. Your choices below are kept.</Text> : null}
+    {!master.enabled ? <Text testID={`status-alerts-paused-${meal}`} style={{ fontFamily: F.semi, fontSize: 12, color: c.mutedForeground }}>Paused: meal and hydration alerts are off in Settings. Your choices below are kept.</Text> : null}
     {master.enabled && !master.supported ? <Muted>Saved here; delivery requires the iPhone or Android app.</Muted> : null}
     {master.enabled && master.supported && (!master.allowed || master.error) ? <Muted>Device alerts need attention. Check Meal alerts in Settings.</Muted> : null}
     {loading ? <Muted>Loading alerts...</Muted> : error ? <Muted>Alerts unavailable.</Muted> : null}

@@ -1,5 +1,6 @@
 import type { DayActivity, Meal, MealAlert } from './local-models';
 import { getMealTimes } from './meal-scheduling';
+import { HYDRATION_REMINDER_PREFIX } from './hydration';
 
 export const REMINDER_PREFIX = 'clear-access-meal:';
 export const MAX_MEAL_ALERTS = 8;
@@ -22,7 +23,7 @@ export function isMealAlerts(value: unknown): value is NonNullable<DayActivity['
 export type ReminderSource = {
   enabled: boolean;
   people: { id: number; name: string }[];
-  days: Pick<DayActivity, 'date' | 'personId' | 'mealTimes' | 'mealAlerts'>[];
+  days: Pick<DayActivity, 'date' | 'personId' | 'mealTimes' | 'mealAlerts' | 'hydration'>[];
 };
 export type ReminderJob = { id: string; at: number; title: string; body: string; signature: string };
 export function buildReminders(source: ReminderSource, now: number) {
@@ -46,6 +47,17 @@ export function buildReminders(source: ReminderSource, now: number) {
         jobs.push({ id, at, title, body, signature: JSON.stringify([at, title, body]) });
       }
     }
+    for (const entry of day.hydration?.entries ?? []) {
+      if (!entry.alertEnabled || entry.actualMl !== null) continue;
+      const [year, month, date] = day.date.split('-').map(Number);
+      const [hour, minute] = entry.time.split(':').map(Number);
+      const at = new Date(year, month - 1, date, hour, minute).getTime();
+      if (at <= now) continue;
+      const id = `${HYDRATION_REMINDER_PREFIX}${day.personId}:${day.date}:${entry.id}`;
+      const title = `Hydration · ${person.name}`;
+      const body = `Planned drink: ${entry.plannedMl} mL.`;
+      jobs.push({ id, at, title, body, signature: JSON.stringify([at, title, body]) });
+    }
   }
   jobs.sort((a, b) => a.at - b.at || a.id.localeCompare(b.id));
   // Leave room below iOS's pending-local-notification limit.
@@ -59,7 +71,7 @@ export type ReminderDevice = {
   schedule(job: ReminderJob): Promise<void>;
 };
 export async function reconcileReminders(device: ReminderDevice, jobs: ReminderJob[]) {
-  const pending = (await device.pending()).filter(p => p.id.startsWith(REMINDER_PREFIX));
+  const pending = (await device.pending()).filter(p => p.id.startsWith(REMINDER_PREFIX) || p.id.startsWith(HYDRATION_REMINDER_PREFIX));
   const wanted = new Map(jobs.map(job => [job.id, job]));
   for (const item of pending) {
     const job = wanted.get(item.id);

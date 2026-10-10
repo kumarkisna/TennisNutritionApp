@@ -14,6 +14,7 @@ import { ReferencePanel } from '@/components/ReferencePanel';
 import { TennisPlanPanel } from '@/components/TennisPlanPanel';
 import { PlanningTargets } from '@/components/PlanningTargets';
 import { SleepLogCard } from '@/components/SleepLogCard';
+import { HydrationCard } from '@/components/HydrationCard';
 import { Btn, CaloriesMacros, Card, DISCLAIMER, ErrorBox, Eyebrow, F, FiberNote, IconBtn, LoadingBlock, Muted, NutritionGrid, Screen, SectionTitle, Title, tap } from '@/components/ui';
 import { cap, dateLabel, isIsoDate, n, shiftDate, today } from '@/lib/format';
 
@@ -97,8 +98,10 @@ export default function Planner() {
       mealTimes={getMealTimes(day.data?.mealTimes)}
       tennisDiets={day.data?.tennis?.diets ?? []}
       sleepLog={day.data?.sleep}
+      hydration={day.data?.hydration}
       disabled={!entries.isSuccess || !day.isSuccess || entries.isFetching || day.isFetching}
     />
+    {settings.hydrationPosition === 'first' ? <HydrationCard personId={person.id} date={date} personName={person.name} dateOfBirth={person.dateOfBirth} sex={person.growthReferenceSex} day={day.data} /> : null}
     {settings.sleepLogPosition === 'first' ? sleepLogSection : null}
     {settings.dayTotalsPosition === 'first' ? dayTotalsSection : null}
     {settings.plannedPortionsPosition === 'first' && settings.tennisPlanPosition === 'before' ? tennisPlanSection : null}
@@ -106,11 +109,13 @@ export default function Planner() {
     {settings.plannedPortionsPosition === 'first' && settings.tennisPlanPosition === 'after' ? tennisPlanSection : null}
     {settings.plannedPortionsPosition === 'last' && settings.tennisPlanPosition === 'before' ? tennisPlanSection : null}
     {planningInformation}
+    {settings.hydrationPosition === 'middle' ? <HydrationCard personId={person.id} date={date} personName={person.name} dateOfBirth={person.dateOfBirth} sex={person.growthReferenceSex} day={day.data} /> : null}
     {settings.plannedPortionsPosition === 'last' ? mealActions : null}
     {settings.plannedPortionsPosition === 'last' && settings.tennisPlanPosition === 'after' ? tennisPlanSection : null}
     {settings.dayTotalsPosition === 'last' ? dayTotalsSection : null}
     {summary.data ? <Card><Eyebrow>Day totals</Eyebrow><NutritionGrid nutrition={summary.data.totals} /><FiberNote /></Card> : null}
     <Muted>{DISCLAIMER}</Muted>
     {settings.sleepLogPosition === 'last' ? sleepLogSection : null}
+    {settings.hydrationPosition === 'last' ? <HydrationCard personId={person.id} date={date} personName={person.name} dateOfBirth={person.dateOfBirth} sex={person.growthReferenceSex} day={day.data} /> : null}
   </Screen>;
 }

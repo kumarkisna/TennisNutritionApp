@@ -16,6 +16,7 @@ import {
   type NutritionGoal as NutritionGoalType,
   type DayActivity,
   type DayActivityInput,
+  type HydrationLogInput,
   type SleepLogInput,
   type MealTimeInput,
   type MealAlertInput,
@@ -236,6 +237,23 @@ function isSleepLog(value: unknown): value is DayActivity['sleep'] {
     (value.naps === undefined || isIntervalList(value.naps, 10)) &&
     (value.wakeUps === undefined || isIntervalList(value.wakeUps, 20)) &&
     calculateTotalSleepMinutes(value as Parameters<typeof calculateTotalSleepMinutes>[0]) !== null;
+}
+function isHydrationLog(value: unknown): value is DayActivity['hydration'] {
+  return isRecord(value) && hasExactKeys(value, ['entries', 'sessions']) &&
+    Array.isArray(value.entries) && value.entries.length <= 20 &&
+    value.entries.every(entry => isRecord(entry) && hasExactKeys(entry, ['id', 'time', 'plannedMl', 'actualMl', 'alertEnabled']) &&
+      typeof entry.id === 'string' && /^hydration-[a-z0-9-]{1,80}$/.test(entry.id) &&
+      isClockTime(entry.time) && Number.isInteger(entry.plannedMl) && isFiniteInRange(entry.plannedMl, 1, 5000) &&
+      (entry.actualMl === null || (Number.isInteger(entry.actualMl) && isFiniteInRange(entry.actualMl, 0, 5000))) &&
+      typeof entry.alertEnabled === 'boolean') &&
+    Array.isArray(value.sessions) && value.sessions.length <= 10 &&
+    value.sessions.every(session => isRecord(session) && hasExactKeys(session, ['id', 'activity', 'durationMinutes', 'preWeightKg', 'postWeightKg', 'fluidMl', 'urineMl']) &&
+      typeof session.id === 'string' && /^hydration-session-[a-z0-9-]{1,80}$/.test(session.id) &&
+      typeof session.activity === 'string' && session.activity.trim().length > 0 && session.activity.length <= 80 &&
+      Number.isInteger(session.durationMinutes) && isFiniteInRange(session.durationMinutes, 1, 720) &&
+      isFiniteInRange(session.preWeightKg, 1, 300) && isFiniteInRange(session.postWeightKg, 1, 300) &&
+      Number.isInteger(session.fluidMl) && isFiniteInRange(session.fluidMl, 0, 10000) &&
+      Number.isInteger(session.urineMl) && isFiniteInRange(session.urineMl, 0, 10000));
 }
 function isMealReviewList(value: unknown, personIds: ReadonlySet<number>): value is MealPlanReview[] {
   if (!Array.isArray(value) || value.length > 10000) return false;
@@ -463,6 +481,7 @@ function validateStoredData(value: unknown): StoreData {
       !DAY_ACTIVITIES.includes(activity.activityType as DayActivity['activityType']) ||
       (activity.tennis !== undefined && !isTennisPlan(activity.tennis)) ||
       (activity.sleep !== undefined && !isSleepLog(activity.sleep)) ||
+      (activity.hydration !== undefined && !isHydrationLog(activity.hydration)) ||
       (activity.tennisFoodImports !== undefined && !isTennisFoodImportRefs(activity.tennisFoodImports)) ||
       (activity.mealTimes !== undefined && !isMealTimes(activity.mealTimes)) ||
       (activity.mealAlerts !== undefined && !isMealAlerts(activity.mealAlerts))) {
@@ -656,12 +675,13 @@ function validateBackupData(value: unknown): StoreData {
 
   const activityKeys = new Set<string>();
   for (const activity of value.activities) {
-    if (!isRecord(activity) || !hasExactKeys(activity, ['date', 'personId', 'activityType'], ['tennis', 'mealTimes', 'mealAlerts', 'tennisFoodImports', 'sleep']) ||
+    if (!isRecord(activity) || !hasExactKeys(activity, ['date', 'personId', 'activityType'], ['tennis', 'mealTimes', 'mealAlerts', 'tennisFoodImports', 'sleep', 'hydration']) ||
       typeof activity.date !== 'string' || !isValidCalendarDate(activity.date) ||
       !Number.isSafeInteger(activity.personId) || !peopleById.has(activity.personId as number) ||
       !DAY_ACTIVITIES.includes(activity.activityType as DayActivity['activityType']) ||
       (Object.hasOwn(activity, 'tennis') && !isTennisPlan(activity.tennis)) ||
       (Object.hasOwn(activity, 'sleep') && !isSleepLog(activity.sleep)) ||
+      (Object.hasOwn(activity, 'hydration') && !isHydrationLog(activity.hydration)) ||
       (Object.hasOwn(activity, 'tennisFoodImports') && !isTennisFoodImportRefs(activity.tennisFoodImports)) ||
       (Object.hasOwn(activity, 'mealTimes') && !isMealTimes(activity.mealTimes)) ||
       (Object.hasOwn(activity, 'mealAlerts') && !isMealAlerts(activity.mealAlerts))) {
@@ -2386,6 +2406,24 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
         return activity;
       });
     },
+    async saveHydrationLog(input: HydrationLogInput): Promise<DayActivity> {
+      return transact(draft => {
+        if (!isValidCalendarDate(input.date)) fail('Choose a valid date for the hydration plan.');
+        findPerson(draft, input.personId);
+        if (input.hydration !== null && !isHydrationLog(input.hydration)) fail('Enter valid hydration times and amounts.');
+        let day = draft.activities.find(item => item.date === input.date && item.personId === input.personId);
+        if (!day) {
+          day = { date: input.date, personId: input.personId, activityType: 'rest' };
+          draft.activities.push(day);
+        }
+        if (input.hydration === null) delete day.hydration;
+        else day.hydration = {
+          entries: input.hydration.entries.map(entry => ({ ...entry })),
+          sessions: input.hydration.sessions.map(session => ({ ...session })),
+        };
+        return day;
+      });
+    },
     async saveMealTime(input: MealTimeInput): Promise<DayActivity> {
       return transact(draft => {
         if (!isValidCalendarDate(input.date)) fail('Choose a valid date.');
@@ -2404,7 +2442,7 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
       return read(current => ({
         enabled: current.mealAlertsEnabled ?? false,
         people: current.people.map(({ id, name }) => ({ id, name })),
-        days: current.activities.map(({ date, personId, mealTimes, mealAlerts }) => ({ date, personId, mealTimes, mealAlerts })),
+        days: current.activities.map(({ date, personId, mealTimes, mealAlerts, hydration }) => ({ date, personId, mealTimes, mealAlerts, hydration })),
       }));
     },
     async setMealAlertsEnabled(enabled: boolean): Promise<void> {

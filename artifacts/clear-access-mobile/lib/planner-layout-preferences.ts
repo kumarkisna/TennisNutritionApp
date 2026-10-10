@@ -3,12 +3,14 @@ export const LEGACY_PLANNER_LAYOUT_STORAGE_KEY = 'clear-access-mobile:planner-la
 export const PREVIOUS_PLANNER_LAYOUT_STORAGE_KEY = 'clear-access-mobile:planner-layout:v2';
 export type PlannerLayoutMode = 'current' | 'compact';
 export type PlannerSectionPosition = 'first' | 'last';
+export type HydrationPosition = 'first' | 'middle' | 'last';
 export type TennisPlanPosition = 'before' | 'after';
 export type PlannerLayoutPreferences = {
   mode: PlannerLayoutMode;
   dayTotalsPosition: PlannerSectionPosition;
   plannedPortionsPosition: PlannerSectionPosition;
   sleepLogPosition: PlannerSectionPosition;
+  hydrationPosition: HydrationPosition;
   tennisPlanPosition: TennisPlanPosition;
 };
 export const DEFAULT_PLANNER_LAYOUT: PlannerLayoutPreferences = {
@@ -16,6 +18,7 @@ export const DEFAULT_PLANNER_LAYOUT: PlannerLayoutPreferences = {
   dayTotalsPosition: 'first',
   plannedPortionsPosition: 'last',
   sleepLogPosition: 'first',
+  hydrationPosition: 'middle',
   tennisPlanPosition: 'before',
 };
 export type PlannerLayoutStorage = {
@@ -30,6 +33,7 @@ function isPreferences(value: unknown): value is PlannerLayoutPreferences {
     'dayTotalsPosition' in value && (value.dayTotalsPosition === 'first' || value.dayTotalsPosition === 'last') &&
     'plannedPortionsPosition' in value && (value.plannedPortionsPosition === 'first' || value.plannedPortionsPosition === 'last') &&
     'sleepLogPosition' in value && (value.sleepLogPosition === 'first' || value.sleepLogPosition === 'last') &&
+    (!('hydrationPosition' in value) || value.hydrationPosition === 'first' || value.hydrationPosition === 'middle' || value.hydrationPosition === 'last') &&
     'tennisPlanPosition' in value && (value.tennisPlanPosition === 'before' || value.tennisPlanPosition === 'after');
 }
 
@@ -80,6 +84,7 @@ export function createPlannerLayoutPreferences(storage: PlannerLayoutStorage) {
           dayTotalsPosition: value.dayTotalsPosition,
           plannedPortionsPosition: value.plannedPortionsPosition,
           sleepLogPosition: value.sleepLogPosition,
+          hydrationPosition: 'hydrationPosition' in value ? value.hydrationPosition as HydrationPosition : DEFAULT_PLANNER_LAYOUT.hydrationPosition,
           tennisPlanPosition: value.tennisPlanPosition,
         };
       }

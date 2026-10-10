@@ -39,8 +39,8 @@ export const notificationDevice: ReminderDevice = {
     }); } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       throw new Error(Platform.OS === 'android'
-        ? `Could not schedule a meal alert. Check notification permission and Alarms & reminders access in device settings, then retry syncing. ${detail}`
-        : `Could not schedule a meal alert. Check device notification settings and retry syncing. ${detail}`);
+        ? `Could not schedule a reminder. Check notification permission and Alarms & reminders access in device settings, then retry syncing. ${detail}`
+        : `Could not schedule a reminder. Check device notification settings and retry syncing. ${detail}`);
     }
   },
 };

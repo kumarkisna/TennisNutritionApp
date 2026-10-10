@@ -15,20 +15,20 @@ export function MealAlertSettings() {
     setProblem(null);
     try { await m.setEnabled(v); } catch (e) { warn(); setProblem(e instanceof Error ? e.message : 'Could not change alerts.'); }
   }
-  const status = !m.enabled ? 'Off: all meal alerts are paused.'
+  const status = !m.enabled ? 'Off: meal and hydration alerts are paused.'
     : !m.supported ? 'On, configuration only. Requires the iPhone or Android app for notification delivery.'
     : m.error ? 'On, but device scheduling needs attention. Retry syncing below.'
     : m.allowed ? `On: ${m.upcoming} upcoming ${m.upcoming === 1 ? 'alert' : 'alerts'} scheduled.`
     : 'On, but blocked: notification permission is not allowed.';
   const err = problem ?? m.error;
   return <Card>
-    <Eyebrow>Meal alerts</Eyebrow>
+    <Eyebrow>Meal & hydration alerts</Eyebrow>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
       <View style={{ flex: 1 }}>
-        <Text style={{ fontFamily: F.bold, fontSize: 16, color: c.foreground }}>Meal alerts</Text>
+        <Text style={{ fontFamily: F.bold, fontSize: 16, color: c.foreground }}>Meal & hydration alerts</Text>
         <Text testID="status-meal-alerts" accessibilityLiveRegion="polite" style={{ fontFamily: F.semi, fontSize: 12.5, color: c.primary }}>{status}</Text>
       </View>
-      <Switch testID="switch-meal-alerts-master" accessibilityLabel="Meal alerts master switch" accessibilityRole="switch" value={m.enabled} disabled={disabled}
+      <Switch testID="switch-meal-alerts-master" accessibilityLabel="Meal and hydration alerts master switch" accessibilityRole="switch" value={m.enabled} disabled={disabled}
         onValueChange={v => void set(v)} trackColor={{ true: c.primary, false: c.border }} />
     </View>
     <Muted>Applies to everyone on this device. Only alerts you enable for upcoming meal dates and times can notify you; they do not repeat daily. Turning this off keeps your per-meal choices.</Muted>

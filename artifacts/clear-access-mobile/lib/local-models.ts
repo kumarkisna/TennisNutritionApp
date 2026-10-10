@@ -255,11 +255,15 @@ export type SleepLog = {
   wakeUps?: SleepInterval[];
 };
 export type SleepLogInput = { date: string; personId: number; sleep: SleepLog | null };
+export type HydrationEntry = { id: string; time: string; plannedMl: number; actualMl: number | null; alertEnabled: boolean };
+export type HydrationSession = { id: string; activity: string; durationMinutes: number; preWeightKg: number; postWeightKg: number; fluidMl: number; urineMl: number };
+export type HydrationLog = { entries: HydrationEntry[]; sessions: HydrationSession[] };
+export type HydrationLogInput = { date: string; personId: number; hydration: HydrationLog | null };
 export type DayActivity = {
   date: string; personId: number; activityType: DayActivityType; tennis?: TennisPlan; mealTimes?: MealTimes;
-  mealAlerts?: Partial<Record<Meal, MealAlert[]>>; tennisFoodImports?: TennisFoodImportRef[]; sleep?: SleepLog;
+  mealAlerts?: Partial<Record<Meal, MealAlert[]>>; tennisFoodImports?: TennisFoodImportRef[]; sleep?: SleepLog; hydration?: HydrationLog;
 };
-export type DayActivityInput = Omit<DayActivity, 'tennis' | 'mealTimes' | 'mealAlerts' | 'tennisFoodImports' | 'sleep'>;
+export type DayActivityInput = Omit<DayActivity, 'tennis' | 'mealTimes' | 'mealAlerts' | 'tennisFoodImports' | 'sleep' | 'hydration'>;
 
 export type MealSummary = { meal: Meal; count: number; nutrition: Nutrition };
 export type DailySummary = {

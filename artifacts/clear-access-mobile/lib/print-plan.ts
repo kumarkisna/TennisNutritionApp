@@ -1,4 +1,4 @@
-import type { DayActivityType, Meal, MealEntry, MealTimes, SleepLog, TennisDiet, TennisPlan } from './local-models';
+import type { DayActivityType, HydrationLog, Meal, MealEntry, MealTimes, SleepLog, TennisDiet, TennisPlan } from './local-models';
 import { sportsActivities } from './planning-targets';
 import { dietPhaseLabels } from './tennis-planning';
 import { calculateTotalSleepMinutes, formatSleepDuration, intervalDurationMinutes, sleepDurationMinutes } from './sleep-tracking';
@@ -96,6 +96,7 @@ export function buildPlannedDietHtml({
   mealTimes,
   tennisDiets = [],
   sleepLog,
+  hydration,
 }: {
   personName: string;
   date: string;
@@ -105,6 +106,7 @@ export function buildPlannedDietHtml({
   mealTimes: MealTimes;
   tennisDiets?: TennisDiet[];
   sleepLog?: SleepLog;
+  hydration?: HydrationLog;
 }): string {
   const items = sortPlannedDiet(entries, mealTimes, tennisDiets);
   const sessionRows = tennisPlan?.sessions
@@ -144,6 +146,10 @@ export function buildPlannedDietHtml({
        ${wakeUpRows ? `<p><strong>Overnight wake-ups</strong></p><ul>${wakeUpRows}</ul>` : ''}
        ${sleepLog.note ? `<p><strong>Notes:</strong> ${escapeHtml(sleepLog.note)}</p>` : ''}`
     : '<p class="empty">No sleep record saved for this date.</p>';
+  const hydrationSection = hydration?.entries.length || hydration?.sessions.length
+    ? `<ul>${hydration.entries.map(e => `<li>${escapeHtml(e.time)} · planned ${e.plannedMl} mL · actual ${e.actualMl === null ? 'not logged' : `${e.actualMl} mL`}${e.alertEnabled && e.actualMl === null ? ' · alert on' : ''}</li>`).join('')}</ul>
+      ${hydration.sessions.map(s => `<p>${escapeHtml(s.activity)} · estimated sweat rate ${(Math.max(0, s.preWeightKg - s.postWeightKg + (s.fluidMl - s.urineMl) / 1000) / (s.durationMinutes / 60)).toFixed(2)} L/hour</p>`).join('')}`
+    : '<p class="empty">No hydration plan saved for this date.</p>';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -186,6 +192,7 @@ export function buildPlannedDietHtml({
       <h2>Sleep log</h2>
       ${sleepSection}
     </section>
+    <section><h2>Hydration</h2>${hydrationSection}</section>
     <section>
       <h2>Tennis sessions</h2>
       ${tennisPlan
