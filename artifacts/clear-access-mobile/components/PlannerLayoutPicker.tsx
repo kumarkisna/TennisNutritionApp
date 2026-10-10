@@ -24,23 +24,7 @@ export function PlannerLayoutPicker() {
         { value: 'compact', label: '2 · Action view' },
       ]}
     />
-    <Text style={{ fontFamily: F.semi, fontSize: 13, color: c.foreground }}>Day totals</Text>
-    <Chips value={settings.dayTotalsPosition} disabled={disabled} testPrefix="select-day-totals-position"
-      onChange={value => save({ dayTotalsPosition: value })}
-      options={[{ value: 'first', label: 'First' }, { value: 'last', label: 'Last' }]} />
-    <Text style={{ fontFamily: F.semi, fontSize: 13, color: c.foreground }}>Planned portions</Text>
-    <Chips value={settings.plannedPortionsPosition} disabled={disabled} testPrefix="select-planned-portions-position"
-      onChange={value => save({ plannedPortionsPosition: value })}
-      options={[{ value: 'first', label: 'First' }, { value: 'last', label: 'Last' }]} />
-    <Text style={{ fontFamily: F.semi, fontSize: 13, color: c.foreground }}>Sleep log in Planner</Text>
-    <Chips value={settings.sleepLogPosition} disabled={disabled} testPrefix="select-sleep-log-position"
-      onChange={value => save({ sleepLogPosition: value })}
-      options={[{ value: 'first', label: 'First' }, { value: 'last', label: 'Last' }]} />
-    <Text style={{ fontFamily: F.semi, fontSize: 13, color: c.foreground }}>Hydration plan in Planner</Text>
-    <Muted>Middle places it after Planning targets and before the sections positioned last.</Muted>
-    <Chips value={settings.hydrationPosition} disabled={disabled} testPrefix="select-hydration-position"
-      onChange={value => save({ hydrationPosition: value })}
-      options={[{ value: 'first', label: 'First' }, { value: 'middle', label: 'Middle' }, { value: 'last', label: 'Last' }]} />
+    <Muted>Use “Reorder sections” on the Planner to move Day totals, Planned portions, Tennis plan, Sleep, Hydration, and Planning guidance up or down. Date controls, printing, and safety notes stay fixed.</Muted>
     <Text style={{ fontFamily: F.semi, fontSize: 13, color: c.foreground }}>Tennis plan relative to portions</Text>
     <Chips value={settings.tennisPlanPosition} disabled={disabled} testPrefix="select-tennis-plan-position"
       onChange={value => save({ tennisPlanPosition: value })}

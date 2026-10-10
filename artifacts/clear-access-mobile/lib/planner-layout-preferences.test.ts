@@ -39,6 +39,7 @@ test('layout and section positions persist independently of planner records', as
     plannedPortionsPosition: 'first' as const,
     sleepLogPosition: 'last' as const,
     tennisPlanPosition: 'after' as const,
+    sectionOrder: [...DEFAULT_PLANNER_LAYOUT.sectionOrder],
   };
   await preferences.save(choice);
   assert.deepEqual(await preferences.load(), choice);

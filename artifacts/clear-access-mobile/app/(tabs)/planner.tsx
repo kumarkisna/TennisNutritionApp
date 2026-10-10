@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { dietPhaseLabels } from '@/lib/tennis-planning';
@@ -15,7 +15,8 @@ import { TennisPlanPanel } from '@/components/TennisPlanPanel';
 import { PlanningTargets } from '@/components/PlanningTargets';
 import { SleepLogCard } from '@/components/SleepLogCard';
 import { HydrationCard } from '@/components/HydrationCard';
-import { Btn, CaloriesMacros, Card, DISCLAIMER, ErrorBox, Eyebrow, F, FiberNote, IconBtn, LoadingBlock, Muted, NutritionGrid, Screen, SectionTitle, Title, tap } from '@/components/ui';
+import type { PlannerSection } from '@/lib/planner-layout-preferences';
+import { Btn, CaloriesMacros, Card, DISCLAIMER, ErrorBox, Eyebrow, F, FiberNote, IconBtn, LoadingBlock, Muted, NutritionGrid, Screen, SectionTitle, Title, tap, warn } from '@/components/ui';
 import { cap, dateLabel, isIsoDate, n, shiftDate, today } from '@/lib/format';
 
 const meals: Meal[] = ['breakfast', 'lunch', 'dinner', 'snack'];
@@ -24,7 +25,8 @@ export default function Planner() {
   const c = useColors();
   const router = useRouter();
   const { person, date, setDate } = usePlanner();
-  const { settings } = usePlannerLayout();
+  const { settings, updateSettings } = usePlannerLayout();
+  const [reordering, setReordering] = useState(false);
   const showDetails = settings.mode === 'current';
   const params = { personId: person.id, date };
   const summary = useGetDailySummary(params);
@@ -77,6 +79,25 @@ export default function Planner() {
   </Card> : null;
   const sleepLogSection = <SleepLogCard personId={person.id} personName={person.name} date={date} dateOfBirth={person.dateOfBirth} />;
   const tennisPlanSection = <TennisPlanPanel key={`${person.id}-${date}`} person={person} date={date} showDetails={showDetails} />;
+  const sectionLabels: Record<PlannerSection, string> = {
+    sleep: 'Sleep log', totals: 'Day totals', tennis: 'Tennis plan', guidance: 'Planning guidance', hydration: 'Hydration', meals: 'Planned portions',
+  };
+  const sectionNodes: Record<PlannerSection, ReactNode> = {
+    sleep: sleepLogSection,
+    totals: dayTotalsSection,
+    tennis: tennisPlanSection,
+    guidance: planningInformation,
+    hydration: <HydrationCard personId={person.id} date={date} personName={person.name} dateOfBirth={person.dateOfBirth} sex={person.growthReferenceSex} day={day.data} />,
+    meals: mealActions,
+  };
+  async function moveSection(section: PlannerSection, delta: -1 | 1) {
+    const next = [...settings.sectionOrder];
+    const index = next.indexOf(section);
+    const target = index + delta;
+    if (target < 0 || target >= next.length) return;
+    [next[index], next[target]] = [next[target], next[index]];
+    if (!(await updateSettings({ sectionOrder: next }))) warn();
+  }
   return <Screen tabs onRefresh={() => { summary.refetch(); entries.refetch(); day.refetch(); }} refreshing={summary.isRefetching || entries.isRefetching || day.isRefetching}>
     <Eyebrow>02 / Day planner</Eyebrow>
     <Title sub={showDetails ? `${dateLabel(date)} · ${person.name}'s plan.` : undefined}>Shape the day.</Title>
@@ -101,21 +122,18 @@ export default function Planner() {
       hydration={day.data?.hydration}
       disabled={!entries.isSuccess || !day.isSuccess || entries.isFetching || day.isFetching}
     />
-    {settings.hydrationPosition === 'first' ? <HydrationCard personId={person.id} date={date} personName={person.name} dateOfBirth={person.dateOfBirth} sex={person.growthReferenceSex} day={day.data} /> : null}
-    {settings.sleepLogPosition === 'first' ? sleepLogSection : null}
-    {settings.dayTotalsPosition === 'first' ? dayTotalsSection : null}
-    {settings.plannedPortionsPosition === 'first' && settings.tennisPlanPosition === 'before' ? tennisPlanSection : null}
-    {settings.plannedPortionsPosition === 'first' ? mealActions : null}
-    {settings.plannedPortionsPosition === 'first' && settings.tennisPlanPosition === 'after' ? tennisPlanSection : null}
-    {settings.plannedPortionsPosition === 'last' && settings.tennisPlanPosition === 'before' ? tennisPlanSection : null}
-    {planningInformation}
-    {settings.hydrationPosition === 'middle' ? <HydrationCard personId={person.id} date={date} personName={person.name} dateOfBirth={person.dateOfBirth} sex={person.growthReferenceSex} day={day.data} /> : null}
-    {settings.plannedPortionsPosition === 'last' ? mealActions : null}
-    {settings.plannedPortionsPosition === 'last' && settings.tennisPlanPosition === 'after' ? tennisPlanSection : null}
-    {settings.dayTotalsPosition === 'last' ? dayTotalsSection : null}
+      <Btn small variant="ghost" label={reordering ? 'Done reordering' : 'Reorder sections'} testID="button-toggle-section-reorder" onPress={() => setReordering(value => !value)} />
+    {settings.sectionOrder.map((section, index) => <View key={section} testID={`planner-section-${section}`} style={{ gap: 6 }}>
+      {reordering ? <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Muted>{index + 1} of {settings.sectionOrder.length} · {sectionLabels[section]}</Muted>
+        <View style={{ flexDirection: 'row', gap: 4 }}>
+          <Btn small variant="ghost" icon="chevron-up" label="Up" testID={`button-move-section-${section}-up`} disabled={index === 0} onPress={() => void moveSection(section, -1)} />
+          <Btn small variant="ghost" icon="chevron-down" label="Down" testID={`button-move-section-${section}-down`} disabled={index === settings.sectionOrder.length - 1} onPress={() => void moveSection(section, 1)} />
+        </View>
+      </View> : null}
+      {sectionNodes[section]}
+    </View>)}
     {summary.data ? <Card><Eyebrow>Day totals</Eyebrow><NutritionGrid nutrition={summary.data.totals} /><FiberNote /></Card> : null}
     <Muted>{DISCLAIMER}</Muted>
-    {settings.sleepLogPosition === 'last' ? sleepLogSection : null}
-    {settings.hydrationPosition === 'last' ? <HydrationCard personId={person.id} date={date} personName={person.name} dateOfBirth={person.dateOfBirth} sex={person.growthReferenceSex} day={day.data} /> : null}
   </Screen>;
 }

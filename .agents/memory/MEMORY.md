@@ -20,3 +20,4 @@
 - [Date-of-birth age semantics](date-of-birth-age.md) — age is derived from optional DOB; clear stored ages when DOB is absent, and use the planner date for date-specific estimates.
 - [Custom-food nutrient aggregation](custom-food-nutrient-aggregation.md) — ingredient nutrition is mass-weighted per 100 g; unknown minerals remain unknown instead of counting as zero.
 - [Tennis merge import identity](tennis-food-merge-provenance.md) — track local slot imports with stable person backup IDs, source dates, and source slot IDs; validate provenance in backups.
+- [Evidence-based hydration guidance](hydration-guidance-boundary.md) — label daily water values as population references and avoid fixed activity-based fluid prescriptions.

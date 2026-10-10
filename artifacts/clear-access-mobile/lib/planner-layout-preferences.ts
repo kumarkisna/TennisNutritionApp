@@ -3,14 +3,14 @@ export const LEGACY_PLANNER_LAYOUT_STORAGE_KEY = 'clear-access-mobile:planner-la
 export const PREVIOUS_PLANNER_LAYOUT_STORAGE_KEY = 'clear-access-mobile:planner-layout:v2';
 export type PlannerLayoutMode = 'current' | 'compact';
 export type PlannerSectionPosition = 'first' | 'last';
-export type HydrationPosition = 'first' | 'middle' | 'last';
 export type TennisPlanPosition = 'before' | 'after';
+export type PlannerSection = 'sleep' | 'totals' | 'tennis' | 'guidance' | 'hydration' | 'meals';
 export type PlannerLayoutPreferences = {
   mode: PlannerLayoutMode;
   dayTotalsPosition: PlannerSectionPosition;
   plannedPortionsPosition: PlannerSectionPosition;
   sleepLogPosition: PlannerSectionPosition;
-  hydrationPosition: HydrationPosition;
+  sectionOrder: PlannerSection[];
   tennisPlanPosition: TennisPlanPosition;
 };
 export const DEFAULT_PLANNER_LAYOUT: PlannerLayoutPreferences = {
@@ -18,7 +18,7 @@ export const DEFAULT_PLANNER_LAYOUT: PlannerLayoutPreferences = {
   dayTotalsPosition: 'first',
   plannedPortionsPosition: 'last',
   sleepLogPosition: 'first',
-  hydrationPosition: 'middle',
+  sectionOrder: ['sleep', 'totals', 'tennis', 'guidance', 'hydration', 'meals'],
   tennisPlanPosition: 'before',
 };
 export type PlannerLayoutStorage = {
@@ -33,7 +33,8 @@ function isPreferences(value: unknown): value is PlannerLayoutPreferences {
     'dayTotalsPosition' in value && (value.dayTotalsPosition === 'first' || value.dayTotalsPosition === 'last') &&
     'plannedPortionsPosition' in value && (value.plannedPortionsPosition === 'first' || value.plannedPortionsPosition === 'last') &&
     'sleepLogPosition' in value && (value.sleepLogPosition === 'first' || value.sleepLogPosition === 'last') &&
-    (!('hydrationPosition' in value) || value.hydrationPosition === 'first' || value.hydrationPosition === 'middle' || value.hydrationPosition === 'last') &&
+    (!('sectionOrder' in value) || (Array.isArray(value.sectionOrder) && value.sectionOrder.length === 6 &&
+      new Set(value.sectionOrder).size === 6 && value.sectionOrder.every(section => ['sleep', 'totals', 'tennis', 'guidance', 'hydration', 'meals'].includes(String(section))))) &&
     'tennisPlanPosition' in value && (value.tennisPlanPosition === 'before' || value.tennisPlanPosition === 'after');
 }
 
@@ -67,6 +68,7 @@ function migrateV2(serialized: string): PlannerLayoutPreferences {
     plannedPortionsPosition: value.plannedPortionsPosition,
     sleepLogPosition: DEFAULT_PLANNER_LAYOUT.sleepLogPosition,
     tennisPlanPosition: value.tennisPlanPosition,
+    sectionOrder: DEFAULT_PLANNER_LAYOUT.sectionOrder,
   };
 }
 
@@ -84,7 +86,7 @@ export function createPlannerLayoutPreferences(storage: PlannerLayoutStorage) {
           dayTotalsPosition: value.dayTotalsPosition,
           plannedPortionsPosition: value.plannedPortionsPosition,
           sleepLogPosition: value.sleepLogPosition,
-          hydrationPosition: 'hydrationPosition' in value ? value.hydrationPosition as HydrationPosition : DEFAULT_PLANNER_LAYOUT.hydrationPosition,
+          sectionOrder: 'sectionOrder' in value ? value.sectionOrder as PlannerSection[] : DEFAULT_PLANNER_LAYOUT.sectionOrder,
           tennisPlanPosition: value.tennisPlanPosition,
         };
       }
