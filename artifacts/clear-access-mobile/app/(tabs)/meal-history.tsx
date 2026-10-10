@@ -9,6 +9,7 @@ import { isIsoDate, shiftDate } from '@/lib/format';
 import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, Muted, Screen, Title, success, warn } from '@/components/ui';
 import { dietPhaseLabels, fuelLabels } from '@/lib/tennis-planning';
 import type { TennisPlan } from '@/lib/local-models';
+import { filterMealReviews, sortMealReviews, type MealReviewSort } from '@/lib/meal-review-sort';
 
 const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const planModeLabels = { training: 'Training day', tournament: 'Tournament day', rest: 'Rest day' } as const;
@@ -34,6 +35,7 @@ export default function MealHistory() {
   const [keyword, setKeyword] = useState('');
   const [note, setNote] = useState('');
   const [search, setSearch] = useState('');
+  const [reviewSort, setReviewSort] = useState<MealReviewSort>('recent');
   const [targetPersonId, setTargetPersonId] = useState(person.id);
   const [targetDate, setTargetDate] = useState(shiftDate(date, 1));
   const [includeTennis, setIncludeTennis] = useState(false);
@@ -43,10 +45,11 @@ export default function MealHistory() {
   const [notice, setNotice] = useState('');
   const review = reviews.data?.find(item => item.date === date);
   const tennis = activity.data?.tennis;
-  const filteredReviews = useMemo(() => (reviews.data ?? []).filter(item =>
-    !search.trim() || item.keyword.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())),
+  const filteredReviews = useMemo(() => filterMealReviews(reviews.data ?? [], search),
   [reviews.data, search]);
-  const reviewByDate = useMemo(() => new Map(filteredReviews.map(item => [item.date, item])), [filteredReviews]);
+  const sortedReviews = useMemo(() => sortMealReviews(filteredReviews, reviewSort),
+  [filteredReviews, reviewSort]);
+  const reviewByDate = useMemo(() => new Map((reviews.data ?? []).map(item => [item.date, item])), [reviews.data]);
   const [year, monthNumber] = month.split('-').map(Number);
   const firstWeekday = new Date(year, monthNumber - 1, 1).getDay();
   const daysCount = new Date(year, monthNumber, 0).getDate();
@@ -103,7 +106,6 @@ export default function MealHistory() {
   return <Screen title="Meal history">
     <Eyebrow>Meal history · {person.name}</Eyebrow>
     <Title sub="Review the meals you tried, find the combinations that worked, and reuse them on another day.">Your meal combinations.</Title>
-    <Field label="Find by keyword" value={search} onChangeText={setSearch} placeholder="e.g. match day, quick breakfast" testID="input-meal-history-search" />
     <Card>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <Btn small variant="ghost" label="Previous month" testID="button-meal-calendar-previous" onPress={() => setMonth(monthShift(month, -1))} />
@@ -202,7 +204,10 @@ export default function MealHistory() {
     </Card>
     <Card>
       <Eyebrow>Saved meal history</Eyebrow>
-      {filteredReviews.length ? filteredReviews.map(item => <Pressable key={`${item.personId}:${item.date}`} onPress={() => { setDate(item.date); setMonth(item.date.slice(0, 7)); }}
+      <Field label="Find by keyword or note" value={search} onChangeText={setSearch} placeholder="e.g. match day, felt energized" testID="input-meal-history-search" />
+      <Chips testPrefix="select-meal-history-sort" value={reviewSort} onChange={value => setReviewSort(value as MealReviewSort)}
+        options={[{ value: 'recent', label: 'Newest first' }, { value: 'rating', label: 'Highest rated' }]} />
+      {sortedReviews.length ? sortedReviews.map(item => <Pressable key={`${item.personId}:${item.date}`} onPress={() => { setDate(item.date); setMonth(item.date.slice(0, 7)); }}
         style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 9, gap: 3 }}>
         <Text style={{ fontFamily: F.bold, color: c.foreground }}>{item.date} · {item.rating}/10</Text>
         <Muted>{item.keyword}{item.note ? ` · ${item.note}` : ''}</Muted>

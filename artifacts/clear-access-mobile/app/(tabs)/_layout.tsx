@@ -14,6 +14,7 @@ function NativeTabLayout() {
     <NativeTabs.Trigger name="index"><NativeTabs.Trigger.Icon sf={{ default: 'house', selected: 'house.fill' }} /><NativeTabs.Trigger.Label>Overview</NativeTabs.Trigger.Label></NativeTabs.Trigger>
     <NativeTabs.Trigger name="planner"><NativeTabs.Trigger.Icon sf={{ default: 'calendar', selected: 'calendar' }} /><NativeTabs.Trigger.Label>Planner</NativeTabs.Trigger.Label></NativeTabs.Trigger>
     <NativeTabs.Trigger name="foods"><NativeTabs.Trigger.Icon sf={{ default: 'fork.knife', selected: 'fork.knife' }} /><NativeTabs.Trigger.Label>Foods</NativeTabs.Trigger.Label></NativeTabs.Trigger>
+    <NativeTabs.Trigger name="meal-history"><NativeTabs.Trigger.Icon sf={{ default: 'clock', selected: 'clock.fill' }} /><NativeTabs.Trigger.Label>History</NativeTabs.Trigger.Label></NativeTabs.Trigger>
     <NativeTabs.Trigger name="settings"><NativeTabs.Trigger.Icon sf={{ default: 'slider.horizontal.3', selected: 'slider.horizontal.3' }} /><NativeTabs.Trigger.Label>Settings</NativeTabs.Trigger.Label></NativeTabs.Trigger>
   </NativeTabs>;
 }
@@ -37,6 +38,7 @@ function ClassicTabLayout() {
     <Tabs.Screen name="index" options={{ title: 'Overview', tabBarButtonTestID: 'tab-index', tabBarIcon: icon('house', 'home') }} />
     <Tabs.Screen name="planner" options={{ title: 'Planner', tabBarButtonTestID: 'tab-planner', tabBarIcon: icon('calendar', 'calendar') }} />
     <Tabs.Screen name="foods" options={{ title: 'Foods', tabBarButtonTestID: 'tab-foods', tabBarIcon: icon('fork.knife', 'book-open') }} />
+    <Tabs.Screen name="meal-history" options={{ title: 'History', tabBarButtonTestID: 'tab-meal-history', tabBarIcon: icon('clock', 'clock') }} />
     <Tabs.Screen name="settings" options={{ title: 'Settings', tabBarButtonTestID: 'tab-settings', tabBarIcon: icon('slider.horizontal.3', 'sliders') }} />
   </Tabs>;
 }
