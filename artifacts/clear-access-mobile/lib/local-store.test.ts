@@ -1751,3 +1751,55 @@ test('meal review inputs and same-date reuse are validated', async () => {
   await assert.rejects(store.saveMealPlanReview({ personId: person.id, date: '2026-08-10', rating: 11, keyword: 'x', note: '' }), /rating/i);
   await assert.rejects(store.copyMealsToDate({ sourcePersonId: person.id, sourceDate: '2026-08-10', targetPersonId: person.id, targetDate: '2026-08-10' }), /different destination/i);
 });
+
+test('custom foods retain barcode lookup brand and source link', async () => {
+  const store = createLocalStore(new MemoryStorage());
+  const food = await store.createFood({
+    name: 'Oats — Grain Co', brand: 'Grain Co', sourceUrl: 'https://world.openfoodfacts.org/product/0123456789012',
+    category: 'grains', caloriesPer100g: 380, proteinPer100g: 13, carbsPer100g: 67, fatPer100g: 6, fiberPer100g: 10,
+  });
+  assert.equal(food.brand, 'Grain Co');
+  assert.equal(food.sourceUrl, 'https://world.openfoodfacts.org/product/0123456789012');
+  assert.equal((await store.listFoods()).find(item => item.id === food.id)?.sourceUrl, food.sourceUrl);
+});
+
+test('meal-history reuse optionally copies the tennis plan with edited session timing and linked slots', async () => {
+  const store = createLocalStore(new MemoryStorage());
+  const person = (await store.listPeople())[0];
+  const food = (await store.listFoods())[0];
+  const sourceDate = '2026-08-12';
+  const targetDate = '2026-08-13';
+  await store.saveDayActivity({ personId: person.id, date: sourceDate, activityType: 'training_60' });
+  const sourcePlan = {
+    mode: 'training' as const,
+    sessions: [{ kind: 'practice' as const, startTime: '09:00', durationMinutes: 90, intensity: 'hard' as const }],
+    fuel: { before: 'Breakfast', during: '', between: '', after: 'Recovery snack', hydration: 'Water' },
+    diets: [{ id: 'diet-source-breakfast', phase: 'before' as const, time: '07:30' }],
+    experienceRating: 8,
+  };
+  await store.saveTennisPlan({ personId: person.id, date: sourceDate, plan: sourcePlan });
+  await store.createMealEntry({
+    personId: person.id, date: sourceDate, meal: 'breakfast', foodId: food.id, grams: 120, tennisDietId: 'diet-source-breakfast',
+  });
+  await store.saveDayActivity({ personId: person.id, date: targetDate, activityType: 'training_60' });
+  const changedPlan = {
+    ...sourcePlan,
+    sessions: [{ ...sourcePlan.sessions[0], startTime: '10:15', durationMinutes: 120 }],
+  };
+  await store.copyMealsToDate({ sourcePersonId: person.id, sourceDate, targetPersonId: person.id, targetDate, tennisPlan: changedPlan });
+  const copiedDay = await store.getDayActivity({ personId: person.id, date: targetDate });
+  assert.equal(copiedDay.tennis?.sessions[0].startTime, '10:15');
+  assert.equal(copiedDay.tennis?.sessions[0].durationMinutes, 120);
+  assert.equal(copiedDay.tennis?.diets?.[0].time, '07:30');
+  assert.notEqual(copiedDay.tennis?.diets?.[0].id, 'diet-source-breakfast');
+  assert.equal(copiedDay.tennis?.experienceRating, undefined);
+  const copiedEntry = (await store.listMealEntries({ personId: person.id, date: targetDate }))[0];
+  assert.equal(copiedEntry.tennisDietId, copiedDay.tennis?.diets?.[0].id);
+
+  const restDate = '2026-08-14';
+  await assert.rejects(
+    store.copyMealsToDate({ sourcePersonId: person.id, sourceDate, targetPersonId: person.id, targetDate: restDate, tennisPlan: changedPlan }),
+    /active activity/i,
+  );
+  assert.equal((await store.getDayActivity({ personId: person.id, date: restDate })).activityType, 'rest');
+});

@@ -3,12 +3,16 @@ import { Pressable, Text, View } from 'react-native';
 import { usePlanner } from '@/contexts/PlannerProvider';
 import { useColors } from '@/hooks/useColors';
 import {
-  useCopyMealsToDate, useListMealEntries, useListPeople, useMealPlanReviews, useSaveMealPlanReview,
+  useCopyMealsToDate, useGetDayActivity, useListMealEntries, useListPeople, useMealPlanReviews, useSaveMealPlanReview,
 } from '@/lib/local-api';
 import { isIsoDate, shiftDate } from '@/lib/format';
 import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, Muted, Screen, Title, success, warn } from '@/components/ui';
+import { dietPhaseLabels, fuelLabels } from '@/lib/tennis-planning';
+import type { TennisPlan } from '@/lib/local-models';
 
 const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const planModeLabels = { training: 'Training day', tournament: 'Tournament day', rest: 'Rest day' } as const;
+const sessionLabels = { practice: 'Practice', gym: 'Gym', match: 'Match' } as const;
 const monthShift = (key: string, amount: number) => {
   const [y, m] = key.split('-').map(Number);
   const d = new Date(y, m - 1 + amount, 1);
@@ -20,6 +24,7 @@ export default function MealHistory() {
   const c = useColors();
   const { person, date, setDate } = usePlanner();
   const entries = useListMealEntries({ personId: person.id, date });
+  const activity = useGetDayActivity({ personId: person.id, date });
   const reviews = useMealPlanReviews(person.id);
   const people = useListPeople();
   const saveReview = useSaveMealPlanReview();
@@ -31,9 +36,13 @@ export default function MealHistory() {
   const [search, setSearch] = useState('');
   const [targetPersonId, setTargetPersonId] = useState(person.id);
   const [targetDate, setTargetDate] = useState(shiftDate(date, 1));
+  const [includeTennis, setIncludeTennis] = useState(false);
+  const [sessionTimes, setSessionTimes] = useState<string[]>([]);
+  const [sessionDurations, setSessionDurations] = useState<string[]>([]);
   const [error, setError] = useState<unknown>(null);
   const [notice, setNotice] = useState('');
   const review = reviews.data?.find(item => item.date === date);
+  const tennis = activity.data?.tennis;
   const filteredReviews = useMemo(() => (reviews.data ?? []).filter(item =>
     !search.trim() || item.keyword.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())),
   [reviews.data, search]);
@@ -51,6 +60,11 @@ export default function MealHistory() {
     setNotice('');
   }, [date, review?.rating, review?.keyword, review?.note]);
   useEffect(() => { setTargetPersonId(person.id); }, [person.id]);
+  useEffect(() => {
+    setIncludeTennis(false);
+    setSessionTimes(tennis?.sessions.map(session => session.startTime) ?? []);
+    setSessionDurations(tennis?.sessions.map(session => String(session.durationMinutes)) ?? []);
+  }, [date, tennis]);
 
   async function save() {
     setError(null);
@@ -67,9 +81,22 @@ export default function MealHistory() {
     setError(null);
     if (!isIsoDate(targetDate)) { setError(new Error('Enter a valid destination date.')); return; }
     try {
-      const count = await copy.mutateAsync({ data: { sourcePersonId: person.id, sourceDate: date, targetPersonId, targetDate } });
+      let tennisPlan: TennisPlan | undefined;
+      if (includeTennis && tennis) {
+        tennisPlan = {
+          ...tennis,
+          sessions: tennis.sessions.map((session, index) => ({
+            ...session,
+            startTime: sessionTimes[index] ?? session.startTime,
+            durationMinutes: Number(sessionDurations[index] ?? session.durationMinutes),
+          })),
+        };
+      }
+      const count = await copy.mutateAsync({ data: { sourcePersonId: person.id, sourceDate: date, targetPersonId, targetDate, ...(tennisPlan ? { tennisPlan } : {}) } });
       success();
-      setNotice(`${count} meal portions added. Existing meals and destination settings were kept.`);
+      setNotice(includeTennis
+        ? `${count ? `${count} meal portions and ` : ''}The edited tennis plan was copied. The source rating was not copied.`
+        : `${count} meal portions added. Existing meals and destination settings were kept.`);
     } catch (problem) { setError(problem); warn(); }
   }
 
@@ -111,6 +138,29 @@ export default function MealHistory() {
         </View>) : <Muted>No meals are planned for this date yet.</Muted>}
     </Card>
     <Card>
+      <Eyebrow>Tennis plan</Eyebrow>
+      <Text style={{ fontFamily: F.bold, fontSize: 19, color: c.foreground }}>Court time and fuel timing</Text>
+      {activity.isLoading ? <Muted>Loading tennis details…</Muted> : activity.isError ? <ErrorBox error={activity.error} /> :
+        tennis ? <>
+          <Muted>{planModeLabels[tennis.mode]}{tennis.experienceRating !== undefined ? ` · Tennis-plan experience ${tennis.experienceRating}/10` : ''}</Muted>
+          {tennis.sessions.length ? tennis.sessions.map((session, index) => <View key={`${session.kind}-${index}`} style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 8 }}>
+            <Text style={{ fontFamily: F.semi, color: c.foreground }}>{sessionLabels[session.kind]} · {session.startTime}</Text>
+            <Muted>{session.durationMinutes} min · {session.intensity} intensity</Muted>
+          </View>) : <Muted>No court sessions scheduled.</Muted>}
+          {(tennis.diets?.length ?? 0) > 0 ? <View style={{ gap: 5 }}>
+            <Text style={{ fontFamily: F.bold, color: c.foreground }}>Timed food slots</Text>
+            {[...(tennis.diets ?? [])].sort((a, b) => a.time.localeCompare(b.time)).map(slot =>
+              <Muted key={slot.id}>{dietPhaseLabels[slot.phase]} · {slot.time}</Muted>)}
+          </View> : null}
+          {(['before', 'during', 'between', 'after', 'hydration'] as const).some(key => tennis.fuel[key].trim()) ?
+            <View style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 8, gap: 8 }}>
+              <Text style={{ fontFamily: F.bold, color: c.foreground }}>Fuel and hydration notes</Text>
+              {(['before', 'during', 'between', 'after', 'hydration'] as const).filter(key => tennis.fuel[key].trim()).map(key =>
+                <View key={key}><Text style={{ fontFamily: F.semi, color: c.foreground }}>{fuelLabels[key]}</Text><Muted>{tennis.fuel[key]}</Muted></View>)}
+            </View> : null}
+        </> : <Muted>No tennis plan was saved for this date.</Muted>}
+    </Card>
+    <Card>
       <Eyebrow>Remember what worked</Eyebrow>
       <Text style={{ fontFamily: F.bold, fontSize: 19, color: c.foreground }}>Rate this meal combination</Text>
       <Muted>Ratings and notes belong to this person and date; they do not change nutrition goals or tennis-plan ratings.</Muted>
@@ -124,11 +174,29 @@ export default function MealHistory() {
     <Card>
       <Eyebrow>Reuse</Eyebrow>
       <Text style={{ fontFamily: F.bold, fontSize: 19, color: c.foreground }}>Use these meals again</Text>
-      <Muted>Adds portions to the destination. Existing meals, reminders, goals, and tennis schedule stay unchanged; the rating and note remain on the source date.</Muted>
+      <Muted>Adds portions to the destination without replacing existing meals or reminders. The rating and note stay on the source date.</Muted>
       <Chips testPrefix="select-meal-reuse-person" value={String(targetPersonId)} onChange={value => setTargetPersonId(Number(value))}
         options={(people.data ?? []).map(item => ({ value: String(item.id), label: item.name }))} />
       <Field label="Destination date (YYYY-MM-DD)" value={targetDate} onChangeText={setTargetDate} maxLength={10} keyboardType="numbers-and-punctuation" testID="input-meal-reuse-date" />
-      <Btn label="Add meals to destination" icon="copy" loading={copy.isPending} disabled={!entries.data?.length} testID="button-reuse-meal-combination" onPress={() => void reuse()} />
+      {tennis ? <>
+        <Text style={{ fontFamily: F.semi, color: c.foreground }}>Include the source tennis plan?</Text>
+        <Chips testPrefix="select-meal-reuse-tennis" value={includeTennis ? 'yes' : 'no'} onChange={value => setIncludeTennis(value === 'yes')}
+          options={[{ value: 'no', label: 'Meals only' }, { value: 'yes', label: 'Meals + tennis plan' }]} />
+        {includeTennis ? <>
+          <Muted>Session times and durations below are editable for the copied plan. Timed food slots and notes keep their source values. The destination must not already have a tennis plan, and its activity setting is not changed.</Muted>
+          {tennis.sessions.map((session, index) => <View key={`copy-session-${index}`} style={{ flexDirection: 'row', gap: 8 }}>
+            <View style={{ flex: 1 }}><Field label={`${sessionLabels[session.kind]} start (24h)`} value={sessionTimes[index] ?? session.startTime}
+              onChangeText={value => setSessionTimes(current => current.map((time, i) => i === index ? value : time))}
+              maxLength={5} keyboardType="numbers-and-punctuation" testID={`input-copy-tennis-time-${index}`} /></View>
+            <View style={{ flex: 1 }}><Field label="Duration (min)" value={sessionDurations[index] ?? String(session.durationMinutes)}
+              onChangeText={value => setSessionDurations(current => current.map((duration, i) => i === index ? value : duration))}
+              maxLength={3} keyboardType="number-pad" testID={`input-copy-tennis-duration-${index}`} /></View>
+          </View>)}
+          {tennis.mode !== 'rest' ? <Muted>For a training or tournament plan, set the destination day to an active activity in Planner first. This copy does not change its nutrition estimate.</Muted> : null}
+        </> : null}
+      </> : null}
+      <Btn label={includeTennis ? 'Add meals and tennis plan' : 'Add meals to destination'} icon="copy" loading={copy.isPending}
+        disabled={!entries.data?.length && !(includeTennis && tennis)} testID="button-reuse-meal-combination" onPress={() => void reuse()} />
       {notice ? <Muted>{notice}</Muted> : null}
       {error ? <ErrorBox error={error} /> : null}
     </Card>

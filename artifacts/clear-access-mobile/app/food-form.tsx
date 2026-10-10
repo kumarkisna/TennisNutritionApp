@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Linking, Platform, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useCreateFood, useDeleteFood, useListFoods, useUpdateFood, type Food, type FoodCategoryType, type FoodInput } from '@/lib/local-api';
 import { usePlanner } from '@/contexts/PlannerProvider';
 import { useColors } from '@/hooks/useColors';
@@ -16,6 +17,7 @@ import {
   type FoodNutritionPer100g,
 } from '@/lib/food-nutrition';
 import type { FoodIngredient } from '@/lib/local-api';
+import { parseOpenFoodFactsProduct } from '@/lib/food-barcode';
 
 const categories: FoodCategoryType[] = ['grains', 'protein', 'vegetables', 'fruit', 'dairy', 'other'];
 
@@ -70,6 +72,12 @@ function Inner({ existing, done }: { existing?: Food; done: () => void }) {
   const nextIngredientId = useRef((existing?.ingredients?.length ?? 0) + 1);
   const [problem, setProblem] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [barcodeLoading, setBarcodeLoading] = useState(false);
+  const [barcodeStatus, setBarcodeStatus] = useState<string | null>(null);
+  const [barcodeAttribution, setBarcodeAttribution] = useState<{ brand: string; sourceUrl: string } | null>(null);
+  const barcodeHandled = useRef(false);
 
   const parsedIngredients = ingredients.length > 0 ? parseFoodIngredientDrafts(ingredients) : null;
   const calculatedNutrition = parsedIngredients?.ok
@@ -116,6 +124,71 @@ function Inner({ existing, done }: { existing?: Food; done: () => void }) {
     setProblem(null);
   }
 
+  async function startBarcodeScan() {
+    barcodeHandled.current = false;
+    setBarcodeStatus(null);
+    if (!cameraPermission?.granted) {
+      try {
+        const permission = await requestCameraPermission();
+        if (!permission.granted) {
+          setBarcodeStatus('Camera access is needed to scan. You can still enter the food details manually below.');
+          return;
+        }
+      } catch {
+        setBarcodeStatus('Could not open the camera. Enter the food details manually below.');
+        return;
+      }
+    }
+    setScannerOpen(true);
+  }
+
+  async function lookupBarcode(code: string) {
+    if (barcodeHandled.current || barcodeLoading) return;
+    barcodeHandled.current = true;
+    setScannerOpen(false);
+    setBarcodeAttribution(null);
+    setBarcodeLoading(true);
+    setBarcodeStatus(`Barcode ${code} scanned. Looking up nutrition data…`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12000);
+    try {
+      const response = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,product_name_en,generic_name,brands,categories_tags,nutriments`, {
+        headers: { Accept: 'application/json', ...(Platform.OS !== 'web' ? { 'User-Agent': 'ClearAccessMobile/1.0 (food barcode lookup)' } : {}) },
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error(`Product lookup returned ${response.status}.`);
+      const product = parseOpenFoodFactsProduct(await response.json());
+      if (!product) {
+        setBarcodeStatus('No matching nutrition record was found. Enter the food name and nutrition per 100 g manually below.');
+        return;
+      }
+      const show = (value: number | null) => value === null ? '' : String(value);
+      setName(product.name.slice(0, 120));
+      setCategory(product.category);
+      setBarcodeAttribution({
+        brand: product.brand,
+        sourceUrl: `https://world.openfoodfacts.org/product/${encodeURIComponent(code)}`,
+      });
+      setKcal(show(product.nutrition.caloriesPer100g));
+      setProtein(show(product.nutrition.proteinPer100g));
+      setCarbs(show(product.nutrition.carbsPer100g));
+      setFat(show(product.nutrition.fatPer100g));
+      setFiber(show(product.nutrition.fiberPer100g));
+      setCalcium(show(product.nutrition.calciumMgPer100g));
+      setIron(show(product.nutrition.ironMgPer100g));
+      setIngredients([]);
+      setProblem(null);
+      setBarcodeStatus(product.missingRequired.length
+        ? `Found ${product.name} in Open Food Facts. Some required values are missing (${product.missingRequired.join(', ')}); fill those in manually. Values shown are per 100 g—check them against the package label.`
+        : `Found ${product.name} in Open Food Facts. Nutrition per 100 g was filled in; check it against the package label before saving.`);
+    } catch {
+      setBarcodeStatus('Could not reach the food database. Enter the food name and nutrition per 100 g manually below.');
+    } finally {
+      clearTimeout(timeout);
+      setBarcodeLoading(false);
+    }
+  }
+
   async function submit() {
     const bad = (m: string) => { setProblem(m); warn(); };
     if (!name.trim() || name.trim().length > 120) return bad('Enter a name up to 120 characters.');
@@ -150,7 +223,10 @@ function Inner({ existing, done }: { existing?: Food; done: () => void }) {
     }
 
     setProblem(null);
-    const data: FoodInput = { name: name.trim(), category, ...nutrients, ingredients: ingredientValues };
+    const data: FoodInput = {
+      name: name.trim(), category, ...nutrients, ingredients: ingredientValues,
+      ...(barcodeAttribution ? { brand: barcodeAttribution.brand, sourceUrl: barcodeAttribution.sourceUrl } : {}),
+    };
     try {
       if (existing) await update.mutateAsync({ id: existing.id, data });
       else await create.mutateAsync({ data });
@@ -165,6 +241,33 @@ function Inner({ existing, done }: { existing?: Food; done: () => void }) {
   return <Screen title={existing ? 'Edit food' : 'New food'}>
     <Eyebrow>{existing ? 'Custom food' : 'New custom food'} / per 100 g</Eyebrow>
     <Title sub="Enter nutrition per 100 g manually, or add recipe ingredients to calculate it automatically.">{existing ? `Edit ${existing.name}` : 'Add your own food'}</Title>
+    {!existing ? <Card>
+      <SectionTitle kicker="Optional">Scan a barcode</SectionTitle>
+      <Muted>We’ll look up the product and fill in any nutrition details available. If no record is found, enter the details manually below.</Muted>
+      <Btn label={barcodeLoading ? 'Looking up food…' : 'Scan food barcode'} icon="camera" disabled={barcodeLoading} testID="button-scan-food-barcode" onPress={() => void startBarcodeScan()} />
+      {barcodeStatus ? <Muted>{barcodeStatus}</Muted> : null}
+      {barcodeLoading ? <Muted>Checking Open Food Facts…</Muted> : null}
+      {scannerOpen ? <View style={{ gap: 10 }}>
+        <Muted>Point the camera at the package’s EAN or UPC barcode.</Muted>
+        <CameraView
+          style={{ height: 240, borderRadius: 14, overflow: 'hidden' }}
+          facing="back"
+          barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'] }}
+          onBarcodeScanned={result => {
+            if (/^\d{8,14}$/.test(result.data)) void lookupBarcode(result.data);
+            else {
+              barcodeHandled.current = true;
+              setScannerOpen(false);
+              setBarcodeStatus('That barcode format is not supported. Enter the food details manually below.');
+            }
+          }}
+          testID="camera-food-barcode"
+        />
+        <Btn small variant="ghost" label="Close scanner" icon="x" testID="button-close-food-scanner" onPress={() => setScannerOpen(false)} />
+      </View> : null}
+      {!scannerOpen && cameraPermission?.status === 'denied' && !cameraPermission.canAskAgain && Platform.OS !== 'web' ?
+        <Btn small variant="ghost" label="Open camera settings" icon="settings" testID="button-food-camera-settings" onPress={() => { void Linking.openSettings().catch(() => setBarcodeStatus('Open your device settings to allow camera access.')); }} /> : null}
+    </Card> : null}
     <Field label="Name" value={name} onChangeText={setName} maxLength={120} testID="input-food-name" />
     <Chips testPrefix="select-food-category" value={category} onChange={setCategory} options={categories.map(c => ({ value: c, label: cap(c) }))} />
     <Card>

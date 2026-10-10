@@ -348,7 +348,7 @@ export function useSaveMealPlanReview() {
 }
 export function useCopyMealsToDate() {
   return useLocalMutation(({ data }: { data: CopyMealsToDateInput }) =>
-    localStore.copyMealsToDate(data), ENTRIES_REFRESH);
+    localStore.copyMealsToDate(data), [['getDayActivity'], ...ENTRIES_REFRESH]);
 }
 
 // Retained only as a safe transition bridge for screens removing online discovery.

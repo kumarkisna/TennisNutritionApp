@@ -26,7 +26,9 @@ export default function Foods() {
   const foods = useListFoods(q ? { search: q } : undefined);
 
   const shown = (foods.data ?? []).filter(f => filter === 'all' || f.source === filter);
-  const sourceLabel = (f: Food) => f.source === 'custom' ? 'Custom' : f.source === 'open_food_facts' ? 'Saved' : cap(f.category);
+  const sourceLabel = (f: Food) => f.source === 'custom'
+    ? f.sourceUrl?.includes('openfoodfacts.org') ? 'Custom · Open Food Facts' : 'Custom'
+    : f.source === 'open_food_facts' ? 'Saved' : cap(f.category);
 
   async function deleteFood(id: number) {
     try {

@@ -154,6 +154,8 @@ export type FoodSource = 'reference' | 'custom' | 'open_food_facts';
 export type FoodInput = {
   name: string;
   category: FoodCategory;
+  brand?: string;
+  sourceUrl?: string;
   ingredients?: FoodIngredient[];
   caloriesPer100g: number;
   proteinPer100g: number;
@@ -193,7 +195,13 @@ export type MealPlanReview = {
   note: string;
 };
 export type MealPlanReviewInput = MealPlanReview;
-export type CopyMealsToDateInput = { sourcePersonId: number; sourceDate: string; targetPersonId: number; targetDate: string };
+export type CopyMealsToDateInput = {
+  sourcePersonId: number;
+  sourceDate: string;
+  targetPersonId: number;
+  targetDate: string;
+  tennisPlan?: TennisPlan;
+};
 
 export type TennisSession = {
   kind: 'practice' | 'gym' | 'match';

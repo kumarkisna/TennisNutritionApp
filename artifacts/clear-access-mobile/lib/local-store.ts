@@ -49,6 +49,7 @@ import {
   type MealPlanReview,
   type MealPlanReviewInput,
   type CopyMealsToDateInput,
+  type TennisPlan,
   type MealSummary,
   type Nutrition,
   type Person,
@@ -1190,6 +1191,8 @@ function validateFood(data: FoodInput | FoodUpdate, existing?: Food): Omit<Food,
   const name = result.name?.trim();
   if (name !== undefined && (!name || name.length > 120)) fail('Enter a food name up to 120 characters.');
   if (!result.category || !CATEGORIES.includes(result.category)) fail('Choose a valid food category.');
+  if (result.brand !== undefined && (typeof result.brand !== 'string' || result.brand.length > 200)) fail('Food brand must be 200 characters or less.');
+  if (result.sourceUrl !== undefined && (typeof result.sourceUrl !== 'string' || result.sourceUrl.length > 2048)) fail('Food source link is invalid.');
   const ingredients = result.ingredients === undefined ? [] : result.ingredients;
   if (!isFoodIngredientList(ingredients)) {
     fail('Ingredient details are invalid. Check each ingredient and try again.');
@@ -1217,6 +1220,8 @@ function validateFood(data: FoodInput | FoodUpdate, existing?: Food): Omit<Food,
   return {
     name: name ?? '',
     category: result.category,
+    ...(result.brand ? { brand: result.brand } : {}),
+    ...(result.sourceUrl ? { sourceUrl: result.sourceUrl } : {}),
     caloriesPer100g: result.caloriesPer100g!,
     proteinPer100g: result.proteinPer100g!,
     carbsPer100g: result.carbsPer100g!,
@@ -1729,14 +1734,70 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
     },
     async copyMealsToDate(input: CopyMealsToDateInput): Promise<number> {
       return transact(draft => {
-        findPerson(draft, input.sourcePersonId);
+        const sourcePerson = findPerson(draft, input.sourcePersonId);
         findPerson(draft, input.targetPersonId);
         if (!isValidCalendarDate(input.sourceDate) || !isValidCalendarDate(input.targetDate)) fail('Choose valid source and destination dates.');
         if (input.sourcePersonId === input.targetPersonId && input.sourceDate === input.targetDate) fail('Choose a different destination date.');
+        const sourceDay = draft.activities.find(day => day.personId === input.sourcePersonId && day.date === input.sourceDate);
         const sourceEntries = draft.entries.filter(entry => entry.personId === input.sourcePersonId && entry.date === input.sourceDate);
-        if (!sourceEntries.length) fail('There are no planned meals to reuse on this date.');
+        if (!sourceEntries.length && !input.tennisPlan) fail('There are no planned meals to reuse on this date.');
+        let copiedPlan: TennisPlan | null = null;
+        const slotIds = new Map<string, string>();
+        let copiedRefs: TennisFoodImportRef[] = [];
+        if (input.tennisPlan) {
+          const sourcePlan = sourceDay?.tennis;
+          if (!sourcePlan) fail('There is no tennis plan on the source date.');
+          const sameNonSessionDetails = input.tennisPlan.mode === sourcePlan.mode &&
+            JSON.stringify(input.tennisPlan.fuel) === JSON.stringify(sourcePlan.fuel) &&
+            JSON.stringify(input.tennisPlan.diets ?? []) === JSON.stringify(sourcePlan.diets ?? []);
+          if (!sameNonSessionDetails) fail('The source tennis plan changed. Refresh the history and try again.');
+          const planProblem = tennisPlanProblem(input.tennisPlan);
+          if (planProblem) fail(planProblem);
+          const targetDay = draft.activities.find(day => day.personId === input.targetPersonId && day.date === input.targetDate);
+          if (targetDay?.tennis) fail('The destination already has a tennis plan. Choose a date without one so it is not overwritten.');
+          if (tennisActivityPlanProblem(targetDay?.activityType ?? 'rest', input.tennisPlan)) {
+            fail('Set the destination day to an active activity in Planner before copying this tennis plan. The copy will not change activity or nutrition targets.');
+          }
+          const usedIds = new Set(draft.activities.flatMap(day => day.tennis?.diets?.map(slot => slot.id) ?? []));
+          const diets = (sourcePlan.diets ?? []).map(slot => {
+            let id: string;
+            do { id = `diet-copy-${createBackupId()}`; } while (usedIds.has(id));
+            usedIds.add(id);
+            slotIds.set(slot.id, id);
+            return { ...slot, id };
+          });
+          const { experienceRating: _sourceRating, ...planWithoutRating } = input.tennisPlan;
+          copiedPlan = { ...clone(planWithoutRating), diets };
+          if (sourcePlan.diets?.length) {
+            const sourceBackupId = sourcePerson.backupIds[0];
+            if (!sourceBackupId) fail('The source person has no stable backup identity; the tennis plan cannot be copied safely.');
+            copiedRefs = sourcePlan.diets.map(slot => ({
+              sourcePersonBackupId: sourceBackupId, sourceDate: input.sourceDate, sourceDietId: slot.id,
+            }));
+            const existingRefs = new Set((targetDay?.tennisFoodImports ?? []).map(getTennisFoodImportKey));
+            if (copiedRefs.some(ref => existingRefs.has(getTennisFoodImportKey(ref)))) {
+              fail('This tennis food timetable was already copied to the destination.');
+            }
+          }
+        }
+        let targetDay = draft.activities.find(day => day.personId === input.targetPersonId && day.date === input.targetDate);
+        if (!targetDay) {
+          targetDay = { date: input.targetDate, personId: input.targetPersonId, activityType: 'rest' };
+          draft.activities.push(targetDay);
+        }
+        if (copiedPlan) targetDay.tennis = copiedPlan;
+        if (copiedRefs.length) targetDay.tennisFoodImports = [...(targetDay.tennisFoodImports ?? []), ...copiedRefs];
+        if (sourceEntries.length) targetDay.mealTimes ??= getMealTimes();
         for (const entry of sourceEntries) {
-          draft.entries.push({ ...entry, id: draft.nextEntryId++, personId: input.targetPersonId, date: input.targetDate, tennisDietId: undefined });
+          const tennisDietId = entry.tennisDietId ? slotIds.get(entry.tennisDietId) : undefined;
+          if (entry.tennisDietId && input.tennisPlan && !tennisDietId) fail('A source food portion refers to a missing tennis food slot.');
+          draft.entries.push({
+            ...entry,
+            id: draft.nextEntryId++,
+            personId: input.targetPersonId,
+            date: input.targetDate,
+            ...(tennisDietId ? { tennisDietId } : { tennisDietId: undefined }),
+          });
         }
         return sourceEntries.length;
       });
