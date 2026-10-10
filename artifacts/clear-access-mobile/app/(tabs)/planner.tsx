@@ -22,8 +22,8 @@ export default function Planner() {
   const c = useColors();
   const router = useRouter();
   const { person, date, setDate } = usePlanner();
-  const { mode: layoutMode } = usePlannerLayout();
-  const showDetails = layoutMode === 'current';
+  const { settings } = usePlannerLayout();
+  const showDetails = settings.mode === 'current';
   const params = { personId: person.id, date };
   const summary = useGetDailySummary(params);
   const entries = useListMealEntries(params);
@@ -69,6 +69,11 @@ export default function Planner() {
       </Card>;
     })}
   </>;
+  const dayTotalsSection = summary.isLoading ? <LoadingBlock rows={1} height={94} /> : summary.data && !summary.isError ? <Card>
+    <Eyebrow>Day totals / planned</Eyebrow>
+    <CaloriesMacros large calories={summary.data.totals.calories} protein={summary.data.totals.protein} carbs={summary.data.totals.carbs} fat={summary.data.totals.fat} testPrefix="planner-total" />
+  </Card> : null;
+  const tennisPlanSection = <TennisPlanPanel key={`${person.id}-${date}`} person={person} date={date} showDetails={showDetails} />;
   return <Screen tabs onRefresh={() => { summary.refetch(); entries.refetch(); day.refetch(); }} refreshing={summary.isRefetching || entries.isRefetching || day.isRefetching}>
     <Eyebrow>02 / Day planner</Eyebrow>
     <Title sub={showDetails ? `${dateLabel(date)} · ${person.name}'s plan.` : undefined}>Shape the day.</Title>
@@ -80,7 +85,6 @@ export default function Planner() {
       {date !== today() ? <Btn small variant="ghost" label="Today" testID="button-today" onPress={() => setDate(today())} /> : null}
     </View>
     <Pressable testID="button-planner-person" onPress={() => { tap(); router.push('/people'); }}><Muted>Planning for <Text style={{ fontFamily: F.bold, color: c.primary }}>{person.name}</Text> · tap to switch person</Muted></Pressable>
-    <TennisPlanPanel key={`${person.id}-${date}`} person={person} date={date} showDetails={showDetails} />
     <PrintDayPlanButton
       personName={person.name}
       date={date}
@@ -92,12 +96,15 @@ export default function Planner() {
       disabled={!entries.isSuccess || !day.isSuccess || entries.isFetching || day.isFetching}
     />
 
-    {summary.isLoading ? <LoadingBlock rows={1} height={94} /> : summary.data && !summary.isError ? <Card>
-      <Eyebrow>Day totals / planned</Eyebrow>
-      <CaloriesMacros large calories={summary.data.totals.calories} protein={summary.data.totals.protein} carbs={summary.data.totals.carbs} fat={summary.data.totals.fat} testPrefix="planner-total" />
-    </Card> : null}
-    {showDetails ? planningInformation : mealActions}
-    {showDetails ? mealActions : planningInformation}
+    {settings.dayTotalsPosition === 'first' ? dayTotalsSection : null}
+    {settings.plannedPortionsPosition === 'first' && settings.tennisPlanPosition === 'before' ? tennisPlanSection : null}
+    {settings.plannedPortionsPosition === 'first' ? mealActions : null}
+    {settings.plannedPortionsPosition === 'first' && settings.tennisPlanPosition === 'after' ? tennisPlanSection : null}
+    {settings.plannedPortionsPosition === 'last' && settings.tennisPlanPosition === 'before' ? tennisPlanSection : null}
+    {planningInformation}
+    {settings.plannedPortionsPosition === 'last' ? mealActions : null}
+    {settings.plannedPortionsPosition === 'last' && settings.tennisPlanPosition === 'after' ? tennisPlanSection : null}
+    {settings.dayTotalsPosition === 'last' ? dayTotalsSection : null}
     {summary.data ? <Card><Eyebrow>Day totals</Eyebrow><NutritionGrid nutrition={summary.data.totals} /><FiberNote /></Card> : null}
     <Muted>{DISCLAIMER}</Muted>
   </Screen>;

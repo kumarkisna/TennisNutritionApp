@@ -2,21 +2,22 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   createPlannerLayoutPreferences,
-  type PlannerLayoutMode,
+  DEFAULT_PLANNER_LAYOUT,
+  type PlannerLayoutPreferences,
 } from '@/lib/planner-layout-preferences';
 
 const preferences = createPlannerLayoutPreferences(AsyncStorage);
 type PlannerLayoutContextValue = {
-  mode: PlannerLayoutMode;
+  settings: PlannerLayoutPreferences;
   loading: boolean;
   saving: boolean;
   error: string | null;
-  selectMode: (mode: PlannerLayoutMode) => Promise<boolean>;
+  updateSettings: (changes: Partial<PlannerLayoutPreferences>) => Promise<boolean>;
 };
 const PlannerLayoutContext = createContext<PlannerLayoutContextValue | null>(null);
 
 export function PlannerLayoutProvider({ children }: { children: ReactNode }) {
-  const [mode, setMode] = useState<PlannerLayoutMode>('current');
+  const [settings, setSettings] = useState<PlannerLayoutPreferences>(DEFAULT_PLANNER_LAYOUT);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,8 +25,8 @@ export function PlannerLayoutProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
-    preferences.load().then(savedMode => {
-      if (active) setMode(savedMode);
+    preferences.load().then(savedSettings => {
+      if (active) setSettings(savedSettings);
     }).catch(problem => {
       if (active) setError(`Could not load the Planner layout choice: ${problem instanceof Error ? problem.message : String(problem)}`);
     }).finally(() => {
@@ -34,17 +35,18 @@ export function PlannerLayoutProvider({ children }: { children: ReactNode }) {
     return () => { active = false; };
   }, []);
 
-  async function selectMode(nextMode: PlannerLayoutMode) {
+  async function updateSettings(changes: Partial<PlannerLayoutPreferences>) {
     if (busy.current || loading) return false;
     busy.current = true;
     setSaving(true);
     setError(null);
+    const next = { ...settings, ...changes };
     try {
-      await preferences.save(nextMode);
-      setMode(nextMode);
+      await preferences.save(next);
+      setSettings(next);
       return true;
     } catch (problem) {
-      setError(`Could not save this Planner layout; the current choice was kept. ${problem instanceof Error ? problem.message : String(problem)}`);
+      setError(`Could not save these Planner settings; the current choices were kept. ${problem instanceof Error ? problem.message : String(problem)}`);
       return false;
     } finally {
       busy.current = false;
@@ -52,7 +54,7 @@ export function PlannerLayoutProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  return <PlannerLayoutContext.Provider value={{ mode, loading, saving, error, selectMode }}>
+  return <PlannerLayoutContext.Provider value={{ settings, loading, saving, error, updateSettings }}>
     {children}
   </PlannerLayoutContext.Provider>;
 }

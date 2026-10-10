@@ -6,23 +6,38 @@ import { ErrorBox } from './ui';
 
 export function PlannerLayoutPicker() {
   const c = useColors();
-  const { mode, loading, saving, error, selectMode } = usePlannerLayout();
+  const { settings, loading, saving, error, updateSettings } = usePlannerLayout();
+  const disabled = loading || saving;
+  const save = (changes: Parameters<typeof updateSettings>[0]) =>
+    void updateSettings(changes).then(saved => saved ? success() : warn());
   return <Card>
     <Eyebrow>Planner display</Eyebrow>
-    <Text style={{ fontFamily: F.bold, fontSize: 19, color: c.foreground }}>Choose how much guidance to show.</Text>
-    <Muted>Option 2 moves meals higher and hides explanatory text. Planned data, controls, totals and safety warnings stay visible.</Muted>
+    <Text style={{ fontFamily: F.bold, fontSize: 19, color: c.foreground }}>Make the next action easy to reach.</Text>
+    <Muted>These choices save on this device. The first layout option keeps explanatory text; compact hides guidance but keeps the data and safety notes.</Muted>
     <Chips
-      value={mode}
-      disabled={loading || saving}
+      value={settings.mode}
+      disabled={disabled}
       testPrefix="select-planner-layout"
-      onChange={value => void selectMode(value).then(saved => saved ? success() : warn())}
+      onChange={value => save({ mode: value })}
       options={[
         { value: 'current', label: '1 · Current layout' },
-        { value: 'compact', label: '2 · Hide explanations' },
+        { value: 'compact', label: '2 · Action view' },
       ]}
     />
+    <Text style={{ fontFamily: F.semi, fontSize: 13, color: c.foreground }}>Day totals</Text>
+    <Chips value={settings.dayTotalsPosition} disabled={disabled} testPrefix="select-day-totals-position"
+      onChange={value => save({ dayTotalsPosition: value })}
+      options={[{ value: 'first', label: 'First' }, { value: 'last', label: 'Last' }]} />
+    <Text style={{ fontFamily: F.semi, fontSize: 13, color: c.foreground }}>Planned portions</Text>
+    <Chips value={settings.plannedPortionsPosition} disabled={disabled} testPrefix="select-planned-portions-position"
+      onChange={value => save({ plannedPortionsPosition: value })}
+      options={[{ value: 'first', label: 'First' }, { value: 'last', label: 'Last' }]} />
+    <Text style={{ fontFamily: F.semi, fontSize: 13, color: c.foreground }}>Tennis plan relative to portions</Text>
+    <Chips value={settings.tennisPlanPosition} disabled={disabled} testPrefix="select-tennis-plan-position"
+      onChange={value => save({ tennisPlanPosition: value })}
+      options={[{ value: 'before', label: 'Before' }, { value: 'after', label: 'After' }]} />
     <Text accessibilityLiveRegion="polite" style={{ fontFamily: F.medium, fontSize: 12, color: c.primary }}>
-      {loading ? 'Loading Planner layout…' : saving ? 'Saving Planner layout…' : `Selected: ${mode === 'current' ? 'Current layout' : 'Hide explanations'}`}
+      {loading ? 'Loading Planner settings…' : saving ? 'Saving Planner settings…' : `Selected: ${settings.mode === 'current' ? 'Current layout' : 'Action view'}`}
     </Text>
     {error ? <ErrorBox error={new Error(error)} /> : null}
   </Card>;

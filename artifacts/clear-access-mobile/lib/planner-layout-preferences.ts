@@ -50,7 +50,12 @@ export function createPlannerLayoutPreferences(storage: PlannerLayoutStorage) {
         try { value = JSON.parse(serialized); }
         catch { throw new Error('The saved Planner layout choice could not be read.'); }
         if (!isPreferences(value)) throw new Error('The saved Planner layout choice is unsupported.');
-        return value;
+        return {
+          mode: value.mode,
+          dayTotalsPosition: value.dayTotalsPosition,
+          plannedPortionsPosition: value.plannedPortionsPosition,
+          tennisPlanPosition: value.tennisPlanPosition,
+        };
       }
       const legacy = await storage.getItem(LEGACY_PLANNER_LAYOUT_STORAGE_KEY);
       return legacy === null ? DEFAULT_PLANNER_LAYOUT : migrateLegacy(legacy);

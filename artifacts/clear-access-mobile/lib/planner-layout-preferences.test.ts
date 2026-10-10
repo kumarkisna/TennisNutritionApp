@@ -5,6 +5,8 @@ import test from 'node:test';
 import {
   createPlannerLayoutPreferences,
   PLANNER_LAYOUT_STORAGE_KEY,
+  LEGACY_PLANNER_LAYOUT_STORAGE_KEY,
+  DEFAULT_PLANNER_LAYOUT,
   type PlannerLayoutStorage,
 } from './planner-layout-preferences';
 
@@ -18,41 +20,57 @@ class MemoryStorage implements PlannerLayoutStorage {
   }
 }
 
-test('fresh devices keep the current Planner layout without writing storage', async () => {
+test('fresh devices use the original order and do not write storage', async () => {
   const storage = new MemoryStorage();
   storage.values.set('clear-access-mobile:planner:v1', 'planner records stay untouched');
-  assert.equal(await createPlannerLayoutPreferences(storage).load(), 'current');
+  assert.deepEqual(await createPlannerLayoutPreferences(storage).load(), DEFAULT_PLANNER_LAYOUT);
   assert.equal(storage.values.size, 1);
 });
 
-test('current and compact Planner layouts persist independently of planner records', async () => {
+test('layout and section positions persist independently of planner records', async () => {
   const storage = new MemoryStorage();
   const plannerBytes = '{"saved":"people, meals and foods"}';
   storage.values.set('clear-access-mobile:planner:v1', plannerBytes);
   const preferences = createPlannerLayoutPreferences(storage);
-  for (const mode of ['current', 'compact'] as const) {
-    await preferences.save(mode);
-    assert.equal(await preferences.load(), mode);
-    assert.equal(storage.values.get('clear-access-mobile:planner:v1'), plannerBytes);
-  }
+  const choice = {
+    mode: 'compact' as const,
+    dayTotalsPosition: 'last' as const,
+    plannedPortionsPosition: 'first' as const,
+    tennisPlanPosition: 'after' as const,
+  };
+  await preferences.save(choice);
+  assert.deepEqual(await preferences.load(), choice);
+  assert.equal(storage.values.get('clear-access-mobile:planner:v1'), plannerBytes);
+});
+
+test('v1 layout choice migrates with the original order as the default', async () => {
+  const storage = new MemoryStorage();
+  storage.values.set(LEGACY_PLANNER_LAYOUT_STORAGE_KEY, '{"version":1,"mode":"compact"}');
+  assert.deepEqual(await createPlannerLayoutPreferences(storage).load(), { ...DEFAULT_PLANNER_LAYOUT, mode: 'compact' });
+  assert.equal(storage.values.has(PLANNER_LAYOUT_STORAGE_KEY), false);
 });
 
 test('unsupported layout preferences fail without rewriting stored bytes', async () => {
   const storage = new MemoryStorage();
-  for (const serialized of ['broken JSON', 'null', '{"version":2,"mode":"compact"}', '{"version":1,"mode":"unknown"}']) {
+  for (const serialized of [
+    'broken JSON',
+    'null',
+    '{"version":1,"mode":"compact"}',
+    '{"version":2,"mode":"compact","dayTotalsPosition":"later","plannedPortionsPosition":"first","tennisPlanPosition":"before"}',
+  ]) {
     storage.values.set(PLANNER_LAYOUT_STORAGE_KEY, serialized);
     await assert.rejects(createPlannerLayoutPreferences(storage).load(), /Planner layout/i);
     assert.equal(storage.values.get(PLANNER_LAYOUT_STORAGE_KEY), serialized);
   }
-  await assert.rejects(createPlannerLayoutPreferences(storage).save('hidden' as never), /supported Planner layout/i);
+  await assert.rejects(createPlannerLayoutPreferences(storage).save({ ...DEFAULT_PLANNER_LAYOUT, plannedPortionsPosition: 'hidden' as never }), /supported Planner layout/i);
 });
 
 test('failed layout saves do not change the durable choice', async () => {
   const storage = new MemoryStorage();
   const preferences = createPlannerLayoutPreferences(storage);
-  await preferences.save('current');
+  await preferences.save(DEFAULT_PLANNER_LAYOUT);
   storage.failWrite = true;
-  await assert.rejects(preferences.save('compact'), /Device storage is unavailable/);
+  await assert.rejects(preferences.save({ ...DEFAULT_PLANNER_LAYOUT, mode: 'compact' }), /Device storage is unavailable/);
   storage.failWrite = false;
-  assert.equal(await preferences.load(), 'current');
+  assert.deepEqual(await preferences.load(), DEFAULT_PLANNER_LAYOUT);
 });
