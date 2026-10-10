@@ -20,7 +20,7 @@ test('recent sort orders saved reviews by newest date first', () => {
   assert.deepEqual(sortMealReviews(input, 'recent').map(item => item.date), ['2026-01-03', '2026-01-02', '2026-01-01']);
 });
 
-test('meal history search matches either keyword or note without changing calendar records', () => {
+test('meal history search matches keyword or note and combines with minimum rating', () => {
   const reviews = [
     { ...review('2026-01-01', 8), keyword: 'quick breakfast', note: 'felt energized' },
     { ...review('2026-01-02', 9), keyword: 'match day', note: 'quick snack worked' },
@@ -28,6 +28,8 @@ test('meal history search matches either keyword or note without changing calend
   ];
   assert.deepEqual(filterMealReviews(reviews, '  QUICK  ').map(item => item.date), ['2026-01-01', '2026-01-02']);
   assert.deepEqual(filterMealReviews(reviews, 'energized').map(item => item.date), ['2026-01-01']);
+  assert.deepEqual(filterMealReviews(reviews, 'quick', 9).map(item => item.date), ['2026-01-02']);
+  assert.deepEqual(filterMealReviews(reviews, '', 9).map(item => item.date), ['2026-01-02']);
   assert.equal(filterMealReviews(reviews, '').length, 3);
   assert.equal(reviews.length, 3);
 });

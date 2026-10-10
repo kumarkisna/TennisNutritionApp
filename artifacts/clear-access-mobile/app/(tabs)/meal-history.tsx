@@ -36,6 +36,7 @@ export default function MealHistory() {
   const [note, setNote] = useState('');
   const [search, setSearch] = useState('');
   const [reviewSort, setReviewSort] = useState<MealReviewSort>('recent');
+  const [minimumRating, setMinimumRating] = useState('all');
   const [targetPersonId, setTargetPersonId] = useState(person.id);
   const [targetDate, setTargetDate] = useState(shiftDate(date, 1));
   const [includeTennis, setIncludeTennis] = useState(false);
@@ -45,8 +46,8 @@ export default function MealHistory() {
   const [notice, setNotice] = useState('');
   const review = reviews.data?.find(item => item.date === date);
   const tennis = activity.data?.tennis;
-  const filteredReviews = useMemo(() => filterMealReviews(reviews.data ?? [], search),
-  [reviews.data, search]);
+  const filteredReviews = useMemo(() => filterMealReviews(reviews.data ?? [], search, minimumRating === 'all' ? null : Number(minimumRating)),
+  [reviews.data, search, minimumRating]);
   const sortedReviews = useMemo(() => sortMealReviews(filteredReviews, reviewSort),
   [filteredReviews, reviewSort]);
   const reviewByDate = useMemo(() => new Map((reviews.data ?? []).map(item => [item.date, item])), [reviews.data]);
@@ -205,13 +206,16 @@ export default function MealHistory() {
     <Card>
       <Eyebrow>Saved meal history</Eyebrow>
       <Field label="Find by keyword or note" value={search} onChangeText={setSearch} placeholder="e.g. match day, felt energized" testID="input-meal-history-search" />
+      <Text style={{ fontFamily: F.semi, color: c.foreground }}>Minimum rating</Text>
+      <Chips testPrefix="select-meal-history-min-rating" value={minimumRating} onChange={setMinimumRating}
+        options={[{ value: 'all', label: 'Any rating' }, ...Array.from({ length: 10 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}+` }))]} />
       <Chips testPrefix="select-meal-history-sort" value={reviewSort} onChange={value => setReviewSort(value as MealReviewSort)}
         options={[{ value: 'recent', label: 'Newest first' }, { value: 'rating', label: 'Highest rated' }]} />
       {sortedReviews.length ? sortedReviews.map(item => <Pressable key={`${item.personId}:${item.date}`} onPress={() => { setDate(item.date); setMonth(item.date.slice(0, 7)); }}
         style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 9, gap: 3 }}>
         <Text style={{ fontFamily: F.bold, color: c.foreground }}>{item.date} · {item.rating}/10</Text>
         <Muted>{item.keyword}{item.note ? ` · ${item.note}` : ''}</Muted>
-      </Pressable>) : <Muted>No rated meal combinations match this keyword yet.</Muted>}
+      </Pressable>) : <Muted>No rated meal combinations match these filters yet.</Muted>}
     </Card>
   </Screen>;
 }
