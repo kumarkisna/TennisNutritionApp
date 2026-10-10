@@ -13,6 +13,7 @@ import { getMealTimes } from '@/lib/meal-scheduling';
 import { ReferencePanel } from '@/components/ReferencePanel';
 import { TennisPlanPanel } from '@/components/TennisPlanPanel';
 import { PlanningTargets } from '@/components/PlanningTargets';
+import { SleepLogCard } from '@/components/SleepLogCard';
 import { Btn, CaloriesMacros, Card, DISCLAIMER, ErrorBox, Eyebrow, F, FiberNote, IconBtn, LoadingBlock, Muted, NutritionGrid, Screen, SectionTitle, Title, tap } from '@/components/ui';
 import { cap, dateLabel, isIsoDate, n, shiftDate, today } from '@/lib/format';
 
@@ -73,6 +74,7 @@ export default function Planner() {
     <Eyebrow>Day totals / planned</Eyebrow>
     <CaloriesMacros large calories={summary.data.totals.calories} protein={summary.data.totals.protein} carbs={summary.data.totals.carbs} fat={summary.data.totals.fat} testPrefix="planner-total" />
   </Card> : null;
+  const sleepLogSection = <SleepLogCard personId={person.id} personName={person.name} date={date} dateOfBirth={person.dateOfBirth} />;
   const tennisPlanSection = <TennisPlanPanel key={`${person.id}-${date}`} person={person} date={date} showDetails={showDetails} />;
   return <Screen tabs onRefresh={() => { summary.refetch(); entries.refetch(); day.refetch(); }} refreshing={summary.isRefetching || entries.isRefetching || day.isRefetching}>
     <Eyebrow>02 / Day planner</Eyebrow>
@@ -94,9 +96,10 @@ export default function Planner() {
       entries={entries.data ?? []}
       mealTimes={getMealTimes(day.data?.mealTimes)}
       tennisDiets={day.data?.tennis?.diets ?? []}
+      sleepLog={day.data?.sleep}
       disabled={!entries.isSuccess || !day.isSuccess || entries.isFetching || day.isFetching}
     />
-
+    {settings.sleepLogPosition === 'first' ? sleepLogSection : null}
     {settings.dayTotalsPosition === 'first' ? dayTotalsSection : null}
     {settings.plannedPortionsPosition === 'first' && settings.tennisPlanPosition === 'before' ? tennisPlanSection : null}
     {settings.plannedPortionsPosition === 'first' ? mealActions : null}
@@ -108,5 +111,6 @@ export default function Planner() {
     {settings.dayTotalsPosition === 'last' ? dayTotalsSection : null}
     {summary.data ? <Card><Eyebrow>Day totals</Eyebrow><NutritionGrid nutrition={summary.data.totals} /><FiberNote /></Card> : null}
     <Muted>{DISCLAIMER}</Muted>
+    {settings.sleepLogPosition === 'last' ? sleepLogSection : null}
   </Screen>;
 }

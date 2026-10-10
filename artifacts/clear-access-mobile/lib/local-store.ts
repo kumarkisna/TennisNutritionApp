@@ -1,6 +1,6 @@
 import { referenceFoodSeed } from './reference-food-seed';
 import { calculatePlanningEstimates, getAgeOnDate } from './planning-targets';
-import { emptyTennisPlan, isTennisPlan, isTennisDiet, tennisPlanProblem, tennisActivityPlanProblem } from './tennis-planning';
+import { emptyTennisPlan, isTennisPlan, isTennisDiet, isClockTime, tennisPlanProblem, tennisActivityPlanProblem } from './tennis-planning';
 import { getMealTimes, isMealTimes } from './meal-scheduling';
 import { isMealAlerts, type ReminderSource } from './meal-reminders';
 import { getTennisFoodDestinationFingerprint, getTennisFoodImportKey, getTennisFoodPlanFingerprint, mapTennisFoodSlots } from './tennis-copy';
@@ -15,6 +15,7 @@ import {
   type NutritionGoal as NutritionGoalType,
   type DayActivity,
   type DayActivityInput,
+  type SleepLogInput,
   type MealTimeInput,
   type MealAlertInput,
   type TennisPlanInput,
@@ -222,6 +223,12 @@ function isFiniteInRange(value: unknown, min: number, max: number): value is num
 }
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
+}
+function isSleepLog(value: unknown): value is DayActivity['sleep'] {
+  return isRecord(value) && hasExactKeys(value, ['bedtime', 'wakeTime', 'quality', 'note']) &&
+    isClockTime(value.bedtime) && isClockTime(value.wakeTime) && value.bedtime !== value.wakeTime &&
+    Number.isInteger(value.quality) && isFiniteInRange(value.quality, 1, 5) &&
+    typeof value.note === 'string' && value.note.length <= 1000;
 }
 function isMealReviewList(value: unknown, personIds: ReadonlySet<number>): value is MealPlanReview[] {
   if (!Array.isArray(value) || value.length > 10000) return false;
@@ -448,6 +455,7 @@ function validateStoredData(value: unknown): StoreData {
       !personIds.has(activity.personId as number) ||
       !DAY_ACTIVITIES.includes(activity.activityType as DayActivity['activityType']) ||
       (activity.tennis !== undefined && !isTennisPlan(activity.tennis)) ||
+      (activity.sleep !== undefined && !isSleepLog(activity.sleep)) ||
       (activity.tennisFoodImports !== undefined && !isTennisFoodImportRefs(activity.tennisFoodImports)) ||
       (activity.mealTimes !== undefined && !isMealTimes(activity.mealTimes)) ||
       (activity.mealAlerts !== undefined && !isMealAlerts(activity.mealAlerts))) {
@@ -641,11 +649,12 @@ function validateBackupData(value: unknown): StoreData {
 
   const activityKeys = new Set<string>();
   for (const activity of value.activities) {
-    if (!isRecord(activity) || !hasExactKeys(activity, ['date', 'personId', 'activityType'], ['tennis', 'mealTimes', 'mealAlerts', 'tennisFoodImports']) ||
+    if (!isRecord(activity) || !hasExactKeys(activity, ['date', 'personId', 'activityType'], ['tennis', 'mealTimes', 'mealAlerts', 'tennisFoodImports', 'sleep']) ||
       typeof activity.date !== 'string' || !isValidCalendarDate(activity.date) ||
       !Number.isSafeInteger(activity.personId) || !peopleById.has(activity.personId as number) ||
       !DAY_ACTIVITIES.includes(activity.activityType as DayActivity['activityType']) ||
       (Object.hasOwn(activity, 'tennis') && !isTennisPlan(activity.tennis)) ||
+      (Object.hasOwn(activity, 'sleep') && !isSleepLog(activity.sleep)) ||
       (Object.hasOwn(activity, 'tennisFoodImports') && !isTennisFoodImportRefs(activity.tennisFoodImports)) ||
       (Object.hasOwn(activity, 'mealTimes') && !isMealTimes(activity.mealTimes)) ||
       (Object.hasOwn(activity, 'mealAlerts') && !isMealAlerts(activity.mealAlerts))) {
@@ -2343,6 +2352,23 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
         if (found) found.activityType = input.activityType;
         else draft.activities.push({ date: input.date, personId: input.personId, activityType: input.activityType });
         return draft.activities.find(activity => activity.date === input.date && activity.personId === input.personId)!;
+      });
+    },
+    async saveSleepRecord(input: SleepLogInput): Promise<DayActivity> {
+      return transact(draft => {
+        if (!isValidCalendarDate(input.date)) fail('Choose a valid date for the sleep record.');
+        findPerson(draft, input.personId);
+        const existing = draft.activities.find(activity => activity.date === input.date && activity.personId === input.personId);
+        if (input.sleep !== null && !isSleepLog(input.sleep)) fail('Enter valid bedtime and wake time, a quality rating from 1 to 5, and a note of at most 1000 characters.');
+        if (existing) {
+          if (input.sleep === null) delete existing.sleep;
+          else existing.sleep = { ...input.sleep };
+          return existing;
+        }
+        const activity: DayActivity = { date: input.date, personId: input.personId, activityType: 'rest' };
+        if (input.sleep !== null) activity.sleep = { ...input.sleep };
+        draft.activities.push(activity);
+        return activity;
       });
     },
     async saveMealTime(input: MealTimeInput): Promise<DayActivity> {

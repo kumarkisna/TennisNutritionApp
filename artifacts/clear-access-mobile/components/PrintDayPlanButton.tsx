@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Platform } from 'react-native';
 import * as Print from 'expo-print';
-import type { DayActivity, MealEntry, MealTimes, TennisDiet, TennisPlan } from '@/lib/local-api';
+import type { DayActivity, MealEntry, MealTimes, SleepLog, TennisDiet, TennisPlan } from '@/lib/local-api';
 import { printHtmlInBrowserWindow } from '@/lib/print-browser';
 import { buildPlannedDietHtml } from '@/lib/print-plan';
 import { Btn, ErrorBox, warn } from '@/components/ui';
@@ -14,6 +14,7 @@ export function PrintDayPlanButton({
   entries,
   mealTimes,
   tennisDiets,
+  sleepLog,
   disabled = false,
 }: {
   personName: string;
@@ -23,6 +24,7 @@ export function PrintDayPlanButton({
   entries: MealEntry[];
   mealTimes: MealTimes;
   tennisDiets: TennisDiet[];
+  sleepLog?: SleepLog;
   disabled?: boolean;
 }) {
   const [printing, setPrinting] = useState(false);
@@ -33,7 +35,7 @@ export function PrintDayPlanButton({
     setError(null);
     setPrinting(true);
     try {
-      const html = buildPlannedDietHtml({ personName, date, activityType, tennisPlan, entries, mealTimes, tennisDiets });
+      const html = buildPlannedDietHtml({ personName, date, activityType, tennisPlan, entries, mealTimes, tennisDiets, sleepLog });
       if (Platform.OS === 'web') printHtmlInBrowserWindow(html);
       else await Print.printAsync({ html });
     } catch (caught) {

@@ -159,6 +159,31 @@ test('adolescent athlete activity survives reload and local backup restore', asy
   assert.equal((await restored.getDayActivity(params)).activityType, 'adolescent_athletes');
 });
 
+test('sleep logs are separate by person and date and survive local backup restore', async () => {
+  const storage = new MemoryStorage();
+  const store = createLocalStore(storage);
+  const person = await store.createPerson({ ...baselinePerson('Sleep log user'), dateOfBirth: '2012-01-01' });
+  const first = { personId: person.id, date: '2026-10-09' };
+  const second = { personId: person.id, date: '2026-10-10' };
+  const sleep = { bedtime: '22:30', wakeTime: '06:45', quality: 4, note: 'Training day' };
+
+  await store.saveSleepRecord({ ...first, sleep });
+  await store.saveDayActivity({ ...second, activityType: 'training_60' });
+  assert.deepEqual((await store.getDayActivity(first)).sleep, sleep);
+  assert.equal((await store.getDayActivity(second)).sleep, undefined);
+
+  const reloaded = createLocalStore(storage);
+  assert.deepEqual((await reloaded.getDayActivity(first)).sleep, sleep);
+  const backup = await reloaded.exportBackup();
+  const restored = createLocalStore(new MemoryStorage());
+  await restored.restoreBackup(backup);
+  assert.deepEqual((await restored.getDayActivity(first)).sleep, sleep);
+  assert.equal((await restored.getDayActivity(second)).activityType, 'training_60');
+
+  await assert.rejects(store.saveSleepRecord({ ...first, sleep: { ...sleep, bedtime: '25:00' } }), /valid bedtime/i);
+  await assert.rejects(store.saveSleepRecord({ ...first, sleep: { ...sleep, quality: 6 } }), /valid bedtime/i);
+});
+
 test('hydrates from the versioned seed and preserves changes across store restarts', async () => {
   const storage = new MemoryStorage();
   const firstStore = createLocalStore(storage);

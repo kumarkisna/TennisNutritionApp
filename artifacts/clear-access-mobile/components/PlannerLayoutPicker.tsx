@@ -32,6 +32,10 @@ export function PlannerLayoutPicker() {
     <Chips value={settings.plannedPortionsPosition} disabled={disabled} testPrefix="select-planned-portions-position"
       onChange={value => save({ plannedPortionsPosition: value })}
       options={[{ value: 'first', label: 'First' }, { value: 'last', label: 'Last' }]} />
+    <Text style={{ fontFamily: F.semi, fontSize: 13, color: c.foreground }}>Sleep log in Planner</Text>
+    <Chips value={settings.sleepLogPosition} disabled={disabled} testPrefix="select-sleep-log-position"
+      onChange={value => save({ sleepLogPosition: value })}
+      options={[{ value: 'first', label: 'First' }, { value: 'last', label: 'Last' }]} />
     <Text style={{ fontFamily: F.semi, fontSize: 13, color: c.foreground }}>Tennis plan relative to portions</Text>
     <Chips value={settings.tennisPlanPosition} disabled={disabled} testPrefix="select-tennis-plan-position"
       onChange={value => save({ tennisPlanPosition: value })}

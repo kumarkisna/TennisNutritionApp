@@ -245,11 +245,13 @@ export type MealTimes = Record<Meal, string>;
 export type MealTimeInput = { date: string; personId: number; meal: Meal; time: string };
 export type MealAlert = { id: string; minutesBefore: number; enabled: boolean };
 export type MealAlertInput = { date: string; personId: number; meal: Meal; alerts: MealAlert[] };
+export type SleepLog = { bedtime: string; wakeTime: string; quality: number; note: string };
+export type SleepLogInput = { date: string; personId: number; sleep: SleepLog | null };
 export type DayActivity = {
   date: string; personId: number; activityType: DayActivityType; tennis?: TennisPlan; mealTimes?: MealTimes;
-  mealAlerts?: Partial<Record<Meal, MealAlert[]>>; tennisFoodImports?: TennisFoodImportRef[];
+  mealAlerts?: Partial<Record<Meal, MealAlert[]>>; tennisFoodImports?: TennisFoodImportRef[]; sleep?: SleepLog;
 };
-export type DayActivityInput = Omit<DayActivity, 'tennis' | 'mealTimes' | 'mealAlerts' | 'tennisFoodImports'>;
+export type DayActivityInput = Omit<DayActivity, 'tennis' | 'mealTimes' | 'mealAlerts' | 'tennisFoodImports' | 'sleep'>;
 
 export type MealSummary = { meal: Meal; count: number; nutrition: Nutrition };
 export type DailySummary = {

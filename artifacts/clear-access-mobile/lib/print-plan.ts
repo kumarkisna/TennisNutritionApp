@@ -1,6 +1,7 @@
-import type { DayActivityType, Meal, MealEntry, MealTimes, TennisDiet, TennisPlan } from './local-models';
+import type { DayActivityType, Meal, MealEntry, MealTimes, SleepLog, TennisDiet, TennisPlan } from './local-models';
 import { sportsActivities } from './planning-targets';
 import { dietPhaseLabels } from './tennis-planning';
+import { formatSleepDuration, sleepDurationMinutes } from './sleep-tracking';
 
 export type PlannedDietItem = {
   entryId: number;
@@ -94,6 +95,7 @@ export function buildPlannedDietHtml({
   entries,
   mealTimes,
   tennisDiets = [],
+  sleepLog,
 }: {
   personName: string;
   date: string;
@@ -102,6 +104,7 @@ export function buildPlannedDietHtml({
   entries: MealEntry[];
   mealTimes: MealTimes;
   tennisDiets?: TennisDiet[];
+  sleepLog?: SleepLog;
 }): string {
   const items = sortPlannedDiet(entries, mealTimes, tennisDiets);
   const sessionRows = tennisPlan?.sessions
@@ -124,6 +127,12 @@ export function buildPlannedDietHtml({
       <td class="portion">${escapeHtml(portion)} g</td>
     </tr>`;
   }).join('');
+  const sleepMinutes = sleepLog ? sleepDurationMinutes(sleepLog.bedtime, sleepLog.wakeTime) : null;
+  const sleepSection = sleepLog && sleepMinutes !== null
+    ? `<p><strong>Bedtime:</strong> ${escapeHtml(sleepLog.bedtime)} &nbsp; <strong>Wake time:</strong> ${escapeHtml(sleepLog.wakeTime)}</p>
+       <p><strong>Duration:</strong> ${escapeHtml(formatSleepDuration(sleepMinutes))} &nbsp; <strong>Quality:</strong> ${sleepLog.quality}/5</p>
+       ${sleepLog.note ? `<p><strong>Notes:</strong> ${escapeHtml(sleepLog.note)}</p>` : ''}`
+    : '<p class="empty">No sleep record saved for this date.</p>';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -161,6 +170,10 @@ export function buildPlannedDietHtml({
       <div class="detail"><span class="label">Activity type</span><span class="value">${escapeHtml(sportsActivities[activityType].label)}</span></div>
       <div class="detail"><span class="label">Tennis plan type</span><span class="value">${tennisPlan ? escapeHtml(tennisModeLabels[tennisPlan.mode]) : 'Not set'}</span></div>
       <div class="detail"><span class="label">Plan experience</span><span class="value">${tennisPlan?.experienceRating === undefined ? 'Not rated' : `${tennisPlan.experienceRating}/10`}</span></div>
+    </section>
+    <section>
+      <h2>Sleep log</h2>
+      ${sleepSection}
     </section>
     <section>
       <h2>Tennis sessions</h2>

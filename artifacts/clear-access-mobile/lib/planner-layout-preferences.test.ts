@@ -6,6 +6,7 @@ import {
   createPlannerLayoutPreferences,
   PLANNER_LAYOUT_STORAGE_KEY,
   LEGACY_PLANNER_LAYOUT_STORAGE_KEY,
+  PREVIOUS_PLANNER_LAYOUT_STORAGE_KEY,
   DEFAULT_PLANNER_LAYOUT,
   type PlannerLayoutStorage,
 } from './planner-layout-preferences';
@@ -36,6 +37,7 @@ test('layout and section positions persist independently of planner records', as
     mode: 'compact' as const,
     dayTotalsPosition: 'last' as const,
     plannedPortionsPosition: 'first' as const,
+    sleepLogPosition: 'last' as const,
     tennisPlanPosition: 'after' as const,
   };
   await preferences.save(choice);
@@ -48,6 +50,24 @@ test('v1 layout choice migrates with the original order as the default', async (
   storage.values.set(LEGACY_PLANNER_LAYOUT_STORAGE_KEY, '{"version":1,"mode":"compact"}');
   assert.deepEqual(await createPlannerLayoutPreferences(storage).load(), { ...DEFAULT_PLANNER_LAYOUT, mode: 'compact' });
   assert.equal(storage.values.has(PLANNER_LAYOUT_STORAGE_KEY), false);
+});
+
+test('v2 layout choice keeps existing positions and adds the new sleep position default', async () => {
+  const storage = new MemoryStorage();
+  storage.values.set(PREVIOUS_PLANNER_LAYOUT_STORAGE_KEY, JSON.stringify({
+    version: 2,
+    mode: 'compact',
+    dayTotalsPosition: 'last',
+    plannedPortionsPosition: 'first',
+    tennisPlanPosition: 'after',
+  }));
+  assert.deepEqual(await createPlannerLayoutPreferences(storage).load(), {
+    ...DEFAULT_PLANNER_LAYOUT,
+    mode: 'compact',
+    dayTotalsPosition: 'last',
+    plannedPortionsPosition: 'first',
+    tennisPlanPosition: 'after',
+  });
 });
 
 test('unsupported layout preferences fail without rewriting stored bytes', async () => {

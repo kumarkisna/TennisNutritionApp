@@ -54,6 +54,23 @@ test('print HTML includes the person, date, portions, and safely escaped names',
   assert.match(html, /Plan experience<\/span><span class="value">Not rated/);
 });
 
+test('print HTML includes saved sleep times, calculated duration, rating, and escaped notes', () => {
+  const html = buildPlannedDietHtml({
+    personName: 'Me',
+    date: '2026-10-05',
+    activityType: 'rest',
+    entries: [],
+    mealTimes,
+    sleepLog: { bedtime: '22:30', wakeTime: '06:45', quality: 4, note: 'Quiet & <cool>' },
+  });
+  assert.match(html, /Sleep log/);
+  assert.match(html, /Bedtime:<\/strong> 22:30/);
+  assert.match(html, /Wake time:<\/strong> 06:45/);
+  assert.match(html, /Duration:<\/strong> 8 hr 15 min/);
+  assert.match(html, /Quality:<\/strong> 4\/5/);
+  assert.match(html, /Quiet &amp; &lt;cool&gt;/);
+});
+
 test('print HTML includes tennis plan type, sorted sessions, intensity, and rating', () => {
   const tennisPlan: TennisPlan = {
     mode: 'training',
