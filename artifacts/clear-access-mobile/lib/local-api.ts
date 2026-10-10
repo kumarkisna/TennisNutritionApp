@@ -41,6 +41,9 @@ import type {
   MealEntry,
   MealEntryInput,
   MealEntryUpdate,
+  MealPlanReview,
+  MealPlanReviewInput,
+  CopyMealsToDateInput,
   ImportFoodInput,
   Person,
   PersonInput,
@@ -98,6 +101,9 @@ export type {
   MealEntry,
   MealEntryInput,
   MealEntryUpdate,
+  MealPlanReview,
+  MealPlanReviewInput,
+  CopyMealsToDateInput,
   MealSummary,
   MealType,
   Nutrition,
@@ -332,6 +338,17 @@ export function useTennisPlanHistory(personId: number, options?: LocalQueryOptio
 export function useCopyTennisFoodPlan() {
   return useLocalMutation(({ data }: { data: CopyTennisFoodPlanInput }) =>
     localStore.copyTennisFoodPlan(data), [['getDayActivity'], ...ENTRIES_REFRESH]);
+}
+export function useMealPlanReviews(personId: number) {
+  return useLocalQuery(['listMealPlanReviews', personId], () => localStore.listMealPlanReviews(personId));
+}
+export function useSaveMealPlanReview() {
+  return useLocalMutation(({ data }: { data: MealPlanReviewInput }) =>
+    localStore.saveMealPlanReview(data), [['listMealPlanReviews']]);
+}
+export function useCopyMealsToDate() {
+  return useLocalMutation(({ data }: { data: CopyMealsToDateInput }) =>
+    localStore.copyMealsToDate(data), ENTRIES_REFRESH);
 }
 
 // Retained only as a safe transition bridge for screens removing online discovery.

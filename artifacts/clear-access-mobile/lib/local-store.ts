@@ -46,9 +46,9 @@ import {
   type MealEntry,
   type MealEntryInput,
   type MealEntryUpdate,
-  type MealCombination,
-  type MealCombinationInput,
-  type MealCombinationApplyInput,
+  type MealPlanReview,
+  type MealPlanReviewInput,
+  type CopyMealsToDateInput,
   type MealSummary,
   type Nutrition,
   type Person,
@@ -77,7 +77,6 @@ export type AsyncKeyValueStorage = {
 
 type StoredFood = Food & { referenceKey?: string };
 type StoredEntry = { id: number; date: string; personId: number; meal: MealEntryInput['meal']; grams: number; foodId: number; tennisDietId?: string };
-type StoredMealCombination = MealCombination;
 type StoredHeightRecord = HeightRecord;
 type StoredWeightRecord = WeightRecord;
 type StoreData = {
@@ -88,7 +87,7 @@ type StoreData = {
   activities: DayActivity[];
   heightRecords: StoredHeightRecord[];
   weightRecords: StoredWeightRecord[];
-  mealCombinations: StoredMealCombination[];
+  mealReviews: MealPlanReview[];
   nextPersonId: number;
   nextFoodId: number;
   nextEntryId: number;
@@ -223,21 +222,18 @@ function isFiniteInRange(value: unknown, min: number, max: number): value is num
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
-function isMealCombinationList(value: unknown, foodIds: ReadonlySet<number>): value is StoredMealCombination[] {
-  if (!Array.isArray(value) || value.length > 500) return false;
-  const ids = new Set<string>();
-  for (const combo of value) {
-    if (!isRecord(combo) || !hasExactKeys(combo, ['id', 'name', 'keyword', 'rating', 'notes', 'portions']) ||
-      typeof combo.id !== 'string' || !combo.id.trim() || combo.id.length > 128 || ids.has(combo.id) ||
-      typeof combo.name !== 'string' || !combo.name.trim() || combo.name.length > 80 ||
-      typeof combo.keyword !== 'string' || !combo.keyword.trim() || combo.keyword.length > 40 ||
-      !isFiniteInRange(combo.rating, 1, 10) || !Number.isInteger(combo.rating) ||
-      typeof combo.notes !== 'string' || combo.notes.length > 1000 ||
-      !Array.isArray(combo.portions) || combo.portions.length < 1 || combo.portions.length > 200 ||
-      combo.portions.some(item => !isRecord(item) || !hasExactKeys(item, ['meal', 'foodId', 'grams']) ||
-        !MEALS.includes(item.meal as MealEntryInput['meal']) || !foodIds.has(item.foodId as number) ||
-        !isFiniteInRange(item.grams, 1, 3000))) return false;
-    ids.add(combo.id);
+function isMealReviewList(value: unknown, personIds: ReadonlySet<number>): value is MealPlanReview[] {
+  if (!Array.isArray(value) || value.length > 10000) return false;
+  const keys = new Set<string>();
+  for (const review of value) {
+    if (!isRecord(review) || !hasExactKeys(review, ['personId', 'date', 'rating', 'keyword', 'note']) ||
+      !personIds.has(review.personId as number) || typeof review.date !== 'string' || !isValidCalendarDate(review.date) ||
+      !Number.isInteger(review.rating) || !isFiniteInRange(review.rating, 1, 10) ||
+      typeof review.keyword !== 'string' || !review.keyword.trim() || review.keyword.length > 40 ||
+      typeof review.note !== 'string' || review.note.length > 1000) return false;
+    const key = `${review.personId}:${review.date}`;
+    if (keys.has(key)) return false;
+    keys.add(key);
   }
   return true;
 }
@@ -362,7 +358,7 @@ function seedStore(): StoreData {
     activities: [],
     heightRecords: [],
     weightRecords: [],
-    mealCombinations: [],
+    mealReviews: [],
     nextPersonId: 2,
     nextFoodId: foods.length + 1,
     nextEntryId: 1,
@@ -377,13 +373,13 @@ function validateStoredData(value: unknown): StoreData {
     fail(`Unsupported local planner storage version (${String(value.version)}). Your data was not changed.`);
   }
   const { people, foods, entries, activities, heightRecords, weightRecords, nextPersonId, nextFoodId, nextEntryId, nextHeightRecordId, nextWeightRecordId } = value;
-  const mealCombinations = value.mealCombinations === undefined ? [] : value.mealCombinations;
+  const mealReviews = value.mealReviews === undefined ? [] : value.mealReviews;
   if (value.mealAlertsEnabled !== undefined && typeof value.mealAlertsEnabled !== 'boolean') fail('Local reminder settings are invalid. Your data was not changed.');
   if (
     !Array.isArray(people) || !Array.isArray(foods) || !Array.isArray(entries) || !Array.isArray(activities) ||
     !Array.isArray(heightRecords) ||
     !Array.isArray(weightRecords) ||
-    !Array.isArray(mealCombinations) ||
+    !Array.isArray(mealReviews) ||
     !Number.isSafeInteger(nextPersonId) || !Number.isSafeInteger(nextFoodId) || !Number.isSafeInteger(nextEntryId) ||
     !Number.isSafeInteger(nextHeightRecordId) ||
     !Number.isSafeInteger(nextWeightRecordId) ||
@@ -434,7 +430,7 @@ function validateStoredData(value: unknown): StoreData {
     }
     foodIds.add(food.id as number);
   }
-  if (!isMealCombinationList(mealCombinations, foodIds)) fail('Local planner storage contains an invalid meal combination. Your data was not changed.');
+  if (!isMealReviewList(mealReviews, personIds)) fail('Local planner storage contains an invalid meal review. Your data was not changed.');
   const entryIds = new Set<number>();
   for (const entry of entries) {
     if (!isRecord(entry) || !Number.isSafeInteger(entry.id) || (entry.id as number) < 1 ||
@@ -512,7 +508,7 @@ function validateStoredData(value: unknown): StoreData {
     (weightRecordIds.size && (nextWeightRecordId as number) <= Math.max(...weightRecordIds))) {
     fail('Local planner storage has invalid next-ID counters. Your data was not changed.');
   }
-  return { ...value, mealCombinations } as unknown as StoreData;
+  return { ...value, mealReviews } as unknown as StoreData;
 }
 
 function validateBackupData(value: unknown): StoreData {
@@ -521,7 +517,7 @@ function validateBackupData(value: unknown): StoreData {
     return validateBackupData({
       ...value,
       version: STORE_VERSION,
-      mealCombinations: [],
+      mealReviews: [],
       people: addMissingBackupIds(value.people.map(person => isRecord(person) ? {
         ...person,
         ...(value.version === 2 ? { nutritionGoal: null } : {}),
@@ -534,11 +530,11 @@ function validateBackupData(value: unknown): StoreData {
   }
   if (!isRecord(value) || !hasExactKeys(value, [
     'version', 'people', 'foods', 'entries', 'activities', 'heightRecords', 'weightRecords',
-    'nextPersonId', 'nextFoodId', 'nextEntryId', 'nextHeightRecordId', 'nextWeightRecordId', 'mealCombinations',
+    'nextPersonId', 'nextFoodId', 'nextEntryId', 'nextHeightRecordId', 'nextWeightRecordId', 'mealReviews',
   ], ['mealAlertsEnabled']) || (Object.hasOwn(value, 'mealAlertsEnabled') && typeof value.mealAlertsEnabled !== 'boolean') || value.version !== STORE_VERSION ||
     !Array.isArray(value.people) || !Array.isArray(value.foods) || !Array.isArray(value.entries) ||
     !Array.isArray(value.activities) || !Array.isArray(value.heightRecords) || !Array.isArray(value.weightRecords) ||
-    !Array.isArray(value.mealCombinations)) {
+    !Array.isArray(value.mealReviews)) {
     return invalid('data structure');
   }
   const counters = [value.nextPersonId, value.nextFoodId, value.nextEntryId, value.nextHeightRecordId, value.nextWeightRecordId];
@@ -627,7 +623,7 @@ function validateBackupData(value: unknown): StoreData {
     }
     foodIds.add(food.id as number);
   }
-  if (!isMealCombinationList(value.mealCombinations, foodIds)) return invalid('meal combination');
+  if (!isMealReviewList(value.mealReviews, new Set(peopleById.keys()))) return invalid('meal review');
 
   const entryIds = new Set<number>();
   for (const entry of value.entries) {
@@ -796,6 +792,10 @@ function migrateVersionFive(value: unknown): StoreData {
     version: STORE_VERSION,
     people: addMissingBackupIds(value.people),
   });
+}
+function migrateVersionSix(value: unknown): StoreData {
+  if (!isRecord(value) || value.version !== 6) fail('Local planner storage is corrupted. Your data was not changed.');
+  return validateStoredData({ ...value, version: STORE_VERSION, mealReviews: [] });
 }
 
 function clone<T>(value: T): T {
@@ -981,6 +981,13 @@ function mergePlannerRecords(
     weightKeys.add(key);
     weightRecordsImported += 1;
   }
+  for (const review of incoming.mealReviews) {
+    const personId = personIds.get(review.personId);
+    if (personId === undefined) fail('Planner file references a missing person.');
+    if (!draft.mealReviews.some(existing => existing.personId === personId && existing.date === review.date)) {
+      draft.mealReviews.push({ ...review, personId });
+    }
+  }
 
   return {
     foodsImported,
@@ -1003,6 +1010,7 @@ function estimatePersonPlannerRecords(
     ...incoming,
     entries: incoming.entries.filter(entry => entry.personId === sourcePersonId),
     activities: incoming.activities.filter(activity => activity.personId === sourcePersonId),
+    mealReviews: incoming.mealReviews.filter(review => review.personId === sourcePersonId),
     heightRecords: incoming.heightRecords.filter(record => record.personId === sourcePersonId),
     weightRecords: incoming.weightRecords.filter(record => record.personId === sourcePersonId),
   };
@@ -1304,6 +1312,13 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
         data = migrated;
         return migrated;
       }
+      if (isRecord(parsed) && parsed.version === 6) {
+        const migrated = migrateVersionSix(parsed);
+        try { await storage.setItem(storageKey, JSON.stringify(migrated)); }
+        catch (error) { throw new Error(`Could not migrate local planner data; the change was not applied: ${error instanceof Error ? error.message : String(error)}`); }
+        data = migrated;
+        return migrated;
+      }
       data = validateStoredData(parsed);
       return data;
     })();
@@ -1415,6 +1430,7 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
         draft.activities = draft.activities.filter(activity => activity.personId !== id);
         draft.heightRecords = draft.heightRecords.filter(record => record.personId !== id);
         draft.weightRecords = draft.weightRecords.filter(record => record.personId !== id);
+        draft.mealReviews = draft.mealReviews.filter(review => review.personId !== id);
       });
     },
     async listFoods(params?: ListFoodsParams): Promise<Food[]> {
@@ -1689,6 +1705,42 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
           { date: params.date, personId: params.personId, activityType: 'rest' as const };
       });
     },
+    async listMealPlanReviews(personId: number): Promise<MealPlanReview[]> {
+      return read(current => {
+        findPerson(current, personId);
+        return current.mealReviews.filter(review => review.personId === personId).sort((a, b) => b.date.localeCompare(a.date));
+      });
+    },
+    async saveMealPlanReview(input: MealPlanReviewInput): Promise<MealPlanReview> {
+      return transact(draft => {
+        findPerson(draft, input.personId);
+        if (!isValidCalendarDate(input.date)) fail('Choose a valid date.');
+        if (!Number.isInteger(input.rating) || !isFiniteInRange(input.rating, 1, 10)) fail('Choose a rating from 1 to 10.');
+        const keyword = input.keyword.trim();
+        const note = input.note.trim();
+        if (!keyword || keyword.length > 40) fail('Enter a keyword of 1 to 40 characters.');
+        if (note.length > 1000) fail('Notes must be 1,000 characters or fewer.');
+        const review = { personId: input.personId, date: input.date, rating: input.rating, keyword, note };
+        const index = draft.mealReviews.findIndex(item => item.personId === input.personId && item.date === input.date);
+        if (index < 0) draft.mealReviews.push(review);
+        else draft.mealReviews[index] = review;
+        return review;
+      });
+    },
+    async copyMealsToDate(input: CopyMealsToDateInput): Promise<number> {
+      return transact(draft => {
+        findPerson(draft, input.sourcePersonId);
+        findPerson(draft, input.targetPersonId);
+        if (!isValidCalendarDate(input.sourceDate) || !isValidCalendarDate(input.targetDate)) fail('Choose valid source and destination dates.');
+        if (input.sourcePersonId === input.targetPersonId && input.sourceDate === input.targetDate) fail('Choose a different destination date.');
+        const sourceEntries = draft.entries.filter(entry => entry.personId === input.sourcePersonId && entry.date === input.sourceDate);
+        if (!sourceEntries.length) fail('There are no planned meals to reuse on this date.');
+        for (const entry of sourceEntries) {
+          draft.entries.push({ ...entry, id: draft.nextEntryId++, personId: input.targetPersonId, date: input.targetDate, tennisDietId: undefined });
+        }
+        return sourceEntries.length;
+      });
+    },
     async exportBackup(): Promise<string> {
       const pending = writeQueue.then(async () => {
         const current = await load();
@@ -1808,6 +1860,7 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
           activities,
           heightRecords,
           weightRecords,
+          mealReviews: current.mealReviews.filter(review => review.personId === person.id).map(review => ({ ...review, personId: 1 })),
           nextPersonId: 2,
           nextFoodId: foods.length + 1,
           nextEntryId: entries.length + 1,
@@ -1896,6 +1949,9 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
           activities,
           heightRecords,
           weightRecords,
+          mealReviews: current.mealReviews
+            .filter(review => personIds.has(review.personId))
+            .map(review => ({ ...review, personId: personIds.get(review.personId)! })),
           nextPersonId: sourcePeople.length + 1,
           nextFoodId: foods.length + 1,
           nextEntryId: entries.length + 1,

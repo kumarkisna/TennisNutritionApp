@@ -85,6 +85,7 @@ export default function Planner() {
       {date !== today() ? <Btn small variant="ghost" label="Today" testID="button-today" onPress={() => setDate(today())} /> : null}
     </View>
     <Pressable testID="button-planner-person" onPress={() => { tap(); router.push('/people'); }}><Muted>Planning for <Text style={{ fontFamily: F.bold, color: c.primary }}>{person.name}</Text> · tap to switch person</Muted></Pressable>
+    <Btn icon="calendar" variant="ghost" label="Meal history & ratings" testID="button-meal-history" onPress={() => router.push('/meal-history')} />
     <PrintDayPlanButton
       personName={person.name}
       date={date}

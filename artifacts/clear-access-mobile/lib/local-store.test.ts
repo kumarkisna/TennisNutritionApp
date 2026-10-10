@@ -224,7 +224,7 @@ test('migrates v1 data in-place without losing people, foods, entries, activitie
   assert.equal((await migratedStore.getDayActivity({ date: '2020-03-04', personId: custom.id })).activityType, 'strength');
   assert.equal((await migratedStore.listHeightRecords()).length, 0);
   const migrated = JSON.parse(storage.values.get('clear-access-mobile:planner:v1')!);
-  assert.equal(migrated.version, 6);
+  assert.equal(migrated.version, 7);
   assert.equal(migrated.nextPersonId, current.nextPersonId);
   assert.equal(migrated.nextFoodId, current.nextFoodId);
   assert.equal(migrated.nextEntryId, current.nextEntryId);
@@ -261,7 +261,7 @@ test('migrates v2 local data and old backups with no nutrition goal while preser
   const migratedPeople = await migratedStore.listPeople();
   assert.equal(migratedPeople.find(candidate => candidate.id === person.id)?.nutritionGoal, null);
   const migrated = JSON.parse(storage.values.get('clear-access-mobile:planner:v1')!);
-  assert.equal(migrated.version, 6);
+  assert.equal(migrated.version, 7);
   assert.deepEqual(migrated.foods, current.foods);
   assert.deepEqual(migrated.entries, current.entries);
   assert.deepEqual(migrated.activities, current.activities);
@@ -294,7 +294,7 @@ test('migrates v3 local data and backups by clearing ages without DOB and recalc
   const migratedPeople = await migratedStore.listPeople();
   assert.equal(migratedPeople.find(person => person.id === noDob.id)?.ageYears, null);
   assert.equal(migratedPeople.find(person => person.id === withDob.id)?.ageYears, getAgeOnDate('2000-01-01', today()));
-  assert.equal(JSON.parse(storage.values.get('clear-access-mobile:planner:v1')!).version, 6);
+  assert.equal(JSON.parse(storage.values.get('clear-access-mobile:planner:v1')!).version, 7);
 
   const oldBackup = JSON.parse(await source.exportBackup());
   oldBackup.data = versionThree;
@@ -322,7 +322,7 @@ test('migrates v4 local data and backups with empty progress history and no targ
   assert.equal(migratedPerson.weightKg, 72);
   assert.equal((await migratedStore.listHeightRecords({ personId: person.id })).length, 1);
   assert.deepEqual(await migratedStore.listWeightRecords(), []);
-  assert.equal(JSON.parse(storage.values.get('clear-access-mobile:planner:v1')!).version, 6);
+  assert.equal(JSON.parse(storage.values.get('clear-access-mobile:planner:v1')!).version, 7);
   assert.equal((await migratedStore.createWeightRecord({ personId: person.id, date: '2020-01-03', weightKg: 71 })).id, 1);
 
   const legacyBackup = JSON.parse(await source.exportBackup());
@@ -349,7 +349,7 @@ test('migrates v5 local storage and backups by assigning stable person IDs once'
   const assignedIds = firstLoad.map(person => person.backupIds[0]);
   assert.equal(new Set(assignedIds).size, firstLoad.length);
   assert.ok(assignedIds.every(id => typeof id === 'string' && id.length >= 20));
-  assert.equal(JSON.parse(storage.values.get('clear-access-mobile:planner:v1')!).version, 6);
+  assert.equal(JSON.parse(storage.values.get('clear-access-mobile:planner:v1')!).version, 7);
   const secondLoad = await createLocalStore(storage).listPeople();
   assert.deepEqual(secondLoad.map(person => person.backupIds), firstLoad.map(person => person.backupIds));
 
@@ -1718,4 +1718,36 @@ test('food imports reject malformed files and preserve finite historical nutriti
   const historical = (await destination.listFoods({ search: file.foods[0].name }))
     .find(food => food.calciumMgPer100g === 15_000);
   assert.equal(historical?.ironMgPer100g, 1_500);
+});
+
+test('meal reviews stay with their date and reusing meals adds portions without moving the review', async () => {
+  const storage = new MemoryStorage();
+  const store = createLocalStore(storage);
+  const person = (await store.listPeople())[0];
+  const food = (await store.listFoods())[0];
+  const sourceDate = '2026-08-10';
+  const targetDate = '2026-08-11';
+  await store.createMealEntry({ personId: person.id, date: sourceDate, meal: 'breakfast', foodId: food.id, grams: 150 });
+  await store.createMealEntry({ personId: person.id, date: targetDate, meal: 'snack', foodId: food.id, grams: 40 });
+  await store.saveMealPlanReview({ personId: person.id, date: sourceDate, rating: 9, keyword: 'match day', note: 'Felt good through practice.' });
+  assert.equal(await store.copyMealsToDate({ sourcePersonId: person.id, sourceDate, targetPersonId: person.id, targetDate }), 1);
+  assert.deepEqual((await store.listMealEntries({ personId: person.id, date: targetDate })).map(entry => [entry.meal, entry.grams]), [
+    ['snack', 40], ['breakfast', 150],
+  ]);
+  assert.deepEqual(await store.listMealPlanReviews(person.id), [{
+    personId: person.id, date: sourceDate, rating: 9, keyword: 'match day', note: 'Felt good through practice.',
+  }]);
+
+  const backup = await store.exportBackup();
+  const restored = createLocalStore(new MemoryStorage());
+  await restored.restoreBackup(backup);
+  assert.deepEqual(await restored.listMealPlanReviews(person.id), await store.listMealPlanReviews(person.id));
+  assert.equal((await restored.listMealEntries({ personId: person.id, date: targetDate })).length, 2);
+});
+
+test('meal review inputs and same-date reuse are validated', async () => {
+  const store = createLocalStore(new MemoryStorage());
+  const person = (await store.listPeople())[0];
+  await assert.rejects(store.saveMealPlanReview({ personId: person.id, date: '2026-08-10', rating: 11, keyword: 'x', note: '' }), /rating/i);
+  await assert.rejects(store.copyMealsToDate({ sourcePersonId: person.id, sourceDate: '2026-08-10', targetPersonId: person.id, targetDate: '2026-08-10' }), /different destination/i);
 });

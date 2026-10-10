@@ -185,17 +185,15 @@ export type MealEntryInput = {
   tennisDietId?: string | null;
 };
 export type MealEntryUpdate = { meal?: Meal; grams?: number; tennisDietId?: string | null };
-export type MealCombinationPortion = { meal: Meal; foodId: number; grams: number };
-export type MealCombination = {
-  id: string;
-  name: string;
-  keyword: string;
+export type MealPlanReview = {
+  personId: number;
+  date: string;
   rating: number;
-  notes: string;
-  portions: MealCombinationPortion[];
+  keyword: string;
+  note: string;
 };
-export type MealCombinationInput = Omit<MealCombination, 'id'>;
-export type MealCombinationApplyInput = { id: string; date: string; personId: number };
+export type MealPlanReviewInput = MealPlanReview;
+export type CopyMealsToDateInput = { sourcePersonId: number; sourceDate: string; targetPersonId: number; targetDate: string };
 
 export type TennisSession = {
   kind: 'practice' | 'gym' | 'match';

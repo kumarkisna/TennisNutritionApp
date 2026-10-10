@@ -13,6 +13,7 @@
 - [Tennis nutrition boundary](tennis-nutrition-boundary.md) — schedules guide meal timing, not automatic personalised intake prescriptions or changes to daily references.
 - [Weight-loss goal semantics](weight-loss-goal.md) — treat weight loss as per-person intent only; never adjust activity-based estimates or nutrition references.
 - [Tennis plan sharing](tennis-plan-sharing.md) — copy to another local person or reuse for the same person on another date, with independent date choices.
+- [Meal review history](meal-review-history.md) — ratings, keywords, and notes belong to a person/date; reuse copies portions, not reviews or tennis scheduling.
 - [Meal time defaults](meal-time-defaults.md) — editable suggestions, not optimal-intake advice; preserve assigned day times when future routine defaults change.
 - [Local meal alerts](meal-alert-policy.md) — explicit opt-in; master-off must cancel native jobs, not just update preferences; disclose device delivery limits.
 - [Mobile test runner](mobile-test-runner.md) — run mobile regression tests from the app directory so process.cwd()-based source checks resolve correctly.
