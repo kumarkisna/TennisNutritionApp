@@ -23,6 +23,10 @@ export const ListFoodsQueryParams = zod.object({
   "search": zod.coerce.string().optional()
 })
 
+export const listFoodsResponseMineralCorrectionNoteMax = 300;
+
+
+
 export const ListFoodsResponseItem = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
@@ -37,7 +41,12 @@ export const ListFoodsResponseItem = zod.object({
   "fiberPer100g": zod.number(),
   "fiberKnown": zod.boolean(),
   "calciumMgPer100g": zod.number().nullable(),
-  "ironMgPer100g": zod.number().nullable()
+  "ironMgPer100g": zod.number().nullable(),
+  "supplierCalciumMgPer100g": zod.number().nullable(),
+  "supplierIronMgPer100g": zod.number().nullable(),
+  "calciumCorrectionEnabled": zod.boolean(),
+  "ironCorrectionEnabled": zod.boolean(),
+  "mineralCorrectionNote": zod.string().max(listFoodsResponseMineralCorrectionNoteMax).nullable()
 })
 export const ListFoodsResponse = zod.array(ListFoodsResponseItem)
 
@@ -82,6 +91,10 @@ export const CreateFoodBody = zod.object({
   "ironMgPer100g": zod.number().min(createFoodBodyIronMgPer100gMin).max(createFoodBodyIronMgPer100gMax).nullish()
 })
 
+export const createFoodResponseMineralCorrectionNoteMax = 300;
+
+
+
 export const CreateFoodResponse = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
@@ -96,7 +109,12 @@ export const CreateFoodResponse = zod.object({
   "fiberPer100g": zod.number(),
   "fiberKnown": zod.boolean(),
   "calciumMgPer100g": zod.number().nullable(),
-  "ironMgPer100g": zod.number().nullable()
+  "ironMgPer100g": zod.number().nullable(),
+  "supplierCalciumMgPer100g": zod.number().nullable(),
+  "supplierIronMgPer100g": zod.number().nullable(),
+  "calciumCorrectionEnabled": zod.boolean(),
+  "ironCorrectionEnabled": zod.boolean(),
+  "mineralCorrectionNote": zod.string().max(createFoodResponseMineralCorrectionNoteMax).nullable()
 })
 
 
@@ -139,6 +157,10 @@ export const ImportFoodBody = zod.object({
   "code": zod.string().regex(importFoodBodyCodeRegExp)
 })
 
+export const importFoodResponseMineralCorrectionNoteMax = 300;
+
+
+
 export const ImportFoodResponse = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
@@ -153,7 +175,12 @@ export const ImportFoodResponse = zod.object({
   "fiberPer100g": zod.number(),
   "fiberKnown": zod.boolean(),
   "calciumMgPer100g": zod.number().nullable(),
-  "ironMgPer100g": zod.number().nullable()
+  "ironMgPer100g": zod.number().nullable(),
+  "supplierCalciumMgPer100g": zod.number().nullable(),
+  "supplierIronMgPer100g": zod.number().nullable(),
+  "calciumCorrectionEnabled": zod.boolean(),
+  "ironCorrectionEnabled": zod.boolean(),
+  "mineralCorrectionNote": zod.string().max(importFoodResponseMineralCorrectionNoteMax).nullable()
 })
 
 
@@ -201,6 +228,10 @@ export const UpdateFoodBody = zod.object({
   "ironMgPer100g": zod.number().min(updateFoodBodyIronMgPer100gMin).max(updateFoodBodyIronMgPer100gMax).nullish()
 })
 
+export const updateFoodResponseMineralCorrectionNoteMax = 300;
+
+
+
 export const UpdateFoodResponse = zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
@@ -215,7 +246,12 @@ export const UpdateFoodResponse = zod.object({
   "fiberPer100g": zod.number(),
   "fiberKnown": zod.boolean(),
   "calciumMgPer100g": zod.number().nullable(),
-  "ironMgPer100g": zod.number().nullable()
+  "ironMgPer100g": zod.number().nullable(),
+  "supplierCalciumMgPer100g": zod.number().nullable(),
+  "supplierIronMgPer100g": zod.number().nullable(),
+  "calciumCorrectionEnabled": zod.boolean(),
+  "ironCorrectionEnabled": zod.boolean(),
+  "mineralCorrectionNote": zod.string().max(updateFoodResponseMineralCorrectionNoteMax).nullable()
 })
 
 
@@ -227,6 +263,61 @@ export const DeleteFoodParams = zod.object({
 })
 
 export const DeleteFoodResponse = zod.void()
+
+
+/**
+ * @summary Adjust imported iron and calcium without overwriting supplier values
+ */
+
+
+
+export const CorrectFoodMineralsParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+export const correctFoodMineralsBodyCalciumMgPer100gMin = 0;
+export const correctFoodMineralsBodyCalciumMgPer100gMax = 10000;
+
+export const correctFoodMineralsBodyIronMgPer100gMin = 0;
+export const correctFoodMineralsBodyIronMgPer100gMax = 1000;
+
+export const correctFoodMineralsBodyNoteMax = 300;
+
+
+
+export const CorrectFoodMineralsBody = zod.object({
+  "calciumCorrectionEnabled": zod.boolean(),
+  "calciumMgPer100g": zod.number().min(correctFoodMineralsBodyCalciumMgPer100gMin).max(correctFoodMineralsBodyCalciumMgPer100gMax).nullable(),
+  "ironCorrectionEnabled": zod.boolean(),
+  "ironMgPer100g": zod.number().min(correctFoodMineralsBodyIronMgPer100gMin).max(correctFoodMineralsBodyIronMgPer100gMax).nullable(),
+  "note": zod.string().max(correctFoodMineralsBodyNoteMax).nullable()
+})
+
+export const correctFoodMineralsResponseMineralCorrectionNoteMax = 300;
+
+
+
+export const CorrectFoodMineralsResponse = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "brand": zod.string().optional(),
+  "sourceUrl": zod.string().url().optional(),
+  "category": zod.enum(['grains', 'protein', 'vegetables', 'fruit', 'dairy', 'other']),
+  "source": zod.enum(['reference', 'custom', 'open_food_facts']),
+  "caloriesPer100g": zod.number(),
+  "proteinPer100g": zod.number(),
+  "carbsPer100g": zod.number(),
+  "fatPer100g": zod.number(),
+  "fiberPer100g": zod.number(),
+  "fiberKnown": zod.boolean(),
+  "calciumMgPer100g": zod.number().nullable(),
+  "ironMgPer100g": zod.number().nullable(),
+  "supplierCalciumMgPer100g": zod.number().nullable(),
+  "supplierIronMgPer100g": zod.number().nullable(),
+  "calciumCorrectionEnabled": zod.boolean(),
+  "ironCorrectionEnabled": zod.boolean(),
+  "mineralCorrectionNote": zod.string().max(correctFoodMineralsResponseMineralCorrectionNoteMax).nullable()
+})
 
 
 /**
@@ -474,6 +565,8 @@ export const ListMealEntriesQueryParams = zod.object({
 })
 
 export const listMealEntriesResponseDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const listMealEntriesResponseFoodMineralCorrectionNoteMax = 300;
+
 
 
 export const ListMealEntriesResponseItem = zod.object({
@@ -496,7 +589,12 @@ export const ListMealEntriesResponseItem = zod.object({
   "fiberPer100g": zod.number(),
   "fiberKnown": zod.boolean(),
   "calciumMgPer100g": zod.number().nullable(),
-  "ironMgPer100g": zod.number().nullable()
+  "ironMgPer100g": zod.number().nullable(),
+  "supplierCalciumMgPer100g": zod.number().nullable(),
+  "supplierIronMgPer100g": zod.number().nullable(),
+  "calciumCorrectionEnabled": zod.boolean(),
+  "ironCorrectionEnabled": zod.boolean(),
+  "mineralCorrectionNote": zod.string().max(listMealEntriesResponseFoodMineralCorrectionNoteMax).nullable()
 }),
   "nutrition": zod.object({
   "calories": zod.number(),
@@ -530,6 +628,8 @@ export const CreateMealEntryBody = zod.object({
 })
 
 export const createMealEntryResponseDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const createMealEntryResponseFoodMineralCorrectionNoteMax = 300;
+
 
 
 export const CreateMealEntryResponse = zod.object({
@@ -552,7 +652,12 @@ export const CreateMealEntryResponse = zod.object({
   "fiberPer100g": zod.number(),
   "fiberKnown": zod.boolean(),
   "calciumMgPer100g": zod.number().nullable(),
-  "ironMgPer100g": zod.number().nullable()
+  "ironMgPer100g": zod.number().nullable(),
+  "supplierCalciumMgPer100g": zod.number().nullable(),
+  "supplierIronMgPer100g": zod.number().nullable(),
+  "calciumCorrectionEnabled": zod.boolean(),
+  "ironCorrectionEnabled": zod.boolean(),
+  "mineralCorrectionNote": zod.string().max(createMealEntryResponseFoodMineralCorrectionNoteMax).nullable()
 }),
   "nutrition": zod.object({
   "calories": zod.number(),
@@ -583,6 +688,8 @@ export const UpdateMealEntryBody = zod.object({
 })
 
 export const updateMealEntryResponseDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const updateMealEntryResponseFoodMineralCorrectionNoteMax = 300;
+
 
 
 export const UpdateMealEntryResponse = zod.object({
@@ -605,7 +712,12 @@ export const UpdateMealEntryResponse = zod.object({
   "fiberPer100g": zod.number(),
   "fiberKnown": zod.boolean(),
   "calciumMgPer100g": zod.number().nullable(),
-  "ironMgPer100g": zod.number().nullable()
+  "ironMgPer100g": zod.number().nullable(),
+  "supplierCalciumMgPer100g": zod.number().nullable(),
+  "supplierIronMgPer100g": zod.number().nullable(),
+  "calciumCorrectionEnabled": zod.boolean(),
+  "ironCorrectionEnabled": zod.boolean(),
+  "mineralCorrectionNote": zod.string().max(updateMealEntryResponseFoodMineralCorrectionNoteMax).nullable()
 }),
   "nutrition": zod.object({
   "calories": zod.number(),

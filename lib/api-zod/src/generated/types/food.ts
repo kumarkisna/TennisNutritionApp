@@ -25,4 +25,15 @@ export interface Food {
   calciumMgPer100g: number | null;
   /** @nullable */
   ironMgPer100g: number | null;
+  /** @nullable */
+  supplierCalciumMgPer100g: number | null;
+  /** @nullable */
+  supplierIronMgPer100g: number | null;
+  calciumCorrectionEnabled: boolean;
+  ironCorrectionEnabled: boolean;
+  /**
+     * @maxLength 300
+     * @nullable
+     */
+  mineralCorrectionNote: string | null;
 }

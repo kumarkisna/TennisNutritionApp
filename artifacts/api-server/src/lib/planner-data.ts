@@ -28,6 +28,13 @@ export function isValidCalendarDate(value: string): boolean {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
+function effectiveMinerals(food: Food) {
+  return {
+    calciumMgPer100g: food.calciumCorrectionEnabled ? food.calciumCorrectionMgPer100g : food.calciumMgPer100g,
+    ironMgPer100g: food.ironCorrectionEnabled ? food.ironCorrectionMgPer100g : food.ironMgPer100g,
+  };
+}
+
 export function toFood(food: Food) {
   const imported = food.referenceKey?.startsWith("off:") ?? false;
   const sourceUrl = imported
@@ -46,8 +53,12 @@ export function toFood(food: Food) {
     fatPer100g: food.fatPer100g,
     fiberPer100g: food.fiberPer100g,
     fiberKnown: food.fiberKnown,
-    calciumMgPer100g: food.calciumMgPer100g,
-    ironMgPer100g: food.ironMgPer100g,
+    ...effectiveMinerals(food),
+    supplierCalciumMgPer100g: food.calciumMgPer100g,
+    supplierIronMgPer100g: food.ironMgPer100g,
+    calciumCorrectionEnabled: food.calciumCorrectionEnabled,
+    ironCorrectionEnabled: food.ironCorrectionEnabled,
+    mineralCorrectionNote: food.mineralCorrectionNote,
   };
 }
 
@@ -57,14 +68,15 @@ function round1(value: number): number {
 
 export function nutritionFor(food: Food, grams: number): Nutrition {
   const portion = grams / 100;
+  const minerals = effectiveMinerals(food);
   return {
     calories: round1(food.caloriesPer100g * portion),
     protein: round1(food.proteinPer100g * portion),
     carbs: round1(food.carbsPer100g * portion),
     fat: round1(food.fatPer100g * portion),
     fiber: round1(food.fiberPer100g * portion),
-    calciumMg: food.calciumMgPer100g === null ? null : round1(food.calciumMgPer100g * portion),
-    ironMg: food.ironMgPer100g === null ? null : round1(food.ironMgPer100g * portion),
+    calciumMg: minerals.calciumMgPer100g === null ? null : round1(minerals.calciumMgPer100g * portion),
+    ironMg: minerals.ironMgPer100g === null ? null : round1(minerals.ironMgPer100g * portion),
   };
 }
 

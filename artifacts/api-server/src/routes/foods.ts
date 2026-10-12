@@ -4,6 +4,9 @@ import { db, foodsTable, mealEntriesTable } from "@workspace/db";
 import {
   CreateFoodBody,
   CreateFoodResponse,
+  CorrectFoodMineralsBody,
+  CorrectFoodMineralsParams,
+  CorrectFoodMineralsResponse,
   DeleteFoodParams,
   DiscoverFoodsQueryParams,
   DiscoverFoodsResponse,
@@ -179,6 +182,36 @@ router.patch("/foods/:id", async (req, res): Promise<void> => {
     return;
   }
   res.json(UpdateFoodResponse.parse(toFood(food)));
+});
+
+router.patch("/foods/:id/mineral-corrections", async (req, res): Promise<void> => {
+  const params = CorrectFoodMineralsParams.safeParse(req.params);
+  const body = CorrectFoodMineralsBody.safeParse(req.body);
+  if (!params.success || !body.success) {
+    res.status(400).json({ error: "Enter valid calcium and iron amounts in mg per 100 g, or leave them unknown." });
+    return;
+  }
+  const ownerId: string = res.locals.userId;
+  const [existing] = await db.select().from(foodsTable)
+    .where(and(eq(foodsTable.id, params.data.id), eq(foodsTable.ownerId, ownerId))).limit(1);
+  if (!existing?.referenceKey?.startsWith("off:")) {
+    res.status(404).json({ error: "Imported food not found in your catalog." });
+    return;
+  }
+  const value = body.data;
+  const [food] = await db.update(foodsTable).set({
+    calciumCorrectionEnabled: value.calciumCorrectionEnabled,
+    calciumCorrectionMgPer100g: value.calciumCorrectionEnabled ? value.calciumMgPer100g : null,
+    ironCorrectionEnabled: value.ironCorrectionEnabled,
+    ironCorrectionMgPer100g: value.ironCorrectionEnabled ? value.ironMgPer100g : null,
+    mineralCorrectionNote: value.calciumCorrectionEnabled || value.ironCorrectionEnabled ? value.note?.trim() || null : null,
+  }).where(and(eq(foodsTable.id, existing.id), eq(foodsTable.ownerId, ownerId),
+    eq(foodsTable.referenceKey, existing.referenceKey))).returning();
+  if (!food) {
+    res.status(404).json({ error: "Imported food not found in your catalog." });
+    return;
+  }
+  res.json(CorrectFoodMineralsResponse.parse(toFood(food)));
 });
 
 router.delete("/foods/:id", async (req, res): Promise<void> => {

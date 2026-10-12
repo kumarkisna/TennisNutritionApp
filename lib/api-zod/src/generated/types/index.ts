@@ -31,6 +31,7 @@ export * from './mealEntry';
 export * from './mealEntryInput';
 export * from './mealEntryUpdate';
 export * from './mealSummary';
+export * from './mineralCorrectionInput';
 export * from './nutrition';
 export * from './person';
 export * from './personInput';

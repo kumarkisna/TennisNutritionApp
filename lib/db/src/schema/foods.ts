@@ -19,6 +19,11 @@ export const foodsTable = pgTable(
     fiberKnown: boolean("fiber_known").notNull().default(true),
     calciumMgPer100g: real("calcium_mg_per_100g"),
     ironMgPer100g: real("iron_mg_per_100g"),
+    calciumCorrectionEnabled: boolean("calcium_correction_enabled").notNull().default(false),
+    calciumCorrectionMgPer100g: real("calcium_correction_mg_per_100g"),
+    ironCorrectionEnabled: boolean("iron_correction_enabled").notNull().default(false),
+    ironCorrectionMgPer100g: real("iron_correction_mg_per_100g"),
+    mineralCorrectionNote: text("mineral_correction_note"),
   },
   (table) => [index("foods_owner_id_idx").on(table.ownerId)],
 );

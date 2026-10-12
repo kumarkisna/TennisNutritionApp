@@ -304,6 +304,39 @@ export interface Food {
   calciumMgPer100g: number | null;
   /** @nullable */
   ironMgPer100g: number | null;
+  /** @nullable */
+  supplierCalciumMgPer100g: number | null;
+  /** @nullable */
+  supplierIronMgPer100g: number | null;
+  calciumCorrectionEnabled: boolean;
+  ironCorrectionEnabled: boolean;
+  /**
+     * @maxLength 300
+     * @nullable
+     */
+  mineralCorrectionNote: string | null;
+}
+
+export interface MineralCorrectionInput {
+  calciumCorrectionEnabled: boolean;
+  /**
+     * @minimum 0
+     * @maximum 10000
+     * @nullable
+     */
+  calciumMgPer100g: number | null;
+  ironCorrectionEnabled: boolean;
+  /**
+     * @minimum 0
+     * @maximum 1000
+     * @nullable
+     */
+  ironMgPer100g: number | null;
+  /**
+     * @maxLength 300
+     * @nullable
+     */
+  note: string | null;
 }
 
 export interface DiscoveredFood {

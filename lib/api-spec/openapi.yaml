@@ -137,6 +137,33 @@ paths:
           description: Deleted
         "409":
           description: Food is still used in a plan
+  /foods/{id}/mineral-corrections:
+    patch:
+      operationId: correctFoodMinerals
+      tags: [foods]
+      summary: Adjust imported iron and calcium without overwriting supplier values
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MineralCorrectionInput"
+      responses:
+        "200":
+          description: Food with effective values and preserved supplier attribution
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Food"
+        "400":
+          description: Invalid correction
+        "404":
+          description: Imported food not found in this account
   /people:
     get:
       operationId: listPeople
@@ -519,7 +546,21 @@ components:
         fiberKnown: { type: boolean }
         calciumMgPer100g: { type: [number, "null"] }
         ironMgPer100g: { type: [number, "null"] }
-      required: [id, name, category, source, caloriesPer100g, proteinPer100g, carbsPer100g, fatPer100g, fiberPer100g, fiberKnown, calciumMgPer100g, ironMgPer100g]
+        supplierCalciumMgPer100g: { type: [number, "null"] }
+        supplierIronMgPer100g: { type: [number, "null"] }
+        calciumCorrectionEnabled: { type: boolean }
+        ironCorrectionEnabled: { type: boolean }
+        mineralCorrectionNote: { type: [string, "null"], maxLength: 300 }
+      required: [id, name, category, source, caloriesPer100g, proteinPer100g, carbsPer100g, fatPer100g, fiberPer100g, fiberKnown, calciumMgPer100g, ironMgPer100g, supplierCalciumMgPer100g, supplierIronMgPer100g, calciumCorrectionEnabled, ironCorrectionEnabled, mineralCorrectionNote]
+    MineralCorrectionInput:
+      type: object
+      properties:
+        calciumCorrectionEnabled: { type: boolean }
+        calciumMgPer100g: { type: [number, "null"], minimum: 0, maximum: 10000 }
+        ironCorrectionEnabled: { type: boolean }
+        ironMgPer100g: { type: [number, "null"], minimum: 0, maximum: 1000 }
+        note: { type: [string, "null"], maxLength: 300 }
+      required: [calciumCorrectionEnabled, calciumMgPer100g, ironCorrectionEnabled, ironMgPer100g, note]
     DiscoveredFood:
       type: object
       properties:
