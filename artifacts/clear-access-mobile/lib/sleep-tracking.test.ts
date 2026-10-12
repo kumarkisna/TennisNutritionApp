@@ -2,7 +2,8 @@
 import assert from 'node:assert/strict';
 // @ts-ignore Node's built-in test modules are used only by the direct regression suite.
 import test from 'node:test';
-import { calculateTotalSleepMinutes, formatSleepDuration, isValidSleepQuality, reusableSleepTimes, shiftSleepMonth, sleepDurationMinutes, sleepMonthDates, sleepMonthWeekRanges, sleepMonthsBetween, sleepQualityRecordsForMonth, sleepReferenceForDate, summarizeSleepQualityByMonth, sleepWeekDates, summarizeSleepDurationByWeekday, summarizeSleepQualityByWeekday, summarizeSleepRecords } from './sleep-tracking';
+import { calculateTotalSleepMinutes, formatSleepDuration, isValidSleepQuality, reusableSleepTimes, shiftSleepMonth, sleepDurationMinutes, sleepMonthDates, sleepMonthWeekRanges, sleepMonthsBetween, sleepQualityRecordsForMonth, sleepReferenceForDate, summarizeSleepQualityByActivity, summarizeSleepQualityByActivityByMonth, summarizeSleepQualityByMonth, sleepWeekDates, summarizeSleepDurationByWeekday, summarizeSleepQualityByWeekday, summarizeSleepRecords } from './sleep-tracking';
+import type { SleepActivityQualityRecord } from './sleep-tracking';
 
 test('sleep duration handles overnight sleep and daytime sleep', () => {
   assert.equal(sleepDurationMinutes('22:30', '06:45'), 495);
@@ -51,6 +52,50 @@ test('monthly quality averages and counts ignore missing dates, unrated logs, an
     { month: '2026-02', averageQuality: 3, ratedDays: 2, qualityCounts: [0, 1, 0, 1, 0] },
     { month: '2026-03', averageQuality: null, ratedDays: 0, qualityCounts: [0, 0, 0, 0, 0] },
   ]);
+});
+
+test('sleep rating comparisons group tennis and rest days and exclude missing, invalid, and future ratings', () => {
+  const records: SleepActivityQualityRecord[] = [
+    { date: '2026-01-02', activityType: 'training_60', tennis: {
+      mode: 'training', sessions: [{ kind: 'practice', startTime: '09:00', durationMinutes: 60, intensity: 'moderate' }],
+      fuel: { before: '', during: '', between: '', after: '', hydration: '' },
+    }, sleep: { bedtime: '22:00', wakeTime: '06:00', quality: 5, note: '', naps: [], wakeUps: [] } },
+    { date: '2026-01-10', activityType: 'training_120', tennis: {
+      mode: 'tournament', sessions: [{ kind: 'match', startTime: '10:00', durationMinutes: 90, intensity: 'hard' }],
+      fuel: { before: '', during: '', between: '', after: '', hydration: '' },
+    }, sleep: { bedtime: '22:30', wakeTime: '06:30', quality: 3, note: '', naps: [], wakeUps: [] } },
+    { date: '2026-01-11', activityType: 'rest', sleep: { bedtime: '22:00', wakeTime: '06:00', quality: 2, note: '', naps: [], wakeUps: [] } },
+    { date: '2026-01-12', activityType: 'rest', sleep: { bedtime: null, wakeTime: null, quality: 0, note: '', naps: [], wakeUps: [] } },
+    { date: '2026-01-13', activityType: 'training_60', sleep: { bedtime: '22:00', wakeTime: '06:00', quality: 4, note: '', naps: [], wakeUps: [] } },
+    { date: '2026-01-14', activityType: 'rest' },
+    { date: '2026-02-01', activityType: 'rest', sleep: { bedtime: '22:00', wakeTime: '06:00', quality: 6, note: '', naps: [], wakeUps: [] } },
+    { date: '2026-02-02', activityType: 'rest', sleep: { bedtime: '22:00', wakeTime: '06:00', quality: 4, note: '', naps: [], wakeUps: [] } },
+    { date: '2026-03-01', activityType: 'rest', sleep: { bedtime: '22:00', wakeTime: '06:00', quality: 1, note: '', naps: [], wakeUps: [] } },
+  ];
+
+  const byMonth = summarizeSleepQualityByActivityByMonth(records, ['2026-01', '2026-02'], '2026-02-28');
+  assert.deepEqual(byMonth.map(({ month, summaries }) => ({
+    month,
+    summaries: summaries.map(({ group, ratedDays, averageQuality, qualityCounts }) => ({
+      group, ratedDays, averageQuality, qualityCounts,
+    })),
+  })), [
+    {
+      month: '2026-01',
+      summaries: [
+        { group: 'tennis', ratedDays: 2, averageQuality: 4, qualityCounts: [0, 0, 1, 0, 1] },
+        { group: 'rest', ratedDays: 1, averageQuality: 2, qualityCounts: [0, 1, 0, 0, 0] },
+      ],
+    },
+    {
+      month: '2026-02',
+      summaries: [
+        { group: 'tennis', ratedDays: 0, averageQuality: null, qualityCounts: [0, 0, 0, 0, 0] },
+        { group: 'rest', ratedDays: 1, averageQuality: 4, qualityCounts: [0, 0, 0, 1, 0] },
+      ],
+    },
+  ]);
+  assert.deepEqual(summarizeSleepQualityByActivity(records, '2026-02-28').map(item => item.ratedDays), [2, 2]);
 });
 
 test('sleep quality month details show saved records only, keep unrated records, and sort by date', () => {

@@ -1,10 +1,16 @@
 import { isClockTime } from './tennis-planning';
 import { ageInCalendarMonths } from './growth';
-import type { SleepInterval, SleepLog } from './local-models';
+import type { DayActivityType, SleepInterval, SleepLog, TennisPlan } from './local-models';
 
 export type SleepReference = { label: string; minMinutes: number; maxMinutes: number | null; includesNaps: boolean };
 export type SleepTimes = { bedtime: string; wakeTime: string };
 export type SavedSleepQualityRecord = { date: string; sleep: SleepLog };
+export type SleepActivityQualityRecord = {
+  date: string;
+  sleep?: SleepLog;
+  activityType: DayActivityType;
+  tennis?: TennisPlan;
+};
 
 export function isValidSleepQuality(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 5;
@@ -97,6 +103,51 @@ export function summarizeSleepQualityByMonth(
     };
   });
 }
+
+export function summarizeSleepQualityByActivity(
+  records: readonly SleepActivityQualityRecord[],
+  throughDate: string,
+) {
+  return (['tennis', 'rest'] as const).map(group => {
+    const qualityCounts: [number, number, number, number, number] = [0, 0, 0, 0, 0];
+    let ratedDays = 0;
+    let ratingTotal = 0;
+    for (const record of records) {
+      if (record.date > throughDate || !record.sleep) continue;
+      const isTennisDay = record.tennis?.sessions.some(session =>
+        session.kind === 'practice' || session.kind === 'match',
+      ) === true;
+      const isRestDay = !isTennisDay && (record.activityType === 'rest' || record.tennis?.mode === 'rest');
+      if (group === 'tennis' ? !isTennisDay : !isRestDay) continue;
+      const quality = record.sleep.quality;
+      if (!isValidSleepQuality(quality)) continue;
+      ratedDays += 1;
+      ratingTotal += quality;
+      qualityCounts[quality - 1] += 1;
+    }
+    return {
+      group,
+      ratedDays,
+      averageQuality: ratedDays ? ratingTotal / ratedDays : null,
+      qualityCounts,
+    };
+  });
+}
+
+export function summarizeSleepQualityByActivityByMonth(
+  records: readonly SleepActivityQualityRecord[],
+  months: readonly string[],
+  throughDate: string,
+) {
+  return months.map(month => ({
+    month,
+    summaries: summarizeSleepQualityByActivity(
+      records.filter(record => record.date.startsWith(`${month}-`)),
+      throughDate,
+    ),
+  }));
+}
+
 export function summarizeSleepRecords(records: readonly SleepPeriodRecord[], throughDate: string) {
   const elapsed = records.filter(record => record.date <= throughDate);
   const logged = elapsed.filter(record => record.sleep !== undefined);

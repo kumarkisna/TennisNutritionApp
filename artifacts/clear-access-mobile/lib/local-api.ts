@@ -348,7 +348,7 @@ export function useDayActivitiesForDates(personId: number, dates: string[]) {
 }
 export function useSaveDayActivity() {
   return useLocalMutation(({ data }: { data: DayActivityInput }) =>
-    localStore.saveDayActivity(data), [['getDayActivity'], ['getDailySummary'], ['listHydrationActivityForDateRange']]);
+    localStore.saveDayActivity(data), [['getDayActivity'], ['getDailySummary'], ['listHydrationActivityForDateRange'], ['listSleepRecordsForDateRange']]);
 }
 export function useSaveMealTime() {
   return useLocalMutation(({ data }: { data: MealTimeInput }) =>
@@ -371,7 +371,7 @@ export function useSaveHydrationLog() {
 }
 export function useSaveTennisPlan() {
   return useLocalMutation(({ data }: { data: TennisPlanInput }) =>
-    localStore.saveTennisPlan(data), [['getDayActivity'], ['listHydrationActivityForDateRange'], ...ENTRIES_REFRESH]);
+    localStore.saveTennisPlan(data), [['getDayActivity'], ['listHydrationActivityForDateRange'], ['listSleepRecordsForDateRange'], ...ENTRIES_REFRESH]);
 }
 export function useSaveTennisPlanRating() {
   return useLocalMutation(({ data }: { data: TennisPlanRatingInput }) =>
@@ -393,7 +393,7 @@ export function useTennisPlanHistory(personId: number, options?: LocalQueryOptio
 }
 export function useCopyTennisFoodPlan() {
   return useLocalMutation(({ data }: { data: CopyTennisFoodPlanInput }) =>
-    localStore.copyTennisFoodPlan(data), [['getDayActivity'], ['listHydrationActivityForDateRange'], ...ENTRIES_REFRESH]);
+    localStore.copyTennisFoodPlan(data), [['getDayActivity'], ['listHydrationActivityForDateRange'], ['listSleepRecordsForDateRange'], ...ENTRIES_REFRESH]);
 }
 export function useMealPlanReviews(personId: number) {
   return useLocalQuery(['listMealPlanReviews', personId], () => localStore.listMealPlanReviews(personId));
@@ -426,7 +426,7 @@ export function useImportFood() {
 
 export const LOCAL_PLANNER_QUERY_PREFIXES = [
   'listPeople', 'listFoods', 'listHeightRecords', 'listWeightRecords', 'listMealEntries', 'getDailySummary', 'getDayActivity',
-  'listTennisFoodPlanDates', 'getMealReminderSource', 'searchSleepNotes', 'listHydrationActivityForDateRange',
+  'listTennisFoodPlanDates', 'getMealReminderSource', 'searchSleepNotes', 'listHydrationActivityForDateRange', 'listSleepRecordsForDateRange',
 ] as const;
 
 export const previewLocalBackup = (serialized: string) => localStore.previewBackup(serialized);

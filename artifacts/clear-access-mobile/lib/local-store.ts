@@ -1819,7 +1819,12 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
         return current.activities
           .filter(activity => activity.personId === personId && activity.date >= startDate &&
             activity.date <= endDate && activity.sleep !== undefined)
-          .map(activity => ({ date: activity.date, sleep: clone(activity.sleep!) }))
+          .map(activity => ({
+            date: activity.date,
+            sleep: clone(activity.sleep!),
+            activityType: activity.activityType,
+            ...(activity.tennis ? { tennis: clone(activity.tennis) } : {}),
+          }))
           .sort((left, right) => left.date.localeCompare(right.date));
       });
     },

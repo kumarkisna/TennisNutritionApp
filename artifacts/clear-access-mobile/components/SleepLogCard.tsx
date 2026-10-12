@@ -3,7 +3,7 @@ import { Linking, Pressable, Text, View } from 'react-native';
 import { getAgeOnDate } from '@/lib/planning-targets';
 import { shiftDate, today } from '@/lib/format';
 import type { SleepInterval } from '@/lib/local-models';
-import { calculateTotalSleepMinutes, formatSleepDuration, isValidSleepQuality, reusableSleepTimes, shiftSleepMonth, sleepDurationMinutes, sleepMonthDates, sleepMonthWeekRanges, sleepMonthsBetween, sleepQualityRecordsForMonth, sleepReferenceForDate, sleepWeekDates, summarizeSleepDurationByWeekday, summarizeSleepQualityByMonth, summarizeSleepQualityByWeekday, summarizeSleepRecords } from '@/lib/sleep-tracking';
+import { calculateTotalSleepMinutes, formatSleepDuration, isValidSleepQuality, reusableSleepTimes, shiftSleepMonth, sleepDurationMinutes, sleepMonthDates, sleepMonthWeekRanges, sleepMonthsBetween, sleepQualityRecordsForMonth, sleepReferenceForDate, sleepWeekDates, summarizeSleepDurationByWeekday, summarizeSleepQualityByActivity, summarizeSleepQualityByActivityByMonth, summarizeSleepQualityByMonth, summarizeSleepQualityByWeekday, summarizeSleepRecords } from '@/lib/sleep-tracking';
 import { compareHydrationSummaries, hydrationActivityRecords, summarizeHydrationByActivity, summarizeHydrationByActivityByMonth, summarizeHydrationByDate, summarizeHydrationByWeekday, summarizeHydrationRecords } from '@/lib/hydration';
 import type { HydrationActivityRecord } from '@/lib/hydration';
 import { useColors } from '@/hooks/useColors';
@@ -145,6 +145,12 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
   const qualitySummaries = useMemo(() => summarizeSleepQualityByMonth(
     qualityRangeRecords.data ?? [], qualityRangeStart, qualityRangeEnd, today(),
   ), [qualityRangeRecords.data, qualityRangeStart, qualityRangeEnd]);
+  const sleepActivityRangeSummaries = useMemo(() => summarizeSleepQualityByActivity(
+    qualityRangeRecords.data ?? [], today(),
+  ), [qualityRangeRecords.data]);
+  const sleepActivityMonthSummaries = useMemo(() => summarizeSleepQualityByActivityByMonth(
+    qualityRangeRecords.data ?? [], qualityMonths, today(),
+  ), [qualityRangeRecords.data, qualityMonths]);
   const hydrationActivityRangeSummary = useMemo(() => summarizeHydrationByActivity(
     hydrationActivityRangeRecords.data ?? [], today(),
   ), [hydrationActivityRangeRecords.data]);
@@ -230,6 +236,13 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
   const qualityDistribution = (value: typeof summary) => value.ratedDays
     ? `Quality ratings (${value.ratedDays}): ${value.qualityCounts.map((count, index) => `${index + 1}: ${count}`).join(' · ')}`
     : 'No valid quality ratings.';
+  const sleepActivityGroupTitle = (group: typeof sleepActivityRangeSummaries[number]['group']) =>
+    group === 'tennis' ? 'Tennis practice / match days' : 'Rest days';
+  const sleepActivityRatingLine = (value: typeof sleepActivityRangeSummaries[number]) =>
+    value.averageQuality === null ? 'No valid ratings · n=0' :
+      `Mean ${value.averageQuality.toFixed(1)}/5 · n=${value.ratedDays} valid ratings`;
+  const sleepActivityCountsLine = (value: typeof sleepActivityRangeSummaries[number]) =>
+    `Scores 1–5: ${value.qualityCounts.map((count, index) => `${index + 1}: ${count}`).join(' · ')}`;
   const weekdayQualityAverage = (value: typeof weekdayQuality[number]) =>
     value.averageQuality === null ? '— · n=0' : `${value.averageQuality.toFixed(1)}/5 · n=${value.ratingCount}`;
   const weekdayQualityCounts = (value: typeof weekdayQuality[number]) =>
@@ -398,6 +411,29 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
               </View>;
             })}
           </View>}
+        {qualityRangeRecords.isLoading ? <Muted>Loading activity-grouped sleep ratings…</Muted> :
+          qualityRangeRecords.isError ? <Muted>Activity-grouped sleep ratings could not be loaded.</Muted> :
+            <View testID="sleep-quality-activity-comparison" style={{ borderWidth: 1, borderColor: c.border, borderRadius: 12, padding: 10, gap: 7 }}>
+              <Text style={{ fontFamily: F.semi, color: c.foreground }}>Sleep ratings on tennis vs rest days</Text>
+              <Muted>Practice/match days require a saved tennis practice or match session. Rest days use the saved Rest activity or tennis Rest mode; other activity days are excluded. Only valid ratings from 1–5 count. This comparison is descriptive and does not show that tennis caused a difference.</Muted>
+              <Text style={{ fontFamily: F.semi, color: c.foreground }}>Whole selected range</Text>
+              {sleepActivityRangeSummaries.map(value => <View key={value.group} testID={`sleep-quality-activity-range-${value.group}`} style={{ gap: 2 }}>
+                <Text style={{ fontFamily: F.semi, fontSize: 11, color: c.foreground }}>{sleepActivityGroupTitle(value.group)}</Text>
+                <Muted>{sleepActivityRatingLine(value)}</Muted>
+                <Muted>{sleepActivityCountsLine(value)}</Muted>
+              </View>)}
+              <Text style={{ fontFamily: F.semi, color: c.foreground }}>Month by month</Text>
+              {sleepActivityMonthSummaries.map(({ month: summaryMonth, summaries }) => <View key={summaryMonth}
+                testID={`sleep-quality-activity-month-${summaryMonth}`}
+                style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 6, gap: 4 }}>
+                <Text style={{ fontFamily: F.semi, color: c.foreground }}>{monthTitle(summaryMonth)}</Text>
+                {summaries.map(value => <View key={value.group} testID={`sleep-quality-activity-month-${summaryMonth}-${value.group}`} style={{ gap: 2 }}>
+                  <Text style={{ fontFamily: F.semi, fontSize: 11, color: c.foreground }}>{sleepActivityGroupTitle(value.group)}</Text>
+                  <Muted>{sleepActivityRatingLine(value)}</Muted>
+                  <Muted>{sleepActivityCountsLine(value)}</Muted>
+                </View>)}
+              </View>)}
+            </View>}
         {hydrationActivityRangeRecords.isLoading ? <Muted>Loading hydration activity history…</Muted> :
           hydrationActivityRangeRecords.isError ? <Muted>Hydration activity history could not be loaded.</Muted> :
             <View testID="hydration-activity-range" style={{ borderWidth: 1, borderColor: c.border, borderRadius: 12, padding: 10, gap: 7 }}>
