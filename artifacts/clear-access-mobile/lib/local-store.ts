@@ -1749,6 +1749,17 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
           { date: params.date, personId: params.personId, activityType: 'rest' as const };
       });
     },
+    async searchSleepNotes(personId: number, query: string): Promise<Array<{ date: string; sleep: NonNullable<DayActivity['sleep']> }>> {
+      const normalizedQuery = query.trim().toLowerCase();
+      return read(current => {
+        findPerson(current, personId);
+        if (!normalizedQuery) return [];
+        return current.activities
+          .filter(activity => activity.personId === personId && activity.sleep?.note.toLowerCase().includes(normalizedQuery))
+          .sort((left, right) => right.date.localeCompare(left.date))
+          .map(activity => ({ date: activity.date, sleep: clone(activity.sleep!) }));
+      });
+    },
     async listMealPlanReviews(personId: number): Promise<MealPlanReview[]> {
       return read(current => {
         findPerson(current, personId);

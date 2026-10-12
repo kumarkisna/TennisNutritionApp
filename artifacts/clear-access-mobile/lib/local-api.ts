@@ -302,6 +302,14 @@ export function useGetDailySummary(params: GetDailySummaryParams, options?: Loca
 export function useGetDayActivity(params: GetDayActivityParams, options?: LocalQueryOptions<DayActivity>) {
   return useLocalQuery(getGetDayActivityQueryKey(params), () => localStore.getDayActivity(params), options);
 }
+export function useSearchSleepNotes(personId: number, searchTerm: string) {
+  const normalized = searchTerm.trim();
+  return useLocalQuery(
+    ['searchSleepNotes', personId, normalized.toLowerCase()],
+    () => localStore.searchSleepNotes(personId, normalized),
+    { query: { enabled: normalized.length > 0 } },
+  );
+}
 export function useDayActivitiesForDates(personId: number, dates: string[]) {
   return useQueries({
     queries: dates.map(date => ({
@@ -328,7 +336,7 @@ export function useSaveMealAlerts() {
 }
 export function useSaveSleepRecord() {
   return useLocalMutation(({ data }: { data: SleepLogInput }) =>
-    localStore.saveSleepRecord(data), [['getDayActivity']]);
+    localStore.saveSleepRecord(data), [['getDayActivity'], ['searchSleepNotes']]);
 }
 export function useSaveHydrationLog() {
   return useLocalMutation(({ data }: { data: HydrationLogInput }) =>
@@ -387,7 +395,7 @@ export function useImportFood() {
 
 export const LOCAL_PLANNER_QUERY_PREFIXES = [
   'listPeople', 'listFoods', 'listHeightRecords', 'listWeightRecords', 'listMealEntries', 'getDailySummary', 'getDayActivity',
-  'listTennisFoodPlanDates', 'getMealReminderSource',
+  'listTennisFoodPlanDates', 'getMealReminderSource', 'searchSleepNotes',
 ] as const;
 
 export const previewLocalBackup = (serialized: string) => localStore.previewBackup(serialized);

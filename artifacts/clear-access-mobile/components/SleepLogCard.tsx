@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
-import { useDayActivitiesForDates, useGetDayActivity, useSaveSleepRecord } from '@/lib/local-api';
+import { useDayActivitiesForDates, useGetDayActivity, useSaveSleepRecord, useSearchSleepNotes } from '@/lib/local-api';
 import { getAgeOnDate } from '@/lib/planning-targets';
 import { today } from '@/lib/format';
 import type { SleepInterval } from '@/lib/local-models';
@@ -63,9 +63,16 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
   const c = useColors();
   const [weekStart, setWeekStart] = useState(() => sleepWeekDates(date)[0] ?? date);
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
+  const [noteSearch, setNoteSearch] = useState('');
+  const [settledNoteSearch, setSettledNoteSearch] = useState('');
   useEffect(() => { setWeekStart(sleepWeekDates(date)[0] ?? date); }, [date]);
+  useEffect(() => {
+    const timer = setTimeout(() => setSettledNoteSearch(noteSearch.trim()), 250);
+    return () => clearTimeout(timer);
+  }, [noteSearch]);
   const dates = useMemo(() => sleepWeekDates(weekStart), [weekStart]);
   const days = useDayActivitiesForDates(personId, dates);
+  const noteResults = useSearchSleepNotes(personId, settledNoteSearch);
   const records = dates.map((dayDate, index) => {
     const sleep = days[index]?.data?.sleep;
     const minutes = sleep ? calculateTotalSleepMinutes(sleep) : null;
@@ -104,6 +111,32 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
       {averageMinutes !== null ? ` · average ${formatSleepDuration(averageMinutes)} · quality ${averageQuality?.toFixed(1)}/5` : ''}</Muted>
     <Muted>Tap a date to load its sleep record in the Planner. Saved records stay attached to their original dates.</Muted>
     {!dateOfBirth ? <Muted>Add the person’s date of birth in Settings to compare logged nights with age-based ranges.</Muted> : null}
+    <View style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 8, gap: 6 }}>
+      <Text style={{ fontFamily: F.semi, color: c.foreground }}>Find a sleep note</Text>
+      <Field label="Search this person’s saved sleep notes" value={noteSearch} onChangeText={setNoteSearch} placeholder="Search words in notes" maxLength={100} testID="input-sleep-note-search" />
+      {noteSearch.trim() ? <Btn small variant="ghost" label="Clear search" testID="button-clear-sleep-note-search" onPress={() => setNoteSearch('')} /> : null}
+      {!noteSearch.trim() ? <Muted>Search notes saved on any date for this person.</Muted> :
+        noteSearch.trim().toLowerCase() !== settledNoteSearch.toLowerCase() ? <Muted>Searching saved notes…</Muted> :
+        noteResults.isLoading ? <Muted>Searching saved notes…</Muted> :
+          noteResults.isError ? <ErrorBox error={noteResults.error} /> :
+            noteResults.data?.length ? noteResults.data.map(result => <Pressable
+              key={result.date}
+              testID={`button-sleep-note-result-${result.date}`}
+              accessibilityRole="button"
+              accessibilityLabel={`Open sleep note from ${result.date}: ${result.sleep.note}`}
+              onPress={() => {
+                tap();
+                setExpandedDate(result.date);
+                onSelectDate(result.date);
+              }}
+              style={({ pressed }) => ({
+                borderTopWidth: 1, borderTopColor: c.border, paddingTop: 6, opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Text style={{ fontFamily: F.semi, color: c.primary }}>{result.date} · {formatSleepDuration(calculateTotalSleepMinutes(result.sleep) ?? 0)}</Text>
+              <Muted>{result.sleep.note}</Muted>
+            </Pressable>) : <Muted>No saved sleep notes match “{noteSearch.trim()}”.</Muted>}
+    </View>
     {records.map(record => <Pressable
       key={record.date}
       testID={`button-open-sleep-date-${record.date}`}

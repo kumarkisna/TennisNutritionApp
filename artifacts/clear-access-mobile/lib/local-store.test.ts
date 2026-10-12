@@ -212,6 +212,23 @@ test('nap-only sleep records preserve their date, quality, note, and count as lo
   await assert.rejects(store.saveSleepRecord({ ...input, sleep: { ...input.sleep, wakeUps: [{ startTime: '02:00', endTime: '02:10' }] } }), /valid bedtime/i);
 });
 
+test('sleep note search is case-insensitive, date-sorted, and scoped to one person', async () => {
+  const store = createLocalStore(new MemoryStorage());
+  const firstPerson = await store.createPerson({ ...baselinePerson('Sleep search one'), dateOfBirth: '2012-01-01' });
+  const secondPerson = await store.createPerson({ ...baselinePerson('Sleep search two'), dateOfBirth: '2012-01-01' });
+  const save = (personId: number, date: string, note: string) => store.saveSleepRecord({
+    personId, date, sleep: { bedtime: '22:00', wakeTime: '06:00', quality: 4, note, naps: [], wakeUps: [] },
+  });
+  await save(firstPerson.id, '2026-10-08', 'Late tennis practice');
+  await save(firstPerson.id, '2026-10-11', 'After tennis practice');
+  await save(secondPerson.id, '2026-10-12', 'Tennis practice');
+
+  const matches = await store.searchSleepNotes(firstPerson.id, '  TENNIS PRACTICE  ');
+  assert.deepEqual(matches.map(match => match.date), ['2026-10-11', '2026-10-08']);
+  assert.equal(matches[0].sleep.note, 'After tennis practice');
+  assert.deepEqual(await store.searchSleepNotes(firstPerson.id, '   '), []);
+});
+
 test('hydrates from the versioned seed and preserves changes across store restarts', async () => {
   const storage = new MemoryStorage();
   const firstStore = createLocalStore(storage);
