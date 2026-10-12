@@ -21,3 +21,4 @@
 - [Custom-food nutrient aggregation](custom-food-nutrient-aggregation.md) — ingredient nutrition is mass-weighted per 100 g; unknown minerals remain unknown instead of counting as zero.
 - [Tennis merge import identity](tennis-food-merge-provenance.md) — track local slot imports with stable person backup IDs, source dates, and source slot IDs; validate provenance in backups.
 - [Evidence-based hydration guidance](hydration-guidance-boundary.md) — label daily water values as population references and avoid fixed activity-based fluid prescriptions.
+- [Native backup handoff](native-backup-handoff.md) — share-sheet return is not proof of a saved destination; avoid deleting exports while recipients may still read them.

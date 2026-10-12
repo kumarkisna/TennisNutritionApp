@@ -1,12 +1,22 @@
 import { Alert, Platform } from 'react-native';
+import { checkBackupSize, checkBackupText, pickNativeBackup, saveNativeBackup, type NativeBackupIO } from './native-backup-file';
 
 // Limit imported files before parsing. Transfers are local unless the user chooses to share.
-const MAX_TRANSFER_BYTES = 10 * 1024 * 1024;
-const checkSize = (size: number) => {
-  if (size > MAX_TRANSFER_BYTES) throw new Error('Choose a file smaller than 10 MB.');
-};
-
 export type JsonFileSaveResult = 'saved' | 'shared' | 'cancelled';
+
+async function nativeIO(): Promise<NativeBackupIO> {
+  const [Sharing, DocumentPicker, { File, Paths }] = await Promise.all([
+    import('expo-sharing'), import('expo-document-picker'), import('expo-file-system'),
+  ]);
+  return {
+    cacheUri: Paths.cache.uri,
+    exportFile: name => new File(Paths.cache, name),
+    openFile: uri => new File(uri),
+    isSharingAvailable: Sharing.isAvailableAsync,
+    share: Sharing.shareAsync,
+    pick: DocumentPicker.getDocumentAsync,
+  };
+}
 
 function downloadJsonFile(serialized: string, name: string): void {
   const url = URL.createObjectURL(new Blob([serialized], { type: 'application/json' }));
@@ -20,20 +30,7 @@ function downloadJsonFile(serialized: string, name: string): void {
 }
 
 async function shareJsonFile(serialized: string, name: string, dialogTitle: string): Promise<void> {
-  const Sharing = await import('expo-sharing');
-  if (!await Sharing.isAvailableAsync()) {
-    throw new Error('File sharing is unavailable on this device. No file was saved.');
-  }
-  const { File, Paths } = await import('expo-file-system');
-  const file = new File(Paths.cache, name);
-  try {
-    file.write(serialized);
-    await Sharing.shareAsync(file.uri, {
-      mimeType: 'application/json', UTI: 'public.json', dialogTitle,
-    });
-  } finally {
-    if (file.exists) file.delete();
-  }
+  await saveNativeBackup(serialized, name, await nativeIO());
 }
 
 type AndroidExportChoice = 'save' | 'share' | 'cancel';
@@ -75,6 +72,7 @@ async function saveJsonToAndroidFolder(serialized: string, name: string): Promis
 }
 
 async function saveJsonFile(serialized: string, prefix: string, dialogTitle: string): Promise<JsonFileSaveResult> {
+  checkBackupText(serialized);
   const name = `${prefix}-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
   if (Platform.OS === 'web') {
     downloadJsonFile(serialized, name);
@@ -115,8 +113,10 @@ async function pickJsonFile(): Promise<{ name: string; serialized: string } | nu
         try {
           const file = input.files?.[0];
           if (!file) { resolve(null); return; }
-          checkSize(file.size);
-          resolve({ name: file.name, serialized: await file.text() });
+          checkBackupSize(file.size);
+          const serialized = await file.text();
+          checkBackupText(serialized);
+          resolve({ name: file.name, serialized });
         } catch (error) { reject(error); }
         finally { cleanup(); }
       };
@@ -124,27 +124,7 @@ async function pickJsonFile(): Promise<{ name: string; serialized: string } | nu
       input.click();
     });
   }
-  const DocumentPicker = await import('expo-document-picker');
-  const result = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true, multiple: false });
-  if (result.canceled) return null;
-  const asset = result.assets[0];
-  if (!asset) return null;
-  const FileSystem = await import('expo-file-system/legacy');
-  try {
-    let size = asset.size;
-    if (size === undefined || size < 0) {
-      const info = await FileSystem.getInfoAsync(asset.uri);
-      if (!info.exists) throw new Error('The selected file is no longer available. Choose it again.');
-      size = info.size;
-    }
-    checkSize(size);
-    return { name: asset.name, serialized: await FileSystem.readAsStringAsync(asset.uri) };
-  } finally {
-    const cacheDirectory = FileSystem.cacheDirectory;
-    if (cacheDirectory && asset.uri.startsWith(cacheDirectory)) {
-      await FileSystem.deleteAsync(asset.uri, { idempotent: true }).catch(() => {});
-    }
-  }
+  return pickNativeBackup(await nativeIO());
 }
 
 export const pickBackupFile = pickJsonFile;

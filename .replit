@@ -22,15 +22,3 @@ timeoutMs = 20000
 [nix]
 channel = "stable-25_05"
 packages = ["glib"]
-
-[[ports]]
-localPort = 8080
-externalPort = 8080
-
-[[ports]]
-localPort = 8081
-externalPort = 8081
-
-[[ports]]
-localPort = 20276
-externalPort = 80
