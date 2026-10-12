@@ -26,3 +26,9 @@ An Expo workflow restart can leave an older child process holding the injected a
 **Why:** In this workspace, the first process survived the workflow restart and caused a blank preview even though its HTTP route still answered.
 
 **How to apply:** If restart logs report the port is already in use, inspect the exact Expo process tree and port owner, stop only the stale app process, then restart on the configured port.
+
+An Ngrok tunnel-start failure can be transient even when the app bundles correctly; a later managed workflow start may recover without application-code changes.
+
+**Why:** This workspace showed repeated `failed to start tunnel` errors while a standalone web export succeeded, then connected on a later managed start. The optional React Native DevTools library warning remained but did not prevent the app from rendering.
+
+**How to apply:** Separate Metro/bundle errors from tunnel errors, confirm the artifact status and rendered screen, and avoid changing Expo dependencies to address an external tunnel failure.
