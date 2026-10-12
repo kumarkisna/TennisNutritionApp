@@ -11,7 +11,7 @@ import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, Muted, Screen, Title, su
 import TimeField from '@/components/TimeField';
 import { dietPhaseLabels, fuelLabels } from '@/lib/tennis-planning';
 import type { MealPlanReview, MealReuseUndoReceipt, TennisPlan } from '@/lib/local-models';
-import { filterMealReviews, sortMealReviews, type MealReviewSort } from '@/lib/meal-review-sort';
+import { filterMealReviews, mealReviewDateRangeError, sortMealReviews, type MealReviewSort } from '@/lib/meal-review-sort';
 import { HydrationWeekCard } from '@/components/HydrationWeekCard';
 
 const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -90,6 +90,8 @@ export default function MealHistory() {
   const [keyword, setKeyword] = useState('');
   const [note, setNote] = useState('');
   const [search, setSearch] = useState('');
+  const [historyStartDate, setHistoryStartDate] = useState('');
+  const [historyEndDate, setHistoryEndDate] = useState('');
   const [comparisonDates, setComparisonDates] = useState<string[]>([]);
   const [targetPersonId, setTargetPersonId] = useState(person.id);
   const [targetDate, setTargetDate] = useState(shiftDate(date, 1));
@@ -106,14 +108,20 @@ export default function MealHistory() {
   const reviewSort: MealReviewSort = historyPreferences.settings.sort;
   const review = reviews.data?.find(item => item.date === date);
   const tennis = activity.data?.tennis;
-  const filteredReviews = useMemo(() => filterMealReviews(reviews.data ?? [], search, minimumRating === 'all' ? null : Number(minimumRating)),
-  [reviews.data, search, minimumRating]);
+  const historyDateError = mealReviewDateRangeError(historyStartDate, historyEndDate);
+  const filteredReviews = useMemo(() => filterMealReviews(
+    reviews.data ?? [],
+    search,
+    minimumRating === 'all' ? null : Number(minimumRating),
+    { startDate: historyStartDate, endDate: historyEndDate },
+  ), [reviews.data, search, minimumRating, historyStartDate, historyEndDate]);
   const sortedReviews = useMemo(() => sortMealReviews(filteredReviews, reviewSort),
   [filteredReviews, reviewSort]);
   const reviewByDate = useMemo(() => new Map((reviews.data ?? []).map(item => [item.date, item])), [reviews.data]);
+  const filteredReviewByDate = useMemo(() => new Map(sortedReviews.map(item => [item.date, item])), [sortedReviews]);
   const comparisonReviews = useMemo(() => comparisonDates
-    .map(comparisonDate => reviewByDate.get(comparisonDate))
-    .filter((item): item is MealPlanReview => Boolean(item)), [comparisonDates, reviewByDate]);
+    .map(comparisonDate => filteredReviewByDate.get(comparisonDate))
+    .filter((item): item is MealPlanReview => Boolean(item)), [comparisonDates, filteredReviewByDate]);
   const [year, monthNumber] = month.split('-').map(Number);
   const firstWeekday = new Date(year, monthNumber - 1, 1).getDay();
   const daysCount = new Date(year, monthNumber, 0).getDate();
@@ -340,6 +348,26 @@ export default function MealHistory() {
     <Card>
       <Eyebrow>Saved meal history</Eyebrow>
       <Field label="Find by keyword or note" value={search} onChangeText={setSearch} placeholder="e.g. match day, felt energized" testID="input-meal-history-search" />
+      <View style={{ gap: 7 }}>
+        <Text style={{ fontFamily: F.semi, color: c.foreground }}>Date range</Text>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <View style={{ flex: 1 }}>
+            <Field label="From date" value={historyStartDate} onChangeText={setHistoryStartDate}
+              placeholder="YYYY-MM-DD" maxLength={10} autoCapitalize="none" keyboardType="numbers-and-punctuation"
+              testID="input-meal-history-start-date" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Field label="Through date" value={historyEndDate} onChangeText={setHistoryEndDate}
+              placeholder="YYYY-MM-DD" maxLength={10} autoCapitalize="none" keyboardType="numbers-and-punctuation"
+              testID="input-meal-history-end-date" />
+          </View>
+        </View>
+        <Muted>Both dates are included. Use YYYY-MM-DD, or leave either field blank to keep that end open.</Muted>
+        {historyDateError ? <ErrorBox error={new Error(historyDateError)} /> : null}
+        <Btn small variant="ghost" label="Clear dates" disabled={!historyStartDate && !historyEndDate}
+          testID="button-meal-history-clear-dates"
+          onPress={() => { setHistoryStartDate(''); setHistoryEndDate(''); }} />
+      </View>
       <Text style={{ fontFamily: F.semi, color: c.foreground }}>Minimum rating</Text>
       <Chips testPrefix="select-meal-history-min-rating" value={minimumRating} disabled={historyPreferences.loading}
         onChange={value => { void historyPreferences.updateSettings({ minimumRating: value === 'all' ? null : Number(value) }); }}
@@ -348,7 +376,8 @@ export default function MealHistory() {
         onChange={value => { void historyPreferences.updateSettings({ sort: value as MealReviewSort }); }}
         options={[{ value: 'recent', label: 'Newest first' }, { value: 'rating', label: 'Highest rated' }]} />
       {historyPreferences.error ? <ErrorBox error={new Error(historyPreferences.error)} /> : null}
-      {historyPreferences.loading ? <Muted>Loading saved history filters…</Muted> : sortedReviews.length ? sortedReviews.map(item => <View key={`${item.personId}:${item.date}`}
+      {historyPreferences.loading ? <Muted>Loading saved history filters…</Muted> : historyDateError ?
+        <Muted>Correct the dates to see matching meal history.</Muted> : sortedReviews.length ? sortedReviews.map(item => <View key={`${item.personId}:${item.date}`}
         style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 9, gap: 6 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Pressable style={{ flex: 1, gap: 3 }} onPress={() => { setDate(item.date); setMonth(item.date.slice(0, 7)); }}>
@@ -359,7 +388,7 @@ export default function MealHistory() {
             testID={`button-meal-history-compare-${item.date}`} onPress={() => toggleComparison(item.date)} />
         </View>
       </View>) : <Muted>No rated meal combinations match these filters yet.</Muted>}
-      {comparisonDates.length === 1 ? <Muted>Select one more saved date to compare meal portions, notes, and tennis details.</Muted> : null}
+      {comparisonReviews.length === 1 ? <Muted>Select one more saved date to compare meal portions, notes, and tennis details.</Muted> : null}
     </Card>
     {comparisonReviews.length >= 2 ? <>
       <Text style={{ fontFamily: F.bold, fontSize: 20, color: c.foreground }}>Compare saved combinations</Text>
