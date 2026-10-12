@@ -8,6 +8,7 @@ import { compareHydrationSummaries, hydrationActivityRecords, summarizeHydration
 import type { HydrationActivityRecord } from '@/lib/hydration';
 import { useColors } from '@/hooks/useColors';
 import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, Muted, tap } from '@/components/ui';
+import { sleepMonthSelectionForPlannerDate } from '@/lib/sleep-month-preferences';
 import DateField from '@/components/DateField';
 import TimeField from '@/components/TimeField';
 import MonthField from '@/components/MonthField';
@@ -263,16 +264,27 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
     if (rangeMode === 'week') moveWeek(amount);
     else setMonth(current => shiftSleepMonth(current, amount));
   };
+  const resetMonthComparison = () => {
+    const selection = sleepMonthSelectionForPlannerDate(date);
+    setMonth(selection.month);
+    setComparisonMonth(selection.comparisonMonth);
+  };
   const liters = (milliliters: number) => `${(milliliters / 1000).toFixed(2)} L`;
 
   return <View style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 10, gap: 8 }}>
     <Text style={{ fontFamily: F.bold, color: c.foreground }}>Sleep patterns</Text>
     <Chips testPrefix="select-sleep-summary-range" value={rangeMode} onChange={value => setRangeMode(value as 'week' | 'month' | 'quality-range')}
       options={[{ value: 'week', label: 'Week' }, { value: 'month', label: 'Month' }, { value: 'quality-range', label: 'Quality range' }]} />
-    {rangeMode === 'month' ? monthSelectionReady ? <View style={{ flexDirection: 'row', gap: 8 }}>
-      <MonthField label="Month to review" value={month} onChangeText={setMonth} testID="select-sleep-month" />
-      <MonthField label="Compare with" value={comparisonMonth} onChangeText={setComparisonMonth} testID="select-sleep-comparison-month" />
-    </View> : <Muted>Loading this person’s saved month selections…</Muted> : null}
+    {rangeMode === 'month' ? monthSelectionReady ? <>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <MonthField label="Month to review" value={month} onChangeText={setMonth} testID="select-sleep-month" />
+        <MonthField label="Compare with" value={comparisonMonth} onChangeText={setComparisonMonth} testID="select-sleep-comparison-month" />
+      </View>
+      <Btn small variant="ghost" icon="rotate-ccw" label="Reset to Planner month"
+        accessibilityLabel="Reset monthly sleep comparison to the selected Planner date"
+        accessibilityHint="Sets the comparison month to the month before the selected Planner date."
+        testID="button-reset-sleep-month-comparison" onPress={resetMonthComparison} />
+    </> : <Muted>Loading this person’s saved month selections…</Muted> : null}
     {rangeMode === 'quality-range' ? <View style={{ flexDirection: 'row', gap: 8 }}>
       <MonthField label="Start month" value={qualityRangeStart} onChangeText={setQualityRangeStart} testID="select-sleep-quality-start-month" />
       <MonthField label="End month" value={qualityRangeEnd} onChangeText={setQualityRangeEnd} testID="select-sleep-quality-end-month" />

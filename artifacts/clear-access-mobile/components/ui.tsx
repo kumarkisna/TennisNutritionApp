@@ -63,12 +63,24 @@ export function Card({ children, style, tone = 'card' }: { children: ReactNode; 
   return <View style={[{ backgroundColor: bg, borderColor: bd, borderWidth: 1, borderRadius: 20, padding: 18, gap: 10 }, style]}>{children}</View>;
 }
 
-export function Btn({ label, onPress, icon, variant = 'primary', disabled, loading, testID, small }: { label: string; onPress: () => void; icon?: IconName; variant?: 'primary' | 'ghost' | 'danger'; disabled?: boolean; loading?: boolean; testID: string; small?: boolean }) {
+export function Btn({ label, onPress, icon, variant = 'primary', disabled, loading, testID, small, accessibilityLabel, accessibilityHint }: {
+  label: string;
+  onPress: () => void;
+  icon?: IconName;
+  variant?: 'primary' | 'ghost' | 'danger';
+  disabled?: boolean;
+  loading?: boolean;
+  testID: string;
+  small?: boolean;
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
+}) {
   const c = useColors();
   const bg = variant === 'primary' ? c.primary : variant === 'danger' ? c.destructiveSoft : c.secondary;
   const fg = variant === 'primary' ? c.primaryForeground : variant === 'danger' ? c.destructive : c.foreground;
   const off = disabled || loading;
-  return <Pressable testID={testID} accessibilityRole="button" disabled={off} onPress={() => { tap(); onPress(); }}
+  return <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? label} accessibilityHint={accessibilityHint}
+    disabled={off} onPress={() => { tap(); onPress(); }}
     style={({ pressed }) => ({ backgroundColor: bg, borderRadius: 999, minHeight: small ? 38 : 48, paddingHorizontal: small ? 14 : 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: off ? 0.5 : pressed ? 0.8 : 1, borderWidth: variant === 'primary' ? 0 : 1, borderColor: variant === 'danger' ? c.destructiveBorder : c.border, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
     {loading ? <ActivityIndicator color={fg} size="small" /> : icon ? <Feather name={icon} size={small ? 14 : 16} color={fg} /> : null}
     <Text style={{ fontFamily: F.bold, fontSize: small ? 12 : 14, color: fg }}>{label}</Text>

@@ -1,3 +1,5 @@
+import { shiftSleepMonth } from './sleep-tracking';
+
 export const SLEEP_MONTH_PREFERENCES_KEY = 'clear-access-mobile:sleep-month-selections:v1';
 
 export type SleepMonthSelection = { month: string; comparisonMonth: string };
@@ -5,6 +7,14 @@ export type SleepMonthPreferencesStorage = {
   getItem(key: string): Promise<string | null>;
   setItem(key: string, value: string): Promise<void>;
 };
+
+export function sleepMonthSelectionForPlannerDate(plannerDate: string): SleepMonthSelection {
+  const month = plannerDate.slice(0, 7);
+  if (!/^\d{4}-(0[1-9]|1[0-2])-\d{2}$/.test(plannerDate)) {
+    throw new Error('Choose a valid Planner date.');
+  }
+  return { month, comparisonMonth: shiftSleepMonth(month, -1) };
+}
 
 function isMonth(value: unknown): value is string {
   return typeof value === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
