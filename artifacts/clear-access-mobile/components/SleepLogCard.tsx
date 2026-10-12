@@ -9,6 +9,7 @@ import { summarizeHydrationRecords } from '@/lib/hydration';
 import { useColors } from '@/hooks/useColors';
 import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, Muted, tap } from '@/components/ui';
 import TimeField from '@/components/TimeField';
+import MonthField from '@/components/MonthField';
 
 const qualityChoices = [
   { value: 'unrated', label: 'Choose rating' },
@@ -65,6 +66,7 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
   const c = useColors();
   const [weekStart, setWeekStart] = useState(() => sleepWeekDates(date)[0] ?? date);
   const [month, setMonth] = useState(date.slice(0, 7));
+  const [comparisonMonth, setComparisonMonth] = useState(() => shiftSleepMonth(date.slice(0, 7), -1));
   const [rangeMode, setRangeMode] = useState<'week' | 'month'>('week');
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
   const [noteSearch, setNoteSearch] = useState('');
@@ -72,6 +74,7 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
   useEffect(() => {
     setWeekStart(sleepWeekDates(date)[0] ?? date);
     setMonth(date.slice(0, 7));
+    setComparisonMonth(shiftSleepMonth(date.slice(0, 7), -1));
   }, [date]);
   useEffect(() => {
     const timer = setTimeout(() => setSettledNoteSearch(noteSearch.trim()), 250);
@@ -80,10 +83,9 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
   const dates = useMemo(() => rangeMode === 'week' ? sleepWeekDates(weekStart) : sleepMonthDates(`${month}-01`),
     [rangeMode, weekStart, month]);
   const currentMonthDates = useMemo(() => sleepMonthDates(`${month}-01`), [month]);
-  const previousMonth = useMemo(() => shiftSleepMonth(month, -1), [month]);
-  const previousMonthDates = useMemo(() => sleepMonthDates(`${previousMonth}-01`), [previousMonth]);
-  const queriedDates = useMemo(() => rangeMode === 'month' ? [...previousMonthDates, ...currentMonthDates] : dates,
-    [rangeMode, previousMonthDates, currentMonthDates, dates]);
+  const comparisonMonthDates = useMemo(() => sleepMonthDates(`${comparisonMonth}-01`), [comparisonMonth]);
+  const queriedDates = useMemo(() => rangeMode === 'month' ? [...comparisonMonthDates, ...currentMonthDates] : dates,
+    [rangeMode, comparisonMonthDates, currentMonthDates, dates]);
   const days = useDayActivitiesForDates(personId, queriedDates);
   const noteResults = useSearchSleepNotes(personId, settledNoteSearch);
   const toRecord = (dayDate: string, queryIndex: number) => {
@@ -103,17 +105,17 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
     };
   };
   const records = rangeMode === 'month'
-    ? currentMonthDates.map((dayDate, index) => toRecord(dayDate, previousMonthDates.length + index))
+    ? currentMonthDates.map((dayDate, index) => toRecord(dayDate, comparisonMonthDates.length + index))
     : dates.map((dayDate, index) => toRecord(dayDate, index));
-  const previousRecords = rangeMode === 'month' ? previousMonthDates.map((dayDate, index) => toRecord(dayDate, index)) : [];
+  const comparisonRecords = rangeMode === 'month' ? comparisonMonthDates.map((dayDate, index) => toRecord(dayDate, index)) : [];
   const summary = summarizeSleepRecords(records, today());
-  const previousSummary = summarizeSleepRecords(previousRecords, today());
+  const comparisonSummary = summarizeSleepRecords(comparisonRecords, today());
   const hydrationSummary = summarizeHydrationRecords(records.map(record => ({ date: record.date, hydration: record.hydration })), today());
-  const previousHydrationSummary = summarizeHydrationRecords(previousRecords.map(record => ({ date: record.date, hydration: record.hydration })), today());
+  const comparisonHydrationSummary = summarizeHydrationRecords(comparisonRecords.map(record => ({ date: record.date, hydration: record.hydration })), today());
   const periodLoading = records.some(record => record.loading);
   const periodFailed = records.some(record => record.failed);
-  const previousPeriodLoading = previousRecords.some(record => record.loading);
-  const previousPeriodFailed = previousRecords.some(record => record.failed);
+  const comparisonPeriodLoading = comparisonRecords.some(record => record.loading);
+  const comparisonPeriodFailed = comparisonRecords.some(record => record.failed);
   const weeklySummaries = rangeMode === 'month' ? sleepMonthWeekRanges(month).map(range => {
     const weekRecords = records.filter(record => record.date >= range.startDate && record.date <= range.endDate);
     return {
@@ -142,13 +144,13 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
     `${value.plannedEntryCount ? `${liters(value.plannedMl)} planned across ${value.plannedDays} days` : 'No drink entries planned'} · ` +
     `${value.actualMl === null ? 'no actual amounts recorded' : `${liters(value.actualMl)} recorded of ${liters(value.plannedForRecordedMl)} planned for recorded drinks`} · ` +
     `${value.recordedEntryCount}/${value.plannedEntryCount} drinks recorded · no entries saved on ${value.noEntryDays}/${value.elapsedDays} days`;
-  const durationDelta = summary.averageMinutes === null || previousSummary.averageMinutes === null
+  const durationDelta = summary.averageMinutes === null || comparisonSummary.averageMinutes === null
     ? 'unavailable'
-    : summary.averageMinutes === previousSummary.averageMinutes ? 'no change'
-      : `${summary.averageMinutes > previousSummary.averageMinutes ? '+' : '−'}${formatSleepDuration(Math.abs(summary.averageMinutes - previousSummary.averageMinutes))}`;
-  const qualityDelta = summary.averageQuality === null || previousSummary.averageQuality === null
+    : summary.averageMinutes === comparisonSummary.averageMinutes ? 'no change'
+      : `${summary.averageMinutes > comparisonSummary.averageMinutes ? '+' : '−'}${formatSleepDuration(Math.abs(summary.averageMinutes - comparisonSummary.averageMinutes))}`;
+  const qualityDelta = summary.averageQuality === null || comparisonSummary.averageQuality === null
     ? 'unavailable'
-    : `${summary.averageQuality === previousSummary.averageQuality ? '' : summary.averageQuality > previousSummary.averageQuality ? '+' : '−'}${Math.abs(summary.averageQuality - previousSummary.averageQuality).toFixed(1)} points`;
+    : `${summary.averageQuality === comparisonSummary.averageQuality ? '' : summary.averageQuality > comparisonSummary.averageQuality ? '+' : '−'}${Math.abs(summary.averageQuality - comparisonSummary.averageQuality).toFixed(1)} points`;
   const movePeriod = (amount: number) => {
     if (rangeMode === 'week') moveWeek(amount);
     else setMonth(current => shiftSleepMonth(current, amount));
@@ -159,6 +161,10 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
     <Text style={{ fontFamily: F.bold, color: c.foreground }}>Sleep patterns</Text>
     <Chips testPrefix="select-sleep-summary-range" value={rangeMode} onChange={value => setRangeMode(value as 'week' | 'month')}
       options={[{ value: 'week', label: 'Week' }, { value: 'month', label: 'Month' }]} />
+    {rangeMode === 'month' ? <View style={{ flexDirection: 'row', gap: 8 }}>
+      <MonthField label="Month to review" value={month} onChangeText={setMonth} testID="select-sleep-month" />
+      <MonthField label="Compare with" value={comparisonMonth} onChangeText={setComparisonMonth} testID="select-sleep-comparison-month" />
+    </View> : null}
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
       <Btn small variant="ghost" label={`Previous ${rangeMode}`} testID={`button-sleep-previous-${rangeMode}`} onPress={() => movePeriod(-1)} />
       <Text style={{ fontFamily: F.semi, fontSize: 12, color: c.foreground, textAlign: 'center', flex: 1 }}>{periodTitle}</Text>
@@ -166,17 +172,19 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
     </View>
     {periodLoading ? <Muted>Loading sleep records…</Muted> : periodFailed ? <Muted>Some dates could not be loaded. Try reopening this range.</Muted> :
       rangeMode === 'month' ? <View testID="sleep-month-comparison" style={{ borderWidth: 1, borderColor: c.border, borderRadius: 12, padding: 10, gap: 5 }}>
-        <Text style={{ fontFamily: F.semi, color: c.foreground }}>Compared with the previous month</Text>
-        {previousPeriodLoading ? <Muted>Loading {monthTitle(previousMonth)}…</Muted> : previousPeriodFailed ? <Muted>Previous month records could not be loaded.</Muted> : <>
+        <Text style={{ fontFamily: F.semi, color: c.foreground }}>Month comparison</Text>
+        {comparisonMonth === month ? <Muted>Choose a different month to compare against.</Muted> :
+          comparisonPeriodLoading ? <Muted>Loading {monthTitle(comparisonMonth)}…</Muted> :
+            comparisonPeriodFailed ? <Muted>{monthTitle(comparisonMonth)} records could not be loaded.</Muted> : <>
           <Text style={{ fontFamily: F.semi, color: c.foreground }}>{monthTitle(month)}</Text>
           <Muted>{summary.elapsedDays ? monthCounts(summary) : 'No past dates in this month yet.'}</Muted>
           <Muted>{monthAverages(summary)}</Muted>
           <Muted>Hydration · {hydrationMonthDetails(hydrationSummary)}</Muted>
-          <Text style={{ fontFamily: F.semi, color: c.foreground }}>{monthTitle(previousMonth)}</Text>
-          <Muted>{monthCounts(previousSummary)}</Muted>
-          <Muted>{monthAverages(previousSummary)}</Muted>
-          <Muted>Hydration · {hydrationMonthDetails(previousHydrationSummary)}</Muted>
-          <Muted>Change: duration {durationDelta} · quality {qualityDelta} versus {monthTitle(previousMonth)}.</Muted>
+          <Text style={{ fontFamily: F.semi, color: c.foreground }}>{monthTitle(comparisonMonth)}</Text>
+          <Muted>{comparisonSummary.elapsedDays ? monthCounts(comparisonSummary) : 'No past dates in this month yet.'}</Muted>
+          <Muted>{monthAverages(comparisonSummary)}</Muted>
+          <Muted>Hydration · {hydrationMonthDetails(comparisonHydrationSummary)}</Muted>
+          <Muted>Change: duration {durationDelta} · quality {qualityDelta} versus {monthTitle(comparisonMonth)}.</Muted>
           <Muted>Missing dates are shown separately and excluded from averages.</Muted>
         </>}
       </View> : summary.elapsedDays === 0 ? <Muted>No past dates in this range yet.</Muted> : <>
