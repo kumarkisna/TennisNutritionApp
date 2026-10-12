@@ -2,24 +2,27 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   createMealHistoryPreferences,
-  DEFAULT_MEAL_HISTORY_PREFERENCES,
+  DEFAULT_MEAL_HISTORY_PREFERENCES_STATE,
+  mealHistoryPreferencesForPerson,
+  updateMealHistoryPreferencesForPerson,
+  type MealHistoryPreferencesState,
   type MealHistoryPreferences,
 } from '@/lib/meal-history-preferences';
 
 const preferences = createMealHistoryPreferences(AsyncStorage);
 type MealHistoryPreferencesContextValue = {
-  settings: MealHistoryPreferences;
+  preferences: MealHistoryPreferencesState;
   loading: boolean;
   error: string | null;
-  updateSettings: (changes: Partial<MealHistoryPreferences>) => Promise<boolean>;
+  updateSettings: (personId: number, changes: Partial<MealHistoryPreferences>) => Promise<boolean>;
 };
 const MealHistoryPreferencesContext = createContext<MealHistoryPreferencesContextValue | null>(null);
 
 export function MealHistoryPreferencesProvider({ children }: { children: ReactNode }) {
-  const [settings, setSettings] = useState(DEFAULT_MEAL_HISTORY_PREFERENCES);
+  const [preferenceState, setPreferenceState] = useState(DEFAULT_MEAL_HISTORY_PREFERENCES_STATE);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const current = useRef<MealHistoryPreferences>(DEFAULT_MEAL_HISTORY_PREFERENCES);
+  const current = useRef<MealHistoryPreferencesState>(DEFAULT_MEAL_HISTORY_PREFERENCES_STATE);
   const writeQueue = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
@@ -27,7 +30,7 @@ export function MealHistoryPreferencesProvider({ children }: { children: ReactNo
     preferences.load().then(saved => {
       if (active) {
         current.current = saved;
-        setSettings(saved);
+        setPreferenceState(saved);
       }
     }).catch(problem => {
       if (active) setError(`Could not load saved meal-history filters. ${problem instanceof Error ? problem.message : String(problem)}`);
@@ -37,11 +40,11 @@ export function MealHistoryPreferencesProvider({ children }: { children: ReactNo
     return () => { active = false; };
   }, []);
 
-  async function updateSettings(changes: Partial<MealHistoryPreferences>) {
+  async function updateSettings(personId: number, changes: Partial<MealHistoryPreferences>) {
     if (loading) return false;
-    const next = { ...current.current, ...changes };
+    const next = updateMealHistoryPreferencesForPerson(current.current, personId, changes);
     current.current = next;
-    setSettings(next);
+    setPreferenceState(next);
     setError(null);
     const write = writeQueue.current.catch(() => undefined).then(() => preferences.save(next));
     writeQueue.current = write;
@@ -54,13 +57,18 @@ export function MealHistoryPreferencesProvider({ children }: { children: ReactNo
     }
   }
 
-  return <MealHistoryPreferencesContext.Provider value={{ settings, loading, error, updateSettings }}>
+  return <MealHistoryPreferencesContext.Provider value={{ preferences: preferenceState, loading, error, updateSettings }}>
     {children}
   </MealHistoryPreferencesContext.Provider>;
 }
 
-export function useMealHistoryPreferences() {
+export function useMealHistoryPreferences(personId: number) {
   const value = useContext(MealHistoryPreferencesContext);
   if (!value) throw new Error('MealHistoryPreferencesProvider is required for these filters.');
-  return value;
+  return {
+    settings: mealHistoryPreferencesForPerson(value.preferences, personId),
+    loading: value.loading,
+    error: value.error,
+    updateSettings: (changes: Partial<MealHistoryPreferences>) => value.updateSettings(personId, changes),
+  };
 }

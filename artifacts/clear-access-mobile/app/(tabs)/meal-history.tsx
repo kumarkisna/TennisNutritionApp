@@ -77,7 +77,7 @@ function ComparedMealReview({ review, personId, targetPersonId, targetDate, copy
 export default function MealHistory() {
   const c = useColors();
   const { person, date, setDate } = usePlanner();
-  const historyPreferences = useMealHistoryPreferences();
+  const historyPreferences = useMealHistoryPreferences(person.id);
   const entries = useListMealEntries({ personId: person.id, date });
   const activity = useGetDayActivity({ personId: person.id, date });
   const reviews = useMealPlanReviews(person.id);
