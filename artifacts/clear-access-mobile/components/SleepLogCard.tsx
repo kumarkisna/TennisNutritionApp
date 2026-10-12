@@ -8,6 +8,7 @@ import { compareHydrationSummaries, hydrationActivityRecords, summarizeHydration
 import type { HydrationActivityRecord } from '@/lib/hydration';
 import { useColors } from '@/hooks/useColors';
 import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, Muted, tap } from '@/components/ui';
+import DateField from '@/components/DateField';
 import TimeField from '@/components/TimeField';
 import MonthField from '@/components/MonthField';
 import { sleepMonthPreferences, useDayActivitiesForDates, useGetDayActivity, useSaveSleepRecord, useSearchSleepNotes, useSleepRecordsForDateRange } from '@/lib/local-api';
@@ -544,9 +545,14 @@ export function SleepLogCard({ personId, personName, date, dateOfBirth, onSelect
 }) {
   const c = useColors();
   const day = useGetDayActivity({ personId, date });
-  const previousDate = shiftDate(date, -1);
-  const previousDay = useGetDayActivity({ personId, date: previousDate });
-  const previousTimes = reusableSleepTimes(previousDay.data?.sleep);
+  const [sourceSelection, setSourceSelection] = useState(() => ({
+    personId, targetDate: date, sourceDate: shiftDate(date, -1),
+  }));
+  const sourceDate = sourceSelection.personId === personId && sourceSelection.targetDate === date
+    ? sourceSelection.sourceDate
+    : shiftDate(date, -1);
+  const sourceDay = useGetDayActivity({ personId, date: sourceDate });
+  const sourceTimes = reusableSleepTimes(sourceDay.data?.sleep);
   const save = useSaveSleepRecord();
   const [bedtime, setBedtime] = useState('');
   const [wakeTime, setWakeTime] = useState('');
@@ -597,11 +603,11 @@ export function SleepLogCard({ personId, personName, date, dateOfBirth, onSelect
     } catch (problem) { setError(problem); }
   }
 
-  function copyPreviousTimes() {
-    if (!previousTimes) return;
-    setBedtime(previousTimes.bedtime);
-    setWakeTime(previousTimes.wakeTime);
-    setNotice(`Filled bedtime and wake time from ${previousDate}. Review and save this date to keep them.`);
+  function copySourceTimes() {
+    if (!sourceTimes || sourceDate === date) return;
+    setBedtime(sourceTimes.bedtime);
+    setWakeTime(sourceTimes.wakeTime);
+    setNotice(`Filled bedtime and wake time from ${sourceDate}. Review and save this date to keep them.`);
     setError(null);
   }
 
@@ -611,12 +617,18 @@ export function SleepLogCard({ personId, personName, date, dateOfBirth, onSelect
     <Text style={{ fontFamily: F.bold, fontSize: 18, color: c.foreground }}>Sleep log for this date</Text>
     <Muted>Each date has its own sleep record. Enter both overnight times, or leave them blank and record naps only. Overlapping intervals count once.</Muted>
     {day.isLoading ? <Muted>Loading sleep record…</Muted> : day.isError ? <ErrorBox error={day.error} onRetry={() => day.refetch()} /> : <>
-      {previousDay.isLoading ? <Muted>Checking the previous date for sleep times…</Muted> : previousDay.isError
-        ? <ErrorBox error={previousDay.error} onRetry={() => previousDay.refetch()} />
-        : previousTimes
-          ? <Btn small variant="ghost" icon="copy" label="Use previous day’s times"
-            testID="button-copy-sleep-times-from-previous-day" onPress={copyPreviousTimes} />
-          : <Muted>No overnight bedtime and wake time are saved for {previousDate}, so there are no times to copy.</Muted>}
+      <DateField label="Copy times from saved date" value={sourceDate}
+        onChangeText={value => setSourceSelection({ personId, targetDate: date, sourceDate: value })}
+        testID="input-sleep-copy-source-date" />
+      <Muted>Choose any date for this person with saved bedtime and wake time.</Muted>
+      {sourceDay.isLoading ? <Muted>Checking {sourceDate} for sleep times…</Muted> : sourceDay.isError
+        ? <ErrorBox error={sourceDay.error} onRetry={() => sourceDay.refetch()} />
+        : sourceTimes && sourceDate === date
+          ? <Muted>Select a different date; {date} is the date currently being edited.</Muted>
+          : sourceTimes
+            ? <Btn small variant="ghost" icon="copy" label={`Use times from ${sourceDate}`}
+              testID="button-copy-sleep-times-from-date" onPress={copySourceTimes} />
+          : <Muted>No overnight bedtime and wake time are saved for {sourceDate}. Choose a different date.</Muted>}
       <Muted>Only bedtime and wake time are copied. Ratings, notes, naps, and wake-ups stay unchanged.</Muted>
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <View style={{ flex: 1 }}><TimeField label="Bedtime (24-hour)" value={bedtime} onChangeText={setBedtime} placeholder="22:30" testID="input-sleep-bedtime" /></View>
