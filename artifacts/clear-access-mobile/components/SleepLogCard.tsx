@@ -3,7 +3,7 @@ import { Linking, Pressable, Text, View } from 'react-native';
 import { getAgeOnDate } from '@/lib/planning-targets';
 import { shiftDate, today } from '@/lib/format';
 import type { SleepInterval } from '@/lib/local-models';
-import { calculateTotalSleepMinutes, formatSleepDuration, reusableSleepTimes, shiftSleepMonth, sleepDurationMinutes, sleepMonthDates, sleepMonthWeekRanges, sleepMonthsBetween, sleepReferenceForDate, sleepWeekDates, summarizeSleepQualityByMonth, summarizeSleepQualityByWeekday, summarizeSleepRecords } from '@/lib/sleep-tracking';
+import { calculateTotalSleepMinutes, formatSleepDuration, reusableSleepTimes, shiftSleepMonth, sleepDurationMinutes, sleepMonthDates, sleepMonthWeekRanges, sleepMonthsBetween, sleepReferenceForDate, sleepWeekDates, summarizeSleepDurationByWeekday, summarizeSleepQualityByMonth, summarizeSleepQualityByWeekday, summarizeSleepRecords } from '@/lib/sleep-tracking';
 import { compareHydrationSummaries, summarizeHydrationByActivity, summarizeHydrationByWeekday, summarizeHydrationRecords } from '@/lib/hydration';
 import { useColors } from '@/hooks/useColors';
 import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, Muted, tap } from '@/components/ui';
@@ -155,6 +155,8 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
   const comparisonRecords = rangeMode === 'month' ? comparisonMonthDates.map((dayDate, index) => toRecord(dayDate, index)) : [];
   const summary = summarizeSleepRecords(records, today());
   const comparisonSummary = summarizeSleepRecords(comparisonRecords, today());
+  const weekdayDuration = summarizeSleepDurationByWeekday(records, today());
+  const comparisonWeekdayDuration = summarizeSleepDurationByWeekday(comparisonRecords, today());
   const weekdayQuality = summarizeSleepQualityByWeekday(records, today());
   const comparisonWeekdayQuality = summarizeSleepQualityByWeekday(comparisonRecords, today());
   const hydrationSummary = summarizeHydrationRecords(records.map(record => ({ date: record.date, hydration: record.hydration })), today());
@@ -204,6 +206,8 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
     value.averageQuality === null ? '— · n=0' : `${value.averageQuality.toFixed(1)}/5 · n=${value.ratingCount}`;
   const weekdayQualityCounts = (value: typeof weekdayQuality[number]) =>
     value.qualityCounts.map((count, index) => `${index + 1}:${count}`).join(' · ');
+  const weekdayDurationAverage = (value: typeof weekdayDuration[number]) =>
+    value.averageMinutes === null ? '— · n=0' : `${formatSleepDuration(value.averageMinutes)} · n=${value.durationCount}`;
   const weekdayHydrationValue = (value: typeof weekdayHydration[number]) => {
     const plannedPerDay = value.plannedDays ? `${liters(value.plannedMl / value.plannedDays)}/planned day` : '— plan';
     const actualPerDay = value.actualMl !== null && value.actualDays
@@ -312,6 +316,23 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
               </View>)}
             </View>)}
             <Muted>Mean /5 · n valid ratings. Counts below are scores 1–5; missing, unrated, and invalid scores are excluded.</Muted>
+          </View>
+          <View testID="sleep-weekday-duration-comparison" style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 7, marginTop: 3, gap: 4 }}>
+            <Text style={{ fontFamily: F.semi, color: c.foreground }}>Mean sleep duration by weekday</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+              <Text style={{ width: 34, fontFamily: F.semi, fontSize: 10, color: c.muted }}>Day</Text>
+              <Text style={{ flex: 1, textAlign: 'center', fontFamily: F.semi, fontSize: 10, color: c.muted }}>{monthTitle(month)}</Text>
+              <Text style={{ flex: 1, textAlign: 'center', fontFamily: F.semi, fontSize: 10, color: c.muted }}>{monthTitle(comparisonMonth)}</Text>
+            </View>
+            {weekdayDuration.map((daySummary, index) => <View key={daySummary.weekday} testID={`sleep-weekday-duration-${daySummary.weekday}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+              <Text style={{ width: 34, fontFamily: F.semi, fontSize: 11, color: c.foreground }}>{['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][daySummary.weekday]}</Text>
+              {[daySummary, comparisonWeekdayDuration[index]].map((value, monthIndex) => <Text key={monthIndex}
+                testID={`sleep-weekday-duration-value-${monthIndex}-${daySummary.weekday}`}
+                style={{ flex: 1, textAlign: 'center', fontFamily: F.regular, fontSize: 10, color: c.foreground }}>
+                {weekdayDurationAverage(value)}
+              </Text>)}
+            </View>)}
+            <Muted>Mean duration · n valid overnight or nap-only records. Missing and invalid durations are excluded.</Muted>
           </View>
           <View testID="hydration-weekday-comparison" style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 7, marginTop: 3, gap: 4 }}>
             <Text style={{ fontFamily: F.semi, color: c.foreground }}>Hydration by weekday</Text>

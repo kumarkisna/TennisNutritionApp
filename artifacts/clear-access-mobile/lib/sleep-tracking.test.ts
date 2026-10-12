@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 // @ts-ignore Node's built-in test modules are used only by the direct regression suite.
 import test from 'node:test';
-import { calculateTotalSleepMinutes, formatSleepDuration, reusableSleepTimes, shiftSleepMonth, sleepDurationMinutes, sleepMonthDates, sleepMonthWeekRanges, sleepMonthsBetween, sleepReferenceForDate, summarizeSleepQualityByMonth, sleepWeekDates, summarizeSleepQualityByWeekday, summarizeSleepRecords } from './sleep-tracking';
+import { calculateTotalSleepMinutes, formatSleepDuration, reusableSleepTimes, shiftSleepMonth, sleepDurationMinutes, sleepMonthDates, sleepMonthWeekRanges, sleepMonthsBetween, sleepReferenceForDate, summarizeSleepQualityByMonth, sleepWeekDates, summarizeSleepDurationByWeekday, summarizeSleepQualityByWeekday, summarizeSleepRecords } from './sleep-tracking';
 
 test('sleep duration handles overnight sleep and daytime sleep', () => {
   assert.equal(sleepDurationMinutes('22:30', '06:45'), 495);
@@ -118,6 +118,27 @@ test('weekday sleep ratings group valid scores, ignore missing and unrated dates
   assert.deepEqual(summary[3].qualityCounts, [0, 0, 0, 0, 0]);
   assert.deepEqual(summary[5].qualityCounts, [0, 0, 0, 0, 0]);
   assert.equal(summary[6].averageQuality, null);
+});
+
+test('weekday sleep duration averages include valid overnight and nap-only logs only', () => {
+  const summary = summarizeSleepDurationByWeekday([
+    { date: '2026-10-05', sleep: { bedtime: '22:00', wakeTime: '06:00', quality: 5, note: '', naps: [], wakeUps: [] }, minutes: 480 },
+    { date: '2026-10-12', sleep: { bedtime: null, wakeTime: null, quality: 0, note: '', naps: [{ startTime: '13:00', endTime: '14:00' }] }, minutes: 60 },
+    { date: '2026-10-06', sleep: { bedtime: '22:00', wakeTime: '06:00', quality: 2, note: '', naps: [], wakeUps: [] }, minutes: null },
+    { date: '2026-10-13', sleep: { bedtime: null, wakeTime: null, quality: 0, note: '', naps: [{ startTime: '13:00', endTime: '14:00' }] }, minutes: 0 },
+    { date: '2026-10-14', sleep: { bedtime: '22:00', wakeTime: '06:00', quality: 0, note: '', naps: [], wakeUps: [] }, minutes: Number.NaN },
+    { date: '2026-10-15', sleep: undefined, minutes: 120 },
+    { date: '2026-10-16', sleep: { bedtime: '22:00', wakeTime: '06:00', quality: 0, note: '', naps: [], wakeUps: [] }, minutes: 600 },
+  ], '2026-10-15');
+  assert.equal(summary.length, 7);
+  assert.equal(summary[1].durationCount, 2);
+  assert.equal(summary[1].averageMinutes, 270);
+  assert.equal(summary[2].averageMinutes, null);
+  assert.equal(summary[2].durationCount, 0);
+  assert.equal(summary[3].durationCount, 0);
+  assert.equal(summary[4].durationCount, 0);
+  assert.equal(summary[5].durationCount, 0);
+  assert.equal(summary[6].durationCount, 0);
 });
 
 test('sleep reference ranges are calculated from age on each selected date', () => {

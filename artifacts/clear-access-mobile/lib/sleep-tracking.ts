@@ -132,6 +132,27 @@ export function summarizeSleepQualityByWeekday(records: readonly SleepPeriodReco
   }));
 }
 
+export function summarizeSleepDurationByWeekday(records: readonly SleepPeriodRecord[], throughDate: string) {
+  const weekdaySummaries = Array.from({ length: 7 }, (_, weekday) => ({
+    weekday,
+    durationCount: 0,
+    durationTotal: 0,
+  }));
+  for (const record of records) {
+    if (record.date > throughDate || record.sleep === undefined ||
+      record.minutes === null || !Number.isFinite(record.minutes) || record.minutes <= 0) continue;
+    const weekday = new Date(`${record.date}T00:00:00Z`).getUTCDay();
+    if (!Number.isInteger(weekday)) continue;
+    const summary = weekdaySummaries[weekday];
+    summary.durationCount += 1;
+    summary.durationTotal += record.minutes;
+  }
+  return weekdaySummaries.map(summary => ({
+    ...summary,
+    averageMinutes: summary.durationCount ? Math.round(summary.durationTotal / summary.durationCount) : null,
+  }));
+}
+
 export function sleepReferenceForDate(dateOfBirth: string | null, date: string): SleepReference | null {
   if (!dateOfBirth) return null;
   const months = ageInCalendarMonths(dateOfBirth, date);
