@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 // @ts-ignore Node's built-in test modules are used only by the direct regression suite.
 import test from 'node:test';
-import { compareHydrationSummaries, estimateSessionSweatRate, hydrationReference, hydrationTotals, mergeHydrationSchedule, summarizeHydrationByActivity, summarizeHydrationByWeekday, summarizeHydrationRecords } from './hydration';
+import { compareHydrationSummaries, estimateSessionSweatRate, hydrationActivityRecords, hydrationReference, hydrationTotals, mergeHydrationSchedule, summarizeHydrationByActivity, summarizeHydrationByWeekday, summarizeHydrationRecords } from './hydration';
 import { buildReminders } from './meal-reminders';
 
 test('hydration daily references distinguish total water from beverage intake', () => {
@@ -157,6 +157,19 @@ test('activity hydration summaries separate saved active and rest days and keep 
     { group: 'active', elapsedDays: 1, plannedDays: 1, actualDays: 1, plannedMl: 750, plannedForRecordedMl: 500, actualMl: 300 },
     { group: 'rest', elapsedDays: 2, plannedDays: 1, actualDays: 1, plannedMl: 400, plannedForRecordedMl: 400, actualMl: 0 },
   ]);
+});
+
+test('activity drilldown dates use the same saved group rules and exclude dates after the selected cutoff', () => {
+  const records = [
+    { date: '2026-10-01', activityType: 'training_60' as const, tennis: {
+      mode: 'training' as const, sessions: [{ kind: 'practice' as const, startTime: '09:00', durationMinutes: 60, intensity: 'moderate' as const }],
+      fuel: { before: '', during: '', between: '', after: '', hydration: '' },
+    }, hydration: undefined },
+    { date: '2026-10-02', activityType: 'rest' as const, hydration: undefined },
+    { date: '2026-10-03', activityType: 'strength' as const, hydration: undefined },
+  ];
+  assert.deepEqual(hydrationActivityRecords(records, 'active', '2026-10-02').map(record => record.date), ['2026-10-01']);
+  assert.deepEqual(hydrationActivityRecords(records, 'rest', '2026-10-02').map(record => record.date), ['2026-10-02']);
 });
 
 test('hydration alerts use their planned date/time and stop once actual intake is logged', () => {

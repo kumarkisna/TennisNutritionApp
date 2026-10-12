@@ -89,18 +89,20 @@ export function summarizeHydrationByWeekday(
   }));
 }
 
-export function summarizeHydrationByActivity(
-  records: readonly { date: string; activityType: DayActivityType; tennis?: TennisPlan; hydration: HydrationLog | undefined }[],
-  throughDate: string,
-) {
+export type HydrationActivityGroup = 'active' | 'rest';
+export type HydrationActivityRecord = { date: string; activityType: DayActivityType; tennis?: TennisPlan; hydration: HydrationLog | undefined };
+
+export function hydrationActivityRecords(records: readonly HydrationActivityRecord[], group: HydrationActivityGroup, throughDate: string) {
+  return records.filter(record => record.date <= throughDate && (
+    group === 'active'
+      ? record.tennis?.sessions.some(session => session.kind === 'practice' || session.kind === 'match') === true
+      : record.activityType === 'rest' || record.tennis?.mode === 'rest'
+  ));
+}
+
+export function summarizeHydrationByActivity(records: readonly HydrationActivityRecord[], throughDate: string) {
   return (['active', 'rest'] as const).map(group => {
-    const groupedRecords = records.filter(record =>
-      record.date <= throughDate && (
-        group === 'active'
-          ? record.tennis?.sessions.some(session => session.kind === 'practice' || session.kind === 'match') === true
-          : record.activityType === 'rest' || record.tennis?.mode === 'rest'
-      ),
-    );
+    const groupedRecords = hydrationActivityRecords(records, group, throughDate);
     return {
       group,
       ...summarizeHydrationRecords(groupedRecords, throughDate),

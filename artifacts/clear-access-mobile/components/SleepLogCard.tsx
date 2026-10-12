@@ -4,7 +4,8 @@ import { getAgeOnDate } from '@/lib/planning-targets';
 import { shiftDate, today } from '@/lib/format';
 import type { SleepInterval } from '@/lib/local-models';
 import { calculateTotalSleepMinutes, formatSleepDuration, reusableSleepTimes, shiftSleepMonth, sleepDurationMinutes, sleepMonthDates, sleepMonthWeekRanges, sleepMonthsBetween, sleepReferenceForDate, sleepWeekDates, summarizeSleepDurationByWeekday, summarizeSleepQualityByMonth, summarizeSleepQualityByWeekday, summarizeSleepRecords } from '@/lib/sleep-tracking';
-import { compareHydrationSummaries, summarizeHydrationByActivity, summarizeHydrationByWeekday, summarizeHydrationRecords } from '@/lib/hydration';
+import { compareHydrationSummaries, hydrationActivityRecords, summarizeHydrationByActivity, summarizeHydrationByWeekday, summarizeHydrationRecords } from '@/lib/hydration';
+import type { HydrationActivityRecord } from '@/lib/hydration';
 import { useColors } from '@/hooks/useColors';
 import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, Muted, tap } from '@/components/ui';
 import TimeField from '@/components/TimeField';
@@ -75,6 +76,7 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
   const [qualityRangeStart, setQualityRangeStart] = useState(() => shiftSleepMonth(date.slice(0, 7), -11));
   const [qualityRangeEnd, setQualityRangeEnd] = useState(() => date.slice(0, 7));
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
+  const [expandedActivityGroup, setExpandedActivityGroup] = useState<'active' | 'rest' | null>(null);
   const [noteSearch, setNoteSearch] = useState('');
   const [settledNoteSearch, setSettledNoteSearch] = useState('');
   useEffect(() => {
@@ -228,6 +230,13 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
       : 'no paired amounts';
     return `${plannedPerDay} · ${actualPerDay}\n${matchedPercent} · n=${value.elapsedDays} days · ${value.plannedDays} planned / ${value.actualDays} recorded days`;
   };
+  const activityDateRows = (items: typeof records, group: 'active' | 'rest') =>
+    hydrationActivityRecords(items.filter(record => !record.loading && !record.failed), group, today());
+  const activityName = (record: HydrationActivityRecord, group: 'active' | 'rest') =>
+    group === 'rest' ? 'Rest day' : (record.tennis?.sessions ?? [])
+      .filter(session => session.kind === 'practice' || session.kind === 'match')
+      .map(session => `${session.kind === 'practice' ? 'Practice' : 'Match'} · ${session.startTime} · ${session.durationMinutes} min`)
+      .join(' / ');
   const hydrationMonthDetails = (value: typeof hydrationSummary) =>
     `${value.plannedEntryCount ? `${liters(value.plannedMl)} planned across ${value.plannedDays} days` : 'No drink entries planned'} · ` +
     `${value.actualMl === null ? 'no actual amounts recorded' : `${liters(value.actualMl)} recorded of ${liters(value.plannedForRecordedMl)} planned for recorded drinks`} · ` +
@@ -356,6 +365,35 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
               </Text>
               <Muted>{monthTitle(month)}: {activityHydrationValue(value)}</Muted>
               <Muted>{monthTitle(comparisonMonth)}: {activityHydrationValue(comparisonActivityHydration[index])}</Muted>
+              <Btn small variant="ghost" label={expandedActivityGroup === value.group ? 'Hide dates' : 'Show dates'}
+                testID={`button-hydration-activity-dates-${value.group}`}
+                onPress={() => setExpandedActivityGroup(expandedActivityGroup === value.group ? null : value.group)} />
+              {expandedActivityGroup === value.group ? <View testID={`hydration-activity-dates-${value.group}`} style={{ gap: 6 }}>
+                {[{ title: monthTitle(month), items: records }, { title: monthTitle(comparisonMonth), items: comparisonRecords }].map(period => {
+                  const matches = activityDateRows(period.items, value.group);
+                  return <View key={period.title} style={{ gap: 4 }}>
+                    <Text style={{ fontFamily: F.semi, fontSize: 11, color: c.foreground }}>{period.title}</Text>
+                    {period.items.some(record => record.loading) ? <Muted>Loading some dates…</Muted> : null}
+                    {period.items.some(record => record.failed) ? <Muted>Some dates could not be loaded.</Muted> : null}
+                    {matches.map(record => {
+                      const entries = record.hydration?.entries ?? [];
+                      const plannedMl = entries.reduce((sum, entry) => sum + entry.plannedMl, 0);
+                      const entered = entries.filter(entry => entry.actualMl !== null);
+                      const actualMl = entered.reduce((sum, entry) => sum + (entry.actualMl ?? 0), 0);
+                      return <Pressable key={record.date} testID={`hydration-activity-date-${value.group}-${record.date}`}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Open ${prettyDate(record.date, { weekday: 'long', month: 'long', day: 'numeric' })}, ${activityName(record, value.group)} in Planner`}
+                        onPress={() => onSelectDate(record.date)}
+                        style={{ borderWidth: 1, borderColor: c.border, borderRadius: 10, padding: 8, gap: 2 }}>
+                        <Text style={{ fontFamily: F.semi, color: c.foreground }}>{prettyDate(record.date, { weekday: 'short', month: 'short', day: 'numeric' })}</Text>
+                        <Muted>{activityName(record, value.group)}</Muted>
+                        <Muted>{entries.length ? `Planned ${liters(plannedMl)}` : 'No hydration entries saved'} · recorded {entered.length ? `${liters(actualMl)} (${entered.length}/${entries.length} drinks)` : `not entered (0/${entries.length} drinks)`}</Muted>
+                      </Pressable>;
+                    })}
+                    {!matches.length && !period.items.some(record => record.loading || record.failed) ? <Muted>No matching saved dates.</Muted> : null}
+                  </View>;
+                })}
+              </View> : null}
             </View>)}
             <Muted>Practice/match days use this person’s saved tennis sessions; rest days use the saved Rest activity. Other activity days without a tennis practice or match are excluded. Averages use days with plans or recorded amounts; paired percentages exclude drinks without actual amounts. These are log comparisons, not fluid targets.</Muted>
           </View>
