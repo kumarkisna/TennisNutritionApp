@@ -4,6 +4,23 @@ import type { SleepInterval, SleepLog } from './local-models';
 
 export type SleepReference = { label: string; minMinutes: number; maxMinutes: number | null; includesNaps: boolean };
 export type SleepTimes = { bedtime: string; wakeTime: string };
+export type SavedSleepQualityRecord = { date: string; sleep: SleepLog };
+
+export function isValidSleepQuality(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 5;
+}
+
+export function sleepQualityRecordsForMonth(
+  records: readonly { date: string; sleep: SleepLog | undefined }[],
+  month: string,
+  throughDate: string,
+): SavedSleepQualityRecord[] {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return [];
+  return records
+    .filter((record): record is SavedSleepQualityRecord =>
+      record.date.startsWith(`${month}-`) && record.date <= throughDate && record.sleep !== undefined)
+    .sort((left, right) => left.date.localeCompare(right.date));
+}
 
 export function reusableSleepTimes(sleep: Pick<SleepLog, 'bedtime' | 'wakeTime'> | null | undefined): SleepTimes | null {
   if (!sleep || !isClockTime(sleep.bedtime) || !isClockTime(sleep.wakeTime)) return null;
@@ -69,8 +86,7 @@ export function summarizeSleepQualityByMonth(
   throughDate: string,
 ) {
   return sleepMonthsBetween(startMonth, endMonth).map(month => {
-    const monthRecords: SleepPeriodRecord[] = records
-      .filter(record => record.date.startsWith(`${month}-`) && record.date <= throughDate)
+    const monthRecords: SleepPeriodRecord[] = sleepQualityRecordsForMonth(records, month, throughDate)
       .map(record => ({ ...record, minutes: null }));
     const summary = summarizeSleepRecords(monthRecords, throughDate);
     return {
@@ -88,7 +104,7 @@ export function summarizeSleepRecords(records: readonly SleepPeriodRecord[], thr
   const qualityCounts: [number, number, number, number, number] = [0, 0, 0, 0, 0];
   const rated = logged.filter(record => {
     const quality = record.sleep!.quality;
-    if (!Number.isInteger(quality) || quality < 1 || quality > 5) return false;
+    if (!isValidSleepQuality(quality)) return false;
     qualityCounts[quality - 1] += 1;
     return true;
   });

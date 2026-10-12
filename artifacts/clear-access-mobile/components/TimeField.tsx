@@ -12,17 +12,19 @@ export type TimeFieldProps = {
   placeholder?: string;
 };
 
-export default function TimeField({ label, value, onChangeText, testID, editable = true }: TimeFieldProps) {
+export default function TimeField({ label, value, onChangeText, testID, editable = true, placeholder = 'HH:MM' }: TimeFieldProps) {
   const c = useColors();
   return <View style={{ gap: 6 }}>
     <Text style={{ fontFamily: F.bold, fontSize: 11.5, color: c.foreground }}>{label}</Text>
     {createElement('input', {
       type: 'time',
       step: 60,
+      lang: 'en-GB',
       value,
       disabled: !editable,
       onChange: (event: ChangeEvent<HTMLInputElement>) => onChangeText(event.currentTarget.value),
       'aria-label': label,
+      placeholder,
       'data-testid': testID,
       style: {
         boxSizing: 'border-box',

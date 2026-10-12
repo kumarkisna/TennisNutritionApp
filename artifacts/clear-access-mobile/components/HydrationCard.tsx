@@ -6,6 +6,7 @@ import { estimateSessionSweatRate, hydrationReference, hydrationTotals, mergeHyd
 import { isIsoDate, shiftDate } from '@/lib/format';
 import { useColors } from '@/hooks/useColors';
 import { Btn, Card, Eyebrow, F, Field, Muted } from '@/components/ui';
+import TimeField from '@/components/TimeField';
 
 type Props = { personId: number; date: string; personName: string; dateOfBirth: string | null; sex: 'male' | 'female' | null; day?: DayActivity };
 type EntryDraft = { id: string; time: string; planned: string; actual: string; alert: boolean; tennisDietId?: string };
@@ -90,7 +91,10 @@ export function HydrationCard({ personId, date, personName, dateOfBirth, sex, da
     </View> : null}
     {draft.entries.map((e, i) => <View key={e.id} style={{ gap: 6, borderTopWidth: 1, borderColor: c.border, paddingTop: 8 }}>
       {e.tennisDietId ? <Muted>Linked to a tennis food slot at {e.time}. Remove or edit it here; it will stay attached to that slot.</Muted> : null}
-      <View style={{ flexDirection: 'row', gap: 6 }}>{input('Time', e.time, v => updateEntry(e.id, 'time', v), '12:00', `input-hydration-time-${i}`)}{input('Planned mL', e.planned, v => updateEntry(e.id, 'planned', v), '250', `input-hydration-planned-${i}`, true)}</View>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6 }}>
+        <View style={{ flex: 1 }}><TimeField label="Time (24-hour)" value={e.time} onChangeText={v => updateEntry(e.id, 'time', v)} placeholder="12:00" testID={`input-hydration-time-${i}`} /></View>
+        <View style={{ flex: 1 }}>{input('Planned mL', e.planned, v => updateEntry(e.id, 'planned', v), '250', `input-hydration-planned-${i}`, true)}</View>
+      </View>
       <View style={{ flexDirection: 'row', gap: 6 }}>{input('Actual mL (optional)', e.actual, v => updateEntry(e.id, 'actual', v), 'Not logged', `input-hydration-actual-${i}`, true)}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><Text style={{ color: c.foreground, fontFamily: F.medium }}>Alert</Text><Switch value={e.alert} onValueChange={v => updateEntry(e.id, 'alert', v)} testID={`switch-hydration-alert-${i}`} /></View></View>
       <Btn small variant="ghost" icon="trash-2" label="Remove drink" testID={`button-remove-hydration-${i}`} onPress={() => setDraft(v => ({ ...v, entries: v.entries.filter(x => x.id !== e.id) }))} />

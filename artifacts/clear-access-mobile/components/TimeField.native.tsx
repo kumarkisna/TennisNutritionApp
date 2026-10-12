@@ -32,8 +32,8 @@ export default function TimeField({ label, value, onChangeText, testID, editable
     <Btn small variant="ghost" icon="clock" label={iosOpen ? 'Hide time picker' : 'Choose time'}
       testID={`${testID}-picker`} disabled={!editable} onPress={open} />
     {iosOpen ? <View style={{ gap: 4 }}>
-      <DateTimePicker mode="time" display="spinner" value={parseTime(value)} is24Hour onChange={update} />
-      <Muted>Scroll to choose a time, then close the picker.</Muted>
+      <DateTimePicker mode="time" display="spinner" value={parseTime(value)} is24Hour locale="en_GB" onChange={update} />
+      <Muted>Scroll to choose a 24-hour time, then close the picker.</Muted>
       <Btn small label="Done" testID={`${testID}-picker-done`} onPress={() => setIosOpen(false)} />
     </View> : null}
   </View>;

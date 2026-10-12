@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 // @ts-ignore Node's built-in test modules are used only by the direct regression suite.
 import test from 'node:test';
-import { calculateTotalSleepMinutes, formatSleepDuration, reusableSleepTimes, shiftSleepMonth, sleepDurationMinutes, sleepMonthDates, sleepMonthWeekRanges, sleepMonthsBetween, sleepReferenceForDate, summarizeSleepQualityByMonth, sleepWeekDates, summarizeSleepDurationByWeekday, summarizeSleepQualityByWeekday, summarizeSleepRecords } from './sleep-tracking';
+import { calculateTotalSleepMinutes, formatSleepDuration, isValidSleepQuality, reusableSleepTimes, shiftSleepMonth, sleepDurationMinutes, sleepMonthDates, sleepMonthWeekRanges, sleepMonthsBetween, sleepQualityRecordsForMonth, sleepReferenceForDate, summarizeSleepQualityByMonth, sleepWeekDates, summarizeSleepDurationByWeekday, summarizeSleepQualityByWeekday, summarizeSleepRecords } from './sleep-tracking';
 
 test('sleep duration handles overnight sleep and daytime sleep', () => {
   assert.equal(sleepDurationMinutes('22:30', '06:45'), 495);
@@ -51,6 +51,23 @@ test('monthly quality averages and counts ignore missing dates, unrated logs, an
     { month: '2026-02', averageQuality: 3, ratedDays: 2, qualityCounts: [0, 1, 0, 1, 0] },
     { month: '2026-03', averageQuality: null, ratedDays: 0, qualityCounts: [0, 0, 0, 0, 0] },
   ]);
+});
+
+test('sleep quality month details show saved records only, keep unrated records, and sort by date', () => {
+  const records = [
+    { date: '2026-04-03', sleep: { bedtime: '22:00', wakeTime: '06:00', quality: 5, note: 'Rested', naps: [], wakeUps: [] } },
+    { date: '2026-04-01', sleep: { bedtime: null, wakeTime: null, quality: 0, note: 'No rating', naps: [], wakeUps: [] } },
+    { date: '2026-04-02', sleep: undefined },
+    { date: '2026-03-31', sleep: { bedtime: '22:00', wakeTime: '06:00', quality: 3, note: '', naps: [], wakeUps: [] } },
+    { date: '2026-04-30', sleep: { bedtime: '22:00', wakeTime: '06:00', quality: 4, note: 'Future', naps: [], wakeUps: [] } },
+  ];
+
+  const details = sleepQualityRecordsForMonth(records, '2026-04', '2026-04-29');
+  assert.deepEqual(details.map(record => record.date), ['2026-04-01', '2026-04-03']);
+  assert.equal(details[0].sleep.note, 'No rating');
+  assert.equal(isValidSleepQuality(details[0].sleep.quality), false);
+  assert.equal(isValidSleepQuality(details[1].sleep.quality), true);
+  assert.deepEqual(sleepQualityRecordsForMonth(records, '2026-13', '2026-12-31'), []);
 });
 
 test('month weeks use Monday boundaries and mark partial calendar weeks', () => {

@@ -3,7 +3,7 @@ import { Linking, Pressable, Text, View } from 'react-native';
 import { getAgeOnDate } from '@/lib/planning-targets';
 import { shiftDate, today } from '@/lib/format';
 import type { SleepInterval } from '@/lib/local-models';
-import { calculateTotalSleepMinutes, formatSleepDuration, reusableSleepTimes, shiftSleepMonth, sleepDurationMinutes, sleepMonthDates, sleepMonthWeekRanges, sleepMonthsBetween, sleepReferenceForDate, sleepWeekDates, summarizeSleepDurationByWeekday, summarizeSleepQualityByMonth, summarizeSleepQualityByWeekday, summarizeSleepRecords } from '@/lib/sleep-tracking';
+import { calculateTotalSleepMinutes, formatSleepDuration, isValidSleepQuality, reusableSleepTimes, shiftSleepMonth, sleepDurationMinutes, sleepMonthDates, sleepMonthWeekRanges, sleepMonthsBetween, sleepQualityRecordsForMonth, sleepReferenceForDate, sleepWeekDates, summarizeSleepDurationByWeekday, summarizeSleepQualityByMonth, summarizeSleepQualityByWeekday, summarizeSleepRecords } from '@/lib/sleep-tracking';
 import { compareHydrationSummaries, hydrationActivityRecords, summarizeHydrationByActivity, summarizeHydrationByDate, summarizeHydrationByWeekday, summarizeHydrationRecords } from '@/lib/hydration';
 import type { HydrationActivityRecord } from '@/lib/hydration';
 import { useColors } from '@/hooks/useColors';
@@ -38,10 +38,10 @@ function SleepIntervalEditor({ label, testPrefix, intervals, onChange, startHint
     <Text style={{ fontFamily: F.semi, color: c.foreground }}>{label}</Text>
     {intervals.map((interval, index) => <View key={`${testPrefix}-${index}`} style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6 }}>
       <View style={{ flex: 1 }}>
-        <TimeField label={`Start ${index + 1}`} value={interval.startTime} onChangeText={value => onChange(intervals.map((item, i) => i === index ? { ...item, startTime: value } : item))} placeholder={startHint} testID={`input-${testPrefix}-${index}-start`} />
+        <TimeField label={`Start ${index + 1} (24-hour)`} value={interval.startTime} onChangeText={value => onChange(intervals.map((item, i) => i === index ? { ...item, startTime: value } : item))} placeholder={startHint} testID={`input-${testPrefix}-${index}-start`} />
       </View>
       <View style={{ flex: 1 }}>
-        <TimeField label={`End ${index + 1}`} value={interval.endTime} onChangeText={value => onChange(intervals.map((item, i) => i === index ? { ...item, endTime: value } : item))} placeholder={endHint} testID={`input-${testPrefix}-${index}-end`} />
+        <TimeField label={`End ${index + 1} (24-hour)`} value={interval.endTime} onChangeText={value => onChange(intervals.map((item, i) => i === index ? { ...item, endTime: value } : item))} placeholder={endHint} testID={`input-${testPrefix}-${index}-end`} />
       </View>
       <Btn small variant="ghost" icon="trash-2" label="Remove" testID={`button-remove-${testPrefix}-${index}`} onPress={() => onChange(intervals.filter((_, i) => i !== index))} />
     </View>)}
@@ -76,6 +76,7 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
   const latestDateMonth = useRef(date.slice(0, 7));
   latestDateMonth.current = date.slice(0, 7);
   const [rangeMode, setRangeMode] = useState<'week' | 'month' | 'quality-range'>('week');
+  const [expandedQualityMonth, setExpandedQualityMonth] = useState<string | null>(null);
   const [preferredRangeMode, setPreferredRangeMode] = useState<'week' | 'month'>('week');
   const [qualityRangeStart, setQualityRangeStart] = useState(() => shiftSleepMonth(date.slice(0, 7), -11));
   const [qualityRangeEnd, setQualityRangeEnd] = useState(() => date.slice(0, 7));
@@ -142,6 +143,10 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
   const qualitySummaries = useMemo(() => summarizeSleepQualityByMonth(
     qualityRangeRecords.data ?? [], qualityRangeStart, qualityRangeEnd, today(),
   ), [qualityRangeRecords.data, qualityRangeStart, qualityRangeEnd]);
+  const qualityDetailRecords = useMemo(() => new Map(qualitySummaries.map(item => [
+    item.month,
+    sleepQualityRecordsForMonth(qualityRangeRecords.data ?? [], item.month, today()),
+  ] as const)), [qualitySummaries, qualityRangeRecords.data]);
   const noteResults = useSearchSleepNotes(personId, settledNoteSearch, noteQualityFilters);
   const noteFiltersActive = Boolean(noteSearch.trim()) || noteQualityFilters.length > 0;
   const noteSearchPending = noteSearch.trim().toLowerCase() !== settledNoteSearch.toLowerCase();
@@ -312,14 +317,76 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
           <View testID="sleep-quality-trend" style={{ borderWidth: 1, borderColor: c.border, borderRadius: 12, padding: 10, gap: 7 }}>
             <Text style={{ fontFamily: F.semi, color: c.foreground }}>Month-by-month sleep quality</Text>
             <Muted>Average self-reported rating and counts include only saved ratings from 1–5. Missing dates and unrated records are excluded.</Muted>
-            {qualitySummaries.map(item => <View key={item.month} testID={`sleep-quality-month-${item.month}`} style={{
-              borderTopWidth: 1, borderTopColor: c.border, paddingTop: 6, gap: 2,
-            }}>
-              <Text style={{ fontFamily: F.semi, color: c.foreground }}>{monthTitle(item.month)}</Text>
-              <Muted>{item.averageQuality === null ? 'No past quality ratings.' :
-                `Average rating ${item.averageQuality.toFixed(1)}/5 · ${item.ratedDays} ${item.ratedDays === 1 ? 'rating' : 'ratings'}`}</Muted>
-              <Muted>Rating counts (1–5): {item.qualityCounts.map((count, index) => `${index + 1}: ${count}`).join(' · ')}</Muted>
-            </View>)}
+            {qualitySummaries.map(item => {
+              const isExpanded = expandedQualityMonth === item.month;
+              const savedRecords = qualityDetailRecords.get(item.month) ?? [];
+              const unratedCount = savedRecords.filter(record => !isValidSleepQuality(record.sleep.quality)).length;
+              return <View key={item.month} testID={`sleep-quality-month-${item.month}`} style={{
+                borderTopWidth: 1, borderTopColor: c.border, paddingTop: 6, gap: 3,
+              }}>
+                <Pressable
+                  testID={`button-toggle-sleep-quality-month-${item.month}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${isExpanded ? 'Hide' : 'Open'} saved sleep records for ${monthTitle(item.month)}`}
+                  accessibilityState={{ expanded: isExpanded }}
+                  onPress={() => {
+                    tap();
+                    setExpandedQualityMonth(current => current === item.month ? null : item.month);
+                  }}
+                  style={({ pressed }) => ({ gap: 2, opacity: pressed ? 0.7 : 1 })}
+                >
+                  <Text style={{ fontFamily: F.semi, color: c.foreground }}>{monthTitle(item.month)}</Text>
+                  <Muted>{item.averageQuality === null ? 'No past quality ratings.' :
+                    `Average rating ${item.averageQuality.toFixed(1)}/5 · ${item.ratedDays} ${item.ratedDays === 1 ? 'rating' : 'ratings'}`}</Muted>
+                  <Muted>Rating counts (1–5): {item.qualityCounts.map((count, index) => `${index + 1}: ${count}`).join(' · ')}</Muted>
+                  <Muted>{savedRecords.length} saved {savedRecords.length === 1 ? 'record' : 'records'} · {unratedCount} without a valid rating</Muted>
+                  <Text style={{ fontFamily: F.semi, fontSize: 12, color: c.primary }}>
+                    {isExpanded ? 'Hide saved dates' : 'View saved dates'}
+                  </Text>
+                </Pressable>
+                {isExpanded ? <View testID={`sleep-quality-records-${item.month}`} style={{
+                  borderTopWidth: 1, borderTopColor: c.border, paddingTop: 5, gap: 5,
+                }}>
+                  {savedRecords.length ? savedRecords.map(record => {
+                    const quality = record.sleep.quality;
+                    const rated = isValidSleepQuality(quality);
+                    const minutes = calculateTotalSleepMinutes(record.sleep);
+                    const dateLabel = prettyDate(record.date, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+                    return <Pressable
+                      key={record.date}
+                      testID={`button-open-sleep-quality-record-${record.date}`}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Open sleep record for ${dateLabel} in Planner, ${rated ? `rated ${quality} out of 5` : 'not rated'}`}
+                      accessibilityHint="Selects this date for the active person in Planner and loads its saved sleep record."
+                      onPress={() => {
+                        tap();
+                        setExpandedDate(record.date);
+                        onSelectDate(record.date);
+                      }}
+                      style={({ pressed }) => ({
+                        borderTopWidth: 1, borderTopColor: c.border, borderLeftWidth: 3,
+                        borderLeftColor: record.date === date ? c.primary : c.border,
+                        backgroundColor: record.date === date ? c.card : 'transparent',
+                        paddingTop: 6, paddingLeft: 8, paddingRight: 5, gap: 2, opacity: pressed ? 0.7 : 1,
+                      })}
+                    >
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 6 }}>
+                        <Text style={{ fontFamily: F.semi, color: c.foreground }}>
+                          {prettyDate(record.date, { weekday: 'short', month: 'short', day: 'numeric' })}
+                        </Text>
+                        <Text style={{ fontFamily: F.semi, color: rated ? c.primary : c.muted, textAlign: 'right' }}>
+                          {rated ? `Rated ${quality}/5` : 'Not rated · excluded'}
+                        </Text>
+                      </View>
+                      <Muted>{minutes === null ? 'Duration unavailable' : `Duration ${formatSleepDuration(minutes)}`}</Muted>
+                      <Muted>{record.sleep.note.trim() || 'No notes saved for this date.'}</Muted>
+                      {record.date === date ? <Text style={{ fontFamily: F.semi, fontSize: 11, color: c.primary }}>Selected Planner date</Text> : null}
+                    </Pressable>;
+                  }) : <Muted>No saved sleep records for this month. Missing dates are not listed or included in the average.</Muted>}
+                  {savedRecords.length ? <Muted>Only saved dates appear here. Unrated records are visible but excluded from the average; missing dates have no saved record.</Muted> : null}
+                </View> : null}
+              </View>;
+            })}
           </View> :
     rangeMode === 'month' && !monthSelectionReady ? <Muted>Loading the selected month comparison…</Muted> :
       periodLoading ? <Muted>Loading sleep records…</Muted> : periodFailed ? <Muted>Some dates could not be loaded. Try reopening this range.</Muted> :
