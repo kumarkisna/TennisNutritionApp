@@ -115,6 +115,8 @@ test('weekday sleep ratings group valid scores, ignore missing and unrated dates
   assert.equal(summary[1].averageQuality, 5);
   assert.equal(summary[2].averageQuality, 3);
   assert.deepEqual(summary[2].qualityCounts, [0, 1, 0, 1, 0]);
+  assert.deepEqual(summary[3].qualityCounts, [0, 0, 0, 0, 0]);
+  assert.deepEqual(summary[5].qualityCounts, [0, 0, 0, 0, 0]);
   assert.equal(summary[6].averageQuality, null);
 });
 

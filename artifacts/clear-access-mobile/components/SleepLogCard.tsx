@@ -192,8 +192,10 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
   const qualityDistribution = (value: typeof summary) => value.ratedDays
     ? `Quality ratings (${value.ratedDays}): ${value.qualityCounts.map((count, index) => `${index + 1}: ${count}`).join(' · ')}`
     : 'No valid quality ratings.';
-  const weekdayQualityValue = (value: typeof weekdayQuality[number]) =>
+  const weekdayQualityAverage = (value: typeof weekdayQuality[number]) =>
     value.averageQuality === null ? '— · n=0' : `${value.averageQuality.toFixed(1)}/5 · n=${value.ratingCount}`;
+  const weekdayQualityCounts = (value: typeof weekdayQuality[number]) =>
+    value.qualityCounts.map((count, index) => `${index + 1}:${count}`).join(' · ');
   const weekdayHydrationValue = (value: typeof weekdayHydration[number]) => {
     const plannedPerDay = value.plannedDays ? `${liters(value.plannedMl / value.plannedDays)}/planned day` : '— plan';
     const actualPerDay = value.actualMl !== null && value.actualDays
@@ -286,10 +288,12 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
             </View>
             {weekdayQuality.map((daySummary, index) => <View key={daySummary.weekday} testID={`sleep-weekday-quality-${daySummary.weekday}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
               <Text style={{ width: 34, fontFamily: F.semi, fontSize: 11, color: c.foreground }}>{['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][daySummary.weekday]}</Text>
-              <Text style={{ flex: 1, textAlign: 'center', fontFamily: F.regular, fontSize: 11, color: c.foreground }}>{weekdayQualityValue(daySummary)}</Text>
-              <Text style={{ flex: 1, textAlign: 'center', fontFamily: F.regular, fontSize: 11, color: c.foreground }}>{weekdayQualityValue(comparisonWeekdayQuality[index])}</Text>
+              {[daySummary, comparisonWeekdayQuality[index]].map((value, monthIndex) => <View key={monthIndex} style={{ flex: 1, alignItems: 'center' }}>
+                <Text style={{ fontFamily: F.regular, fontSize: 11, color: c.foreground }}>{weekdayQualityAverage(value)}</Text>
+                <Text testID={`sleep-weekday-quality-counts-${monthIndex}-${daySummary.weekday}`} style={{ fontFamily: F.regular, fontSize: 9, color: c.muted, textAlign: 'center' }}>{weekdayQualityCounts(value)}</Text>
+              </View>)}
             </View>)}
-            <Muted>Mean rating /5 · n = valid ratings. Missing dates and unrated or invalid scores are excluded.</Muted>
+            <Muted>Mean /5 · n valid ratings. Counts below are scores 1–5; missing, unrated, and invalid scores are excluded.</Muted>
           </View>
           <View testID="hydration-weekday-comparison" style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 7, marginTop: 3, gap: 4 }}>
             <Text style={{ fontFamily: F.semi, color: c.foreground }}>Hydration by weekday</Text>
