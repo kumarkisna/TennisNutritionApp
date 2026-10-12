@@ -75,8 +75,27 @@ test('sleep summaries separate missing dates from nap-only, overnight, and zero-
     napOnlyDays: 1,
     overnightDays: 2,
     averageMinutes: 190,
+    ratedDays: 4,
+    qualityCounts: [1, 1, 0, 1, 1],
     averageQuality: 3,
   });
+});
+
+test('sleep quality distribution includes only valid 1–5 ratings from logged dates', () => {
+  const records = [
+    { date: '2026-10-01', sleep: { bedtime: '22:00', wakeTime: '06:00', quality: 1, note: '', naps: [], wakeUps: [] }, minutes: 480 },
+    { date: '2026-10-02', sleep: { bedtime: null, wakeTime: null, quality: 2, note: '', naps: [{ startTime: '13:00', endTime: '14:00' }], wakeUps: [] }, minutes: 60 },
+    { date: '2026-10-03', sleep: { bedtime: '22:00', wakeTime: '06:00', quality: 2, note: '', naps: [], wakeUps: [] }, minutes: 480 },
+    { date: '2026-10-04', sleep: { bedtime: null, wakeTime: null, quality: 5, note: '', naps: [], wakeUps: [] }, minutes: null },
+    { date: '2026-10-05', sleep: { bedtime: '22:00', wakeTime: '06:00', quality: 0, note: '', naps: [], wakeUps: [] }, minutes: 480 },
+    { date: '2026-10-06', sleep: undefined, minutes: null },
+  ];
+  const summary = summarizeSleepRecords(records, '2026-10-06');
+  assert.equal(summary.loggedDays, 5);
+  assert.equal(summary.missingDays, 1);
+  assert.equal(summary.ratedDays, 4);
+  assert.deepEqual(summary.qualityCounts, [1, 2, 0, 0, 1]);
+  assert.equal(summary.averageQuality, 2.5);
 });
 
 test('sleep reference ranges are calculated from age on each selected date', () => {

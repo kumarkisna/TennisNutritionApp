@@ -173,6 +173,9 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
     `${value.loggedDays}/${value.elapsedDays} past dates logged · ${value.overnightDays} overnight · ${value.napOnlyDays} nap-only · ${value.missingDays} missing`;
   const monthAverages = (value: typeof summary) =>
     `Average duration ${value.averageMinutes === null ? 'unavailable' : formatSleepDuration(value.averageMinutes)} · quality ${value.averageQuality === null ? 'unrated' : `${value.averageQuality.toFixed(1)}/5`}`;
+  const qualityDistribution = (value: typeof summary) => value.ratedDays
+    ? `Quality ratings (${value.ratedDays}): ${value.qualityCounts.map((count, index) => `${index + 1}: ${count}`).join(' · ')}`
+    : 'No valid quality ratings.';
   const hydrationMonthDetails = (value: typeof hydrationSummary) =>
     `${value.plannedEntryCount ? `${liters(value.plannedMl)} planned across ${value.plannedDays} days` : 'No drink entries planned'} · ` +
     `${value.actualMl === null ? 'no actual amounts recorded' : `${liters(value.actualMl)} recorded of ${liters(value.plannedForRecordedMl)} planned for recorded drinks`} · ` +
@@ -214,10 +217,12 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
           <Text style={{ fontFamily: F.semi, color: c.foreground }}>{monthTitle(month)}</Text>
           <Muted>{summary.elapsedDays ? monthCounts(summary) : 'No past dates in this month yet.'}</Muted>
           <Muted>{monthAverages(summary)}</Muted>
+          <Muted>{qualityDistribution(summary)}</Muted>
           <Muted>Hydration · {hydrationMonthDetails(hydrationSummary)}</Muted>
           <Text style={{ fontFamily: F.semi, color: c.foreground }}>{monthTitle(comparisonMonth)}</Text>
           <Muted>{comparisonSummary.elapsedDays ? monthCounts(comparisonSummary) : 'No past dates in this month yet.'}</Muted>
           <Muted>{monthAverages(comparisonSummary)}</Muted>
+          <Muted>{qualityDistribution(comparisonSummary)}</Muted>
           <Muted>Hydration · {hydrationMonthDetails(comparisonHydrationSummary)}</Muted>
           <Muted>Change: duration {durationDelta} · quality {qualityDelta} versus {monthTitle(comparisonMonth)}.</Muted>
           <Muted>Missing dates are shown separately and excluded from averages.</Muted>

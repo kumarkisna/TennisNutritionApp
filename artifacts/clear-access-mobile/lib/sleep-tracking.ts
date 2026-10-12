@@ -57,6 +57,13 @@ export function summarizeSleepRecords(records: readonly SleepPeriodRecord[], thr
   const elapsed = records.filter(record => record.date <= throughDate);
   const logged = elapsed.filter(record => record.sleep !== undefined);
   const measured = logged.filter(record => record.minutes !== null);
+  const qualityCounts: [number, number, number, number, number] = [0, 0, 0, 0, 0];
+  const rated = logged.filter(record => {
+    const quality = record.sleep!.quality;
+    if (!Number.isInteger(quality) || quality < 1 || quality > 5) return false;
+    qualityCounts[quality - 1] += 1;
+    return true;
+  });
   const napOnly = logged.filter(record => record.sleep!.bedtime === null && record.sleep!.wakeTime === null &&
     (record.sleep!.naps?.length ?? 0) > 0);
   const overnight = logged.filter(record => record.sleep!.bedtime !== null && record.sleep!.wakeTime !== null);
@@ -67,7 +74,9 @@ export function summarizeSleepRecords(records: readonly SleepPeriodRecord[], thr
     napOnlyDays: napOnly.length,
     overnightDays: overnight.length,
     averageMinutes: measured.length ? Math.round(measured.reduce((sum, record) => sum + record.minutes!, 0) / measured.length) : null,
-    averageQuality: logged.length ? logged.reduce((sum, record) => sum + record.sleep!.quality, 0) / logged.length : null,
+    ratedDays: rated.length,
+    qualityCounts,
+    averageQuality: rated.length ? rated.reduce((sum, record) => sum + record.sleep!.quality, 0) / rated.length : null,
   };
 }
 
