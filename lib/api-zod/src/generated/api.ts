@@ -439,6 +439,29 @@ export const DeletePersonResponse = zod.void()
 
 
 /**
+ * @summary List user-provided iron and fat goal changes for an owned person
+ */
+
+
+
+export const ListGoalHistoryParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+export const ListGoalHistoryResponseItem = zod.object({
+  "id": zod.number().int(),
+  "personId": zod.number().int(),
+  "nutrient": zod.enum(['iron', 'fat']),
+  "previousAmount": zod.number().nullable(),
+  "amount": zod.number().nullable(),
+  "previousSource": zod.string().nullable(),
+  "source": zod.string().nullable(),
+  "changedAt": zod.string()
+})
+export const ListGoalHistoryResponse = zod.array(ListGoalHistoryResponseItem)
+
+
+/**
  * @summary List all meal entries for a date
  */
 export const listMealEntriesQueryDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');

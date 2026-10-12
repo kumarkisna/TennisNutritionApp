@@ -69,6 +69,29 @@ export interface DayActivityInput {
   activityType: DayActivityType;
 }
 
+export type GoalHistoryNutrient = typeof GoalHistoryNutrient[keyof typeof GoalHistoryNutrient];
+
+
+export const GoalHistoryNutrient = {
+  iron: 'iron',
+  fat: 'fat',
+} as const;
+
+export interface GoalHistory {
+  id: number;
+  personId: number;
+  nutrient: GoalHistoryNutrient;
+  /** @nullable */
+  previousAmount: number | null;
+  /** @nullable */
+  amount: number | null;
+  /** @nullable */
+  previousSource: string | null;
+  /** @nullable */
+  source: string | null;
+  changedAt: string;
+}
+
 export interface Person {
   id: number;
   name: string;

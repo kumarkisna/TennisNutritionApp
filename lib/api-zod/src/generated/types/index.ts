@@ -20,6 +20,8 @@ export * from './foodSource';
 export * from './foodUpdate';
 export * from './getDailySummaryParams';
 export * from './getDayActivityParams';
+export * from './goalHistory';
+export * from './goalHistoryNutrient';
 export * from './healthStatus';
 export * from './importFoodInput';
 export * from './listFoodsParams';

@@ -199,6 +199,29 @@ paths:
       responses:
         "204":
           description: Deleted
+  /people/{id}/goal-history:
+    get:
+      operationId: listGoalHistory
+      tags: [people]
+      summary: List user-provided iron and fat goal changes for an owned person
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Newest-first goal changes, not app verification
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GoalHistory"
+        "401":
+          description: Sign-in required
+        "404":
+          description: Person not found in this account
   /meal-entries:
     get:
       operationId: listMealEntries
@@ -402,6 +425,18 @@ components:
         activityType:
           $ref: "#/components/schemas/DayActivityType"
       required: [date, personId, activityType]
+    GoalHistory:
+      type: object
+      properties:
+        id: { type: integer }
+        personId: { type: integer }
+        nutrient: { type: string, enum: [iron, fat] }
+        previousAmount: { type: [number, "null"] }
+        amount: { type: [number, "null"] }
+        previousSource: { type: [string, "null"] }
+        source: { type: [string, "null"] }
+        changedAt: { type: string }
+      required: [id, personId, nutrient, previousAmount, amount, previousSource, source, changedAt]
     Person:
       type: object
       properties:

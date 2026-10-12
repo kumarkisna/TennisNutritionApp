@@ -1,11 +1,13 @@
 import { Router, type IRouter } from "express";
-import { and, eq, ne, sql } from "drizzle-orm";
-import { db, peopleTable } from "@workspace/db";
+import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { db, goalHistoryTable, peopleTable } from "@workspace/db";
 import {
   CreatePersonBody,
   CreatePersonResponse,
   DeletePersonParams,
   ListPeopleResponse,
+  ListGoalHistoryParams,
+  ListGoalHistoryResponse,
   UpdatePersonBody,
   UpdatePersonParams,
   UpdatePersonResponse,
@@ -13,6 +15,7 @@ import {
 import { ensureDefaultPerson, getOwnedPerson, toPerson } from "../lib/people";
 import { isValidCalendarDate } from "../lib/planner-data";
 import { requireUser } from "../middlewares/requireUser";
+import { goalHistoryChanges } from "../lib/goal-history";
 
 const router: IRouter = Router();
 router.use("/people", requireUser);
@@ -72,6 +75,25 @@ router.get("/people", async (_req, res): Promise<void> => {
   res.json(ListPeopleResponse.parse(people.map(toPerson)));
 });
 
+router.get("/people/:id/goal-history", async (req, res): Promise<void> => {
+  const params = ListGoalHistoryParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: "Invalid person id." });
+    return;
+  }
+  const ownerId: string = res.locals.userId;
+  if (!await getOwnedPerson(ownerId, params.data.id)) {
+    res.status(404).json({ error: "Person not found in your planner." });
+    return;
+  }
+  const history = await db.select().from(goalHistoryTable)
+    .where(and(eq(goalHistoryTable.ownerId, ownerId), eq(goalHistoryTable.personId, params.data.id)))
+    .orderBy(desc(goalHistoryTable.changedAt), desc(goalHistoryTable.id));
+  res.json(ListGoalHistoryResponse.parse(history.map(({ ownerId: _ownerId, changedAt, ...entry }) => ({
+    ...entry, changedAt: changedAt.toISOString(),
+  }))));
+});
+
 router.post("/people", async (req, res): Promise<void> => {
   const body = CreatePersonBody.safeParse(req.body);
   const name = body.success ? body.data.name.trim() : "";
@@ -90,8 +112,8 @@ router.post("/people", async (req, res): Promise<void> => {
     res.status(409).json({ error: "That person is already in your planner." });
     return;
   }
-  const [person] = await db
-    .insert(peopleTable)
+  const person = await db.transaction(async tx => {
+    const [created] = await tx.insert(peopleTable)
     .values({
       ownerId,
       name,
@@ -104,6 +126,12 @@ router.post("/people", async (req, res): Promise<void> => {
       baselineCalories: body.data.baselineCalories,
     })
     .returning();
+    const history = goalHistoryChanges({}, created);
+    if (history.length) await tx.insert(goalHistoryTable).values(history.map(entry => ({
+      ...entry, ownerId, personId: created.id,
+    })));
+    return created;
+  });
   res.status(201).json(CreatePersonResponse.parse(toPerson(person)));
 });
 
@@ -134,12 +162,31 @@ router.patch("/people/:id", async (req, res): Promise<void> => {
     res.status(409).json({ error: "That person is already in your planner." });
     return;
   }
-  const [person] = await db
-    .update(peopleTable)
-    .set({ ...body.data, ...goals, ...(name === undefined ? {} : { name }) })
-    .where(and(eq(peopleTable.id, existing.id), eq(peopleTable.ownerId, ownerId)))
-    .returning();
-  res.json(UpdatePersonResponse.parse(toPerson(person)));
+  const result = await db.transaction(async tx => {
+    // Serialize edits to capture the actual immediately preceding saved state.
+    const [locked] = await tx.select().from(peopleTable)
+      .where(and(eq(peopleTable.id, existing.id), eq(peopleTable.ownerId, ownerId))).for("update");
+    if (!locked) return null;
+    const currentGoals = normalizeGoalChanges(body.data, locked);
+    if (!currentGoals) return { invalid: true } as const;
+    const changes = { ...body.data, ...currentGoals, ...(name === undefined ? {} : { name }) };
+    const history = goalHistoryChanges(locked, changes);
+    const [person] = await tx.update(peopleTable).set(changes)
+      .where(and(eq(peopleTable.id, locked.id), eq(peopleTable.ownerId, ownerId))).returning();
+    if (history.length) await tx.insert(goalHistoryTable).values(history.map(entry => ({
+      ...entry, personId: person.id, ownerId,
+    })));
+    return { person };
+  });
+  if (!result) {
+    res.status(404).json({ error: "Person not found in your planner." });
+    return;
+  }
+  if ("invalid" in result) {
+    res.status(400).json({ error: "Only add source details to a goal that is set." });
+    return;
+  }
+  res.json(UpdatePersonResponse.parse(toPerson(result.person)));
 });
 
 router.delete("/people/:id", async (req, res): Promise<void> => {

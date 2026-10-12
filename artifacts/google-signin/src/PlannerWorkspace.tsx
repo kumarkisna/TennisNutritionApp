@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useClerk, useUser } from '@clerk/react';
 import { Link, useLocation } from 'wouter';
 import { SportsReferencePanel } from './SportsReferencePanel';
+import { GoalHistory } from './GoalHistory';
 import { Activity, ArrowLeft, ArrowRight, BookOpen, CalendarDays, ChevronLeft, ChevronRight, CirclePlus, ExternalLink, LayoutDashboard, LogOut, Pencil, Plus, Search, Settings2, Trash2, Users, X } from 'lucide-react';
 import {
   useListFoods, getListFoodsQueryKey, useCreateFood, useUpdateFood, useDeleteFood,
@@ -64,6 +65,7 @@ function useRefresh() {
     },
     people: () => {
       client.invalidateQueries({ queryKey: getListPeopleQueryKey() });
+      client.invalidateQueries({ predicate: query => /^\/api\/people\/\d+\/goal-history$/.test(String(query.queryKey[0])) });
       client.invalidateQueries({ queryKey: getListMealEntriesQueryKey().slice(0, 1) });
       client.invalidateQueries({ queryKey: getGetDailySummaryQueryKey().slice(0, 1) });
     },
@@ -556,6 +558,7 @@ function NutrientGoals({ person }: { person: Person }) {
       {saved && <p className="mt-4 text-sm font-bold text-[#176d61]" role="status" data-testid="status-nutrient-goals-saved">Goals saved for {person.name}. The daily comparison now uses these values.</p>}
       <button type="submit" className="workspace-button mt-5" disabled={update.isPending} data-testid="button-save-nutrient-goals">{update.isPending ? 'Saving…' : 'Save nutrient goals'}</button>
     </form>
+    <GoalHistory key={person.id} personId={person.id} personName={person.name} />
   </div>;
 }
 

@@ -30,6 +30,7 @@ import type {
   FoodUpdate,
   GetDailySummaryParams,
   GetDayActivityParams,
+  GoalHistory,
   HealthStatus,
   ImportFoodInput,
   ListFoodsParams,
@@ -982,6 +983,83 @@ export const useDeletePerson = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getDeletePersonMutationOptions(options));
     }
+
+export const getListGoalHistoryUrl = (id: number,) => {
+
+
+
+
+  return `/api/people/${id}/goal-history`
+}
+
+/**
+ * @summary List user-provided iron and fat goal changes for an owned person
+ */
+export const listGoalHistory = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<GoalHistory[]> => {
+
+  return customFetch<GoalHistory[]>(getListGoalHistoryUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListGoalHistoryQueryKey = (id: number,) => {
+    return [
+    `/api/people/${id}/goal-history`
+    ] as const;
+    }
+
+
+export const getListGoalHistoryQueryOptions = <TData = Awaited<ReturnType<typeof listGoalHistory>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGoalHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListGoalHistoryQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listGoalHistory>>> = ({ signal }) => listGoalHistory(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listGoalHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListGoalHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof listGoalHistory>>>
+export type ListGoalHistoryQueryError = ErrorType<void>
+
+
+/**
+ * @summary List user-provided iron and fat goal changes for an owned person
+ */
+
+export function useListGoalHistory<TData = Awaited<ReturnType<typeof listGoalHistory>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGoalHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListGoalHistoryQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListMealEntriesUrl = (params: ListMealEntriesParams,) => {
   const normalizedParams = new URLSearchParams();
