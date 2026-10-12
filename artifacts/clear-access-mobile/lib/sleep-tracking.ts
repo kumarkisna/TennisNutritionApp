@@ -3,6 +3,12 @@ import { ageInCalendarMonths } from './growth';
 import type { SleepInterval, SleepLog } from './local-models';
 
 export type SleepReference = { label: string; minMinutes: number; maxMinutes: number | null; includesNaps: boolean };
+export type SleepTimes = { bedtime: string; wakeTime: string };
+
+export function reusableSleepTimes(sleep: Pick<SleepLog, 'bedtime' | 'wakeTime'> | null | undefined): SleepTimes | null {
+  if (!sleep || !isClockTime(sleep.bedtime) || !isClockTime(sleep.wakeTime)) return null;
+  return { bedtime: sleep.bedtime, wakeTime: sleep.wakeTime };
+}
 
 export function sleepWeekDates(anchorDate: string): string[] {
   const [year, month, day] = anchorDate.split('-').map(Number);

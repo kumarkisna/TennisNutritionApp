@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
 import { useDayActivitiesForDates, useGetDayActivity, useSaveSleepRecord, useSearchSleepNotes } from '@/lib/local-api';
 import { getAgeOnDate } from '@/lib/planning-targets';
-import { today } from '@/lib/format';
+import { shiftDate, today } from '@/lib/format';
 import type { SleepInterval } from '@/lib/local-models';
-import { calculateTotalSleepMinutes, formatSleepDuration, sleepDurationMinutes, sleepReferenceForDate, sleepWeekDates } from '@/lib/sleep-tracking';
+import { calculateTotalSleepMinutes, formatSleepDuration, reusableSleepTimes, sleepDurationMinutes, sleepReferenceForDate, sleepWeekDates } from '@/lib/sleep-tracking';
 import { useColors } from '@/hooks/useColors';
 import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, Muted, tap } from '@/components/ui';
 
@@ -194,6 +194,9 @@ export function SleepLogCard({ personId, personName, date, dateOfBirth, onSelect
 }) {
   const c = useColors();
   const day = useGetDayActivity({ personId, date });
+  const previousDate = shiftDate(date, -1);
+  const previousDay = useGetDayActivity({ personId, date: previousDate });
+  const previousTimes = reusableSleepTimes(previousDay.data?.sleep);
   const save = useSaveSleepRecord();
   const [bedtime, setBedtime] = useState('');
   const [wakeTime, setWakeTime] = useState('');
@@ -244,12 +247,27 @@ export function SleepLogCard({ personId, personName, date, dateOfBirth, onSelect
     } catch (problem) { setError(problem); }
   }
 
+  function copyPreviousTimes() {
+    if (!previousTimes) return;
+    setBedtime(previousTimes.bedtime);
+    setWakeTime(previousTimes.wakeTime);
+    setNotice(`Filled bedtime and wake time from ${previousDate}. Review and save this date to keep them.`);
+    setError(null);
+  }
+
   const canSave = totalDuration !== null && overnightPairValid && wakeUpsValid && quality !== 'unrated' && note.length <= 1000 && !save.isPending;
   return <Card>
     <Eyebrow>Sleep · {personName} · {date}</Eyebrow>
     <Text style={{ fontFamily: F.bold, fontSize: 18, color: c.foreground }}>Sleep log for this date</Text>
     <Muted>Each date has its own sleep record. Enter both overnight times, or leave them blank and record naps only. Overlapping intervals count once.</Muted>
     {day.isLoading ? <Muted>Loading sleep record…</Muted> : day.isError ? <ErrorBox error={day.error} onRetry={() => day.refetch()} /> : <>
+      {previousDay.isLoading ? <Muted>Checking the previous date for sleep times…</Muted> : previousDay.isError
+        ? <ErrorBox error={previousDay.error} onRetry={() => previousDay.refetch()} />
+        : previousTimes
+          ? <Btn small variant="ghost" icon="copy" label="Use previous day’s times"
+            testID="button-copy-sleep-times-from-previous-day" onPress={copyPreviousTimes} />
+          : <Muted>No overnight bedtime and wake time are saved for {previousDate}, so there are no times to copy.</Muted>}
+      <Muted>Only bedtime and wake time are copied. Ratings, notes, naps, and wake-ups stay unchanged.</Muted>
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <View style={{ flex: 1 }}><Field label="Bedtime (HH:MM)" value={bedtime} onChangeText={setBedtime} placeholder="22:30" maxLength={5} keyboardType="numbers-and-punctuation" testID="input-sleep-bedtime" /></View>
         <View style={{ flex: 1 }}><Field label="Wake time (HH:MM)" value={wakeTime} onChangeText={setWakeTime} placeholder="06:45" maxLength={5} keyboardType="numbers-and-punctuation" testID="input-sleep-wake-time" /></View>

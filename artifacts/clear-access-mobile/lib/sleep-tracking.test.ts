@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 // @ts-ignore Node's built-in test modules are used only by the direct regression suite.
 import test from 'node:test';
-import { calculateTotalSleepMinutes, formatSleepDuration, sleepDurationMinutes, sleepReferenceForDate, sleepWeekDates } from './sleep-tracking';
+import { calculateTotalSleepMinutes, formatSleepDuration, reusableSleepTimes, sleepDurationMinutes, sleepReferenceForDate, sleepWeekDates } from './sleep-tracking';
 
 test('sleep duration handles overnight sleep and daytime sleep', () => {
   assert.equal(sleepDurationMinutes('22:30', '06:45'), 495);
@@ -15,6 +15,19 @@ test('sleep duration handles overnight sleep and daytime sleep', () => {
 test('sleep duration rejects invalid and identical times', () => {
   assert.equal(sleepDurationMinutes('24:00', '07:00'), null);
   assert.equal(sleepDurationMinutes('22:00', '22:00'), null);
+});
+
+test('reusable previous-day values include only valid bedtime and wake time', () => {
+  const previousSleep = {
+    bedtime: '22:30', wakeTime: '06:45', quality: 2, note: 'Do not copy this',
+    naps: [{ startTime: '13:00', endTime: '14:00' }],
+    wakeUps: [{ startTime: '02:00', endTime: '02:15' }],
+  };
+  assert.deepEqual(reusableSleepTimes(previousSleep), { bedtime: '22:30', wakeTime: '06:45' });
+  assert.equal(reusableSleepTimes(undefined), null);
+  assert.equal(reusableSleepTimes({ bedtime: null, wakeTime: null }), null);
+  assert.equal(reusableSleepTimes({ bedtime: '22:30', wakeTime: null }), null);
+  assert.equal(reusableSleepTimes({ bedtime: '25:30', wakeTime: '06:45' }), null);
 });
 
 test('sleep weeks are Monday to Sunday across month and year boundaries', () => {
