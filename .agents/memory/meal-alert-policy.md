@@ -32,3 +32,9 @@ For Expo SDK 57 Android Expo Go, avoid importing the `expo-notifications` root b
 **Why:** The app's local meal reminders triggered a remote-push error during module import, before any reminder action occurred.
 
 **How to apply:** Import only the required local-notification modules directly, and recheck this behavior when upgrading Expo Notifications.
+
+For Android local meal and hydration reminders, omit `channelId` and let Expo use its built-in fallback channel instead of manually creating a channel during permission checks.
+
+**Why:** Samsung Android 12 rejected the custom channel call, while Expo's native notification presenter creates a fallback channel when a scheduled trigger has no channel ID.
+
+**How to apply:** Keep permission reads free of channel setup and leave the trigger channel unset unless custom channel creation is verified on the target Android runtime.
