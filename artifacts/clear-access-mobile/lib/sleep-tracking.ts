@@ -11,6 +11,7 @@ export type SleepActivityQualityRecord = {
   activityType: DayActivityType;
   tennis?: TennisPlan;
 };
+export type SleepActivityQualityGroup = 'practice' | 'match' | 'rest';
 
 export function isValidSleepQuality(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 5;
@@ -104,27 +105,38 @@ export function summarizeSleepQualityByMonth(
   });
 }
 
+export function sleepQualityRecordsByActivity(
+  records: readonly SleepActivityQualityRecord[],
+  group: SleepActivityQualityGroup,
+  throughDate: string,
+) {
+  return records
+    .filter((record): record is SleepActivityQualityRecord & { sleep: SleepLog } => {
+      if (record.date > throughDate || !record.sleep || !isValidSleepQuality(record.sleep.quality)) return false;
+      const hasPractice = record.tennis?.sessions.some(session => session.kind === 'practice') === true;
+      const hasMatch = record.tennis?.sessions.some(session => session.kind === 'match') === true;
+      const isRestDay = !hasPractice && !hasMatch &&
+        (record.activityType === 'rest' || record.tennis?.mode === 'rest');
+      return group === 'practice' ? hasPractice : group === 'match' ? hasMatch : isRestDay;
+    })
+    .map(record => ({ date: record.date, sleep: record.sleep }))
+    .sort((left, right) => left.date.localeCompare(right.date));
+}
+
 export function summarizeSleepQualityByActivity(
   records: readonly SleepActivityQualityRecord[],
   throughDate: string,
 ) {
   return (['practice', 'match', 'rest'] as const).map(group => {
+    const ratedRecords = sleepQualityRecordsByActivity(records, group, throughDate);
     const qualityCounts: [number, number, number, number, number] = [0, 0, 0, 0, 0];
-    let ratedDays = 0;
     let ratingTotal = 0;
-    for (const record of records) {
-      if (record.date > throughDate || !record.sleep) continue;
-      const hasPractice = record.tennis?.sessions.some(session => session.kind === 'practice') === true;
-      const hasMatch = record.tennis?.sessions.some(session => session.kind === 'match') === true;
-      const isRestDay = !hasPractice && !hasMatch &&
-        (record.activityType === 'rest' || record.tennis?.mode === 'rest');
-      if (group === 'practice' ? !hasPractice : group === 'match' ? !hasMatch : !isRestDay) continue;
+    for (const record of ratedRecords) {
       const quality = record.sleep.quality;
-      if (!isValidSleepQuality(quality)) continue;
-      ratedDays += 1;
       ratingTotal += quality;
       qualityCounts[quality - 1] += 1;
     }
+    const ratedDays = ratedRecords.length;
     return {
       group,
       ratedDays,

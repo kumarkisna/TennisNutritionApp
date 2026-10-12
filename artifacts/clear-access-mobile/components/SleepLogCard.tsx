@@ -3,9 +3,10 @@ import { Linking, Pressable, Text, View } from 'react-native';
 import { getAgeOnDate } from '@/lib/planning-targets';
 import { shiftDate, today } from '@/lib/format';
 import type { SleepInterval } from '@/lib/local-models';
-import { calculateTotalSleepMinutes, formatSleepDuration, isValidSleepQuality, reusableSleepTimes, shiftSleepMonth, sleepDurationMinutes, sleepMonthDates, sleepMonthWeekRanges, sleepMonthsBetween, sleepQualityRecordsForMonth, sleepReferenceForDate, sleepWeekDates, summarizeSleepDurationByWeekday, summarizeSleepQualityByActivity, summarizeSleepQualityByActivityByMonth, summarizeSleepQualityByMonth, summarizeSleepQualityByWeekday, summarizeSleepRecords } from '@/lib/sleep-tracking';
+import { calculateTotalSleepMinutes, formatSleepDuration, isValidSleepQuality, reusableSleepTimes, shiftSleepMonth, sleepDurationMinutes, sleepMonthDates, sleepMonthWeekRanges, sleepMonthsBetween, sleepQualityRecordsByActivity, sleepQualityRecordsForMonth, sleepReferenceForDate, sleepWeekDates, summarizeSleepDurationByWeekday, summarizeSleepQualityByActivity, summarizeSleepQualityByActivityByMonth, summarizeSleepQualityByMonth, summarizeSleepQualityByWeekday, summarizeSleepRecords } from '@/lib/sleep-tracking';
 import { compareHydrationSummaries, hydrationActivityRecords, summarizeHydrationByActivity, summarizeHydrationByActivityByMonth, summarizeHydrationByDate, summarizeHydrationByWeekday, summarizeHydrationRecords } from '@/lib/hydration';
 import type { HydrationActivityRecord } from '@/lib/hydration';
+import type { SleepActivityQualityRecord } from '@/lib/sleep-tracking';
 import { useColors } from '@/hooks/useColors';
 import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, Muted, tap } from '@/components/ui';
 import { sleepMonthSelectionForPlannerDate } from '@/lib/sleep-month-preferences';
@@ -81,6 +82,7 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
   const [qualityRangeStart, setQualityRangeStart] = useState(() => shiftSleepMonth(date.slice(0, 7), -11));
   const [qualityRangeEnd, setQualityRangeEnd] = useState(() => date.slice(0, 7));
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
+  const [expandedSleepActivityKey, setExpandedSleepActivityKey] = useState<string | null>(null);
   const [expandedActivityGroup, setExpandedActivityGroup] = useState<'active' | 'rest' | null>(null);
   const [expandedHydrationWeek, setExpandedHydrationWeek] = useState<string | null>(null);
   const [noteSearch, setNoteSearch] = useState('');
@@ -307,6 +309,58 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
     }
   };
   const liters = (milliliters: number) => `${(milliliters / 1000).toFixed(2)} L`;
+  const renderSleepActivitySummary = (
+    value: typeof sleepActivityRangeSummaries[number],
+    scope: string,
+    sourceRecords: readonly SleepActivityQualityRecord[],
+    summaryTestId: string,
+  ) => {
+    const detailKey = `${scope}-${value.group}`;
+    const isExpanded = expandedSleepActivityKey === detailKey;
+    const ratedRecords = sleepQualityRecordsByActivity(sourceRecords, value.group, today());
+    return <View key={detailKey} testID={summaryTestId} style={{ gap: 2 }}>
+      <Text style={{ fontFamily: F.semi, fontSize: 11, color: c.foreground }}>{sleepActivityGroupTitle(value.group)}</Text>
+      <Muted>{sleepActivityRatingLine(value)}</Muted>
+      <Muted>{sleepActivityCountsLine(value)}</Muted>
+      <Btn small variant="ghost" label={isExpanded ? 'Hide rated dates' : `View rated dates (${ratedRecords.length})`}
+        testID={`button-open-sleep-activity-dates-${detailKey}`}
+        onPress={() => setExpandedSleepActivityKey(current => current === detailKey ? null : detailKey)} />
+      {isExpanded ? <View testID={`sleep-quality-activity-dates-${detailKey}`}
+        style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 5, gap: 5 }}>
+        {ratedRecords.length ? ratedRecords.map(record => {
+          const dateLabel = prettyDate(record.date, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+          const minutes = calculateTotalSleepMinutes(record.sleep);
+          return <Pressable key={record.date}
+            testID={`button-open-sleep-activity-date-${detailKey}-${record.date}`}
+            accessibilityRole="button"
+            accessibilityLabel={`Open sleep log for ${dateLabel}, rated ${record.sleep.quality} out of 5`}
+            accessibilityHint="Selects this date for the current person in Planner and opens its saved sleep log."
+            accessibilityState={{ selected: record.date === date }}
+            onPress={() => {
+              tap();
+              setExpandedDate(record.date);
+              onSelectDate(record.date);
+            }}
+            style={({ pressed }) => ({
+              borderTopWidth: 1, borderTopColor: c.border, borderLeftWidth: 3,
+              borderLeftColor: record.date === date ? c.primary : c.border,
+              backgroundColor: record.date === date ? c.card : 'transparent',
+              paddingTop: 6, paddingLeft: 8, paddingRight: 5, gap: 2, opacity: pressed ? 0.7 : 1,
+            })}
+          >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 6 }}>
+              <Text style={{ fontFamily: F.semi, color: c.foreground }}>
+                {prettyDate(record.date, { weekday: 'short', month: 'short', day: 'numeric' })}
+              </Text>
+              <Text style={{ fontFamily: F.semi, color: c.primary, textAlign: 'right' }}>Rated {record.sleep.quality}/5</Text>
+            </View>
+            <Muted>{minutes === null ? 'Duration unavailable' : `Duration ${formatSleepDuration(minutes)}`}</Muted>
+            {record.date === date ? <Text style={{ fontFamily: F.semi, fontSize: 11, color: c.primary }}>Selected Planner date</Text> : null}
+          </Pressable>;
+        }) : <Muted>No valid rated sleep dates in this period for this group.</Muted>}
+      </View> : null}
+    </View>;
+  };
 
   return <View style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 10, gap: 8 }}>
     <Text style={{ fontFamily: F.bold, color: c.foreground }}>Sleep patterns</Text>
@@ -417,22 +471,22 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
               <Text style={{ fontFamily: F.semi, color: c.foreground }}>Sleep ratings by practice, match, and rest days</Text>
               <Muted>Practice and match days require a saved tennis session of that type. Rest days use the saved Rest activity or tennis Rest mode, unless a practice or match is also saved. Other activity days are excluded. Only valid ratings from 1–5 count. These are descriptive comparisons and do not show that activity caused a sleep rating.</Muted>
               <Text style={{ fontFamily: F.semi, color: c.foreground }}>Whole selected range</Text>
-              {sleepActivityRangeSummaries.map(value => <View key={value.group} testID={`sleep-quality-activity-range-${value.group}`} style={{ gap: 2 }}>
-                <Text style={{ fontFamily: F.semi, fontSize: 11, color: c.foreground }}>{sleepActivityGroupTitle(value.group)}</Text>
-                <Muted>{sleepActivityRatingLine(value)}</Muted>
-                <Muted>{sleepActivityCountsLine(value)}</Muted>
-              </View>)}
+              {sleepActivityRangeSummaries.map(value => renderSleepActivitySummary(
+                value, 'range', qualityRangeRecords.data ?? [], `sleep-quality-activity-range-${value.group}`,
+              ))}
               <Text style={{ fontFamily: F.semi, color: c.foreground }}>Month by month</Text>
-              {sleepActivityMonthSummaries.map(({ month: summaryMonth, summaries }) => <View key={summaryMonth}
-                testID={`sleep-quality-activity-month-${summaryMonth}`}
-                style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 6, gap: 4 }}>
-                <Text style={{ fontFamily: F.semi, color: c.foreground }}>{monthTitle(summaryMonth)}</Text>
-                {summaries.map(value => <View key={value.group} testID={`sleep-quality-activity-month-${summaryMonth}-${value.group}`} style={{ gap: 2 }}>
-                  <Text style={{ fontFamily: F.semi, fontSize: 11, color: c.foreground }}>{sleepActivityGroupTitle(value.group)}</Text>
-                  <Muted>{sleepActivityRatingLine(value)}</Muted>
-                  <Muted>{sleepActivityCountsLine(value)}</Muted>
-                </View>)}
-              </View>)}
+              {sleepActivityMonthSummaries.map(({ month: summaryMonth, summaries }) => {
+                const monthRecords = (qualityRangeRecords.data ?? []).filter(record => record.date.startsWith(`${summaryMonth}-`));
+                return <View key={summaryMonth}
+                  testID={`sleep-quality-activity-month-${summaryMonth}`}
+                  style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 6, gap: 4 }}>
+                  <Text style={{ fontFamily: F.semi, color: c.foreground }}>{monthTitle(summaryMonth)}</Text>
+                  {summaries.map(value => renderSleepActivitySummary(
+                    value, `month-${summaryMonth}`, monthRecords,
+                    `sleep-quality-activity-month-${summaryMonth}-${value.group}`,
+                  ))}
+                </View>;
+              })}
             </View>}
         {hydrationActivityRangeRecords.isLoading ? <Muted>Loading hydration activity history…</Muted> :
           hydrationActivityRangeRecords.isError ? <Muted>Hydration activity history could not be loaded.</Muted> :

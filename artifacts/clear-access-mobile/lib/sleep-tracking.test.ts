@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 // @ts-ignore Node's built-in test modules are used only by the direct regression suite.
 import test from 'node:test';
-import { calculateTotalSleepMinutes, formatSleepDuration, isValidSleepQuality, reusableSleepTimes, shiftSleepMonth, sleepDurationMinutes, sleepMonthDates, sleepMonthWeekRanges, sleepMonthsBetween, sleepQualityRecordsForMonth, sleepReferenceForDate, summarizeSleepQualityByActivity, summarizeSleepQualityByActivityByMonth, summarizeSleepQualityByMonth, sleepWeekDates, summarizeSleepDurationByWeekday, summarizeSleepQualityByWeekday, summarizeSleepRecords } from './sleep-tracking';
+import { calculateTotalSleepMinutes, formatSleepDuration, isValidSleepQuality, reusableSleepTimes, shiftSleepMonth, sleepDurationMinutes, sleepMonthDates, sleepMonthWeekRanges, sleepMonthsBetween, sleepQualityRecordsByActivity, sleepQualityRecordsForMonth, sleepReferenceForDate, summarizeSleepQualityByActivity, summarizeSleepQualityByActivityByMonth, summarizeSleepQualityByMonth, sleepWeekDates, summarizeSleepDurationByWeekday, summarizeSleepQualityByWeekday, summarizeSleepRecords } from './sleep-tracking';
 import type { SleepActivityQualityRecord } from './sleep-tracking';
 
 test('sleep duration handles overnight sleep and daytime sleep', () => {
@@ -123,6 +123,51 @@ test('a date with practice and match sessions contributes to both activity group
     { group: 'match', ratedDays: 1 },
     { group: 'rest', ratedDays: 0 },
   ]);
+});
+
+test('activity date details match whole-range and month summaries, excluding future and invalid ratings', () => {
+  const makeSleep = (quality: number) => ({
+    bedtime: '22:00', wakeTime: '06:00', quality, note: '', naps: [], wakeUps: [],
+  });
+  const makeTennis = (kinds: ('practice' | 'match' | 'gym')[], mode: 'training' | 'tournament' | 'rest' = 'training') => ({
+    mode,
+    sessions: kinds.map((kind, index) => ({
+      kind, startTime: index ? '11:00' : '09:00', durationMinutes: 60, intensity: 'moderate' as const,
+    })),
+    fuel: { before: '', during: '', between: '', after: '', hydration: '' },
+  });
+  const records: SleepActivityQualityRecord[] = [
+    { date: '2026-03-31', activityType: 'training_60', tennis: makeTennis(['match']), sleep: makeSleep(4) },
+    { date: '2026-04-01', activityType: 'training_60', tennis: makeTennis(['practice']), sleep: makeSleep(3) },
+    { date: '2026-04-02', activityType: 'training_60', tennis: makeTennis(['match']), sleep: makeSleep(4) },
+    { date: '2026-04-03', activityType: 'training_60', tennis: makeTennis(['practice', 'match']), sleep: makeSleep(5) },
+    { date: '2026-04-04', activityType: 'rest', sleep: makeSleep(2) },
+    { date: '2026-04-05', activityType: 'training_60', tennis: makeTennis([], 'rest'), sleep: makeSleep(1) },
+    { date: '2026-04-06', activityType: 'training_60', tennis: makeTennis(['gym']), sleep: makeSleep(4) },
+    { date: '2026-04-07', activityType: 'training_60', tennis: makeTennis(['practice']), sleep: makeSleep(0) },
+    { date: '2026-04-08', activityType: 'training_60', tennis: makeTennis(['match']), sleep: makeSleep(6) },
+    { date: '2026-04-10', activityType: 'training_60', tennis: makeTennis(['practice']), sleep: makeSleep(5) },
+  ];
+  const throughDate = '2026-04-09';
+  const wholeRange = summarizeSleepQualityByActivity(records, throughDate);
+  const expected = {
+    practice: ['2026-04-01', '2026-04-03'],
+    match: ['2026-03-31', '2026-04-02', '2026-04-03'],
+    rest: ['2026-04-04', '2026-04-05'],
+  } as const;
+  for (const summary of wholeRange) {
+    const dates = sleepQualityRecordsByActivity(records, summary.group, throughDate).map(record => record.date);
+    assert.deepEqual(dates, expected[summary.group]);
+    assert.equal(dates.length, summary.ratedDays);
+  }
+
+  const aprilRecords = records.filter(record => record.date.startsWith('2026-04'));
+  for (const summary of summarizeSleepQualityByActivity(aprilRecords, throughDate)) {
+    assert.deepEqual(
+      sleepQualityRecordsByActivity(aprilRecords, summary.group, throughDate).map(record => record.date),
+      expected[summary.group].filter(date => date.startsWith('2026-04')),
+    );
+  }
 });
 
 test('sleep quality month details show saved records only, keep unrated records, and sort by date', () => {
