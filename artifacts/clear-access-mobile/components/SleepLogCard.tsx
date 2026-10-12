@@ -237,7 +237,7 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
     ? `Quality ratings (${value.ratedDays}): ${value.qualityCounts.map((count, index) => `${index + 1}: ${count}`).join(' · ')}`
     : 'No valid quality ratings.';
   const sleepActivityGroupTitle = (group: typeof sleepActivityRangeSummaries[number]['group']) =>
-    group === 'tennis' ? 'Tennis practice / match days' : 'Rest days';
+    group === 'practice' ? 'Practice days' : group === 'match' ? 'Match days' : 'Rest days';
   const sleepActivityRatingLine = (value: typeof sleepActivityRangeSummaries[number]) =>
     value.averageQuality === null ? 'No valid ratings · n=0' :
       `Mean ${value.averageQuality.toFixed(1)}/5 · n=${value.ratedDays} valid ratings`;
@@ -414,8 +414,8 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
         {qualityRangeRecords.isLoading ? <Muted>Loading activity-grouped sleep ratings…</Muted> :
           qualityRangeRecords.isError ? <Muted>Activity-grouped sleep ratings could not be loaded.</Muted> :
             <View testID="sleep-quality-activity-comparison" style={{ borderWidth: 1, borderColor: c.border, borderRadius: 12, padding: 10, gap: 7 }}>
-              <Text style={{ fontFamily: F.semi, color: c.foreground }}>Sleep ratings on tennis vs rest days</Text>
-              <Muted>Practice/match days require a saved tennis practice or match session. Rest days use the saved Rest activity or tennis Rest mode; other activity days are excluded. Only valid ratings from 1–5 count. This comparison is descriptive and does not show that tennis caused a difference.</Muted>
+              <Text style={{ fontFamily: F.semi, color: c.foreground }}>Sleep ratings by practice, match, and rest days</Text>
+              <Muted>Practice and match days require a saved tennis session of that type. Rest days use the saved Rest activity or tennis Rest mode, unless a practice or match is also saved. Other activity days are excluded. Only valid ratings from 1–5 count. These are descriptive comparisons and do not show that activity caused a sleep rating.</Muted>
               <Text style={{ fontFamily: F.semi, color: c.foreground }}>Whole selected range</Text>
               {sleepActivityRangeSummaries.map(value => <View key={value.group} testID={`sleep-quality-activity-range-${value.group}`} style={{ gap: 2 }}>
                 <Text style={{ fontFamily: F.semi, fontSize: 11, color: c.foreground }}>{sleepActivityGroupTitle(value.group)}</Text>

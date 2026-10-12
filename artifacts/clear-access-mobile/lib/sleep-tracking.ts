@@ -108,17 +108,17 @@ export function summarizeSleepQualityByActivity(
   records: readonly SleepActivityQualityRecord[],
   throughDate: string,
 ) {
-  return (['tennis', 'rest'] as const).map(group => {
+  return (['practice', 'match', 'rest'] as const).map(group => {
     const qualityCounts: [number, number, number, number, number] = [0, 0, 0, 0, 0];
     let ratedDays = 0;
     let ratingTotal = 0;
     for (const record of records) {
       if (record.date > throughDate || !record.sleep) continue;
-      const isTennisDay = record.tennis?.sessions.some(session =>
-        session.kind === 'practice' || session.kind === 'match',
-      ) === true;
-      const isRestDay = !isTennisDay && (record.activityType === 'rest' || record.tennis?.mode === 'rest');
-      if (group === 'tennis' ? !isTennisDay : !isRestDay) continue;
+      const hasPractice = record.tennis?.sessions.some(session => session.kind === 'practice') === true;
+      const hasMatch = record.tennis?.sessions.some(session => session.kind === 'match') === true;
+      const isRestDay = !hasPractice && !hasMatch &&
+        (record.activityType === 'rest' || record.tennis?.mode === 'rest');
+      if (group === 'practice' ? !hasPractice : group === 'match' ? !hasMatch : !isRestDay) continue;
       const quality = record.sleep.quality;
       if (!isValidSleepQuality(quality)) continue;
       ratedDays += 1;
