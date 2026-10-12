@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 // @ts-ignore Node's built-in test modules are used only by the direct regression suite.
 import test from 'node:test';
-import { calculateTotalSleepMinutes, formatSleepDuration, reusableSleepTimes, shiftSleepMonth, sleepDurationMinutes, sleepMonthDates, sleepMonthWeekRanges, sleepReferenceForDate, sleepWeekDates, summarizeSleepRecords } from './sleep-tracking';
+import { calculateTotalSleepMinutes, formatSleepDuration, reusableSleepTimes, shiftSleepMonth, sleepDurationMinutes, sleepMonthDates, sleepMonthWeekRanges, sleepReferenceForDate, sleepWeekDates, summarizeSleepQualityByWeekday, summarizeSleepRecords } from './sleep-tracking';
 
 test('sleep duration handles overnight sleep and daytime sleep', () => {
   assert.equal(sleepDurationMinutes('22:30', '06:45'), 495);
@@ -96,6 +96,24 @@ test('sleep quality distribution includes only valid 1–5 ratings from logged d
   assert.equal(summary.ratedDays, 4);
   assert.deepEqual(summary.qualityCounts, [1, 2, 0, 0, 1]);
   assert.equal(summary.averageQuality, 2.5);
+});
+
+test('weekday sleep ratings group valid scores, ignore missing and unrated dates, and stop at the selected date', () => {
+  const summary = summarizeSleepQualityByWeekday([
+    { date: '2026-10-05', sleep: { bedtime: '22:00', wakeTime: '06:00', quality: 5, note: '', naps: [], wakeUps: [] }, minutes: 480 },
+    { date: '2026-10-06', sleep: { bedtime: '22:00', wakeTime: '06:00', quality: 2, note: '', naps: [], wakeUps: [] }, minutes: 480 },
+    { date: '2026-10-06', sleep: { bedtime: '22:00', wakeTime: '06:00', quality: 4, note: '', naps: [], wakeUps: [] }, minutes: 480 },
+    { date: '2026-10-07', sleep: { bedtime: '22:00', wakeTime: '06:00', quality: 0, note: '', naps: [], wakeUps: [] }, minutes: 480 },
+    { date: '2026-10-08', sleep: { bedtime: '22:00', wakeTime: '06:00', quality: 3, note: '', naps: [], wakeUps: [] }, minutes: 480 },
+    { date: '2026-10-09', sleep: undefined, minutes: null },
+    { date: '2026-10-10', sleep: { bedtime: '22:00', wakeTime: '06:00', quality: 1, note: '', naps: [], wakeUps: [] }, minutes: 480 },
+  ], '2026-10-08');
+  assert.equal(summary.length, 7);
+  assert.deepEqual(summary.map(day => day.ratingCount), [0, 1, 2, 0, 1, 0, 0]);
+  assert.equal(summary[1].averageQuality, 5);
+  assert.equal(summary[2].averageQuality, 3);
+  assert.deepEqual(summary[2].qualityCounts, [0, 1, 0, 1, 0]);
+  assert.equal(summary[6].averageQuality, null);
 });
 
 test('sleep reference ranges are calculated from age on each selected date', () => {

@@ -80,6 +80,30 @@ export function summarizeSleepRecords(records: readonly SleepPeriodRecord[], thr
   };
 }
 
+export function summarizeSleepQualityByWeekday(records: readonly SleepPeriodRecord[], throughDate: string) {
+  const weekdaySummaries = Array.from({ length: 7 }, (_, weekday) => ({
+    weekday,
+    ratingCount: 0,
+    ratingTotal: 0,
+    qualityCounts: [0, 0, 0, 0, 0] as [number, number, number, number, number],
+  }));
+  for (const record of records) {
+    if (record.date > throughDate || record.sleep === undefined) continue;
+    const quality = record.sleep.quality;
+    if (!Number.isInteger(quality) || quality < 1 || quality > 5) continue;
+    const weekday = new Date(`${record.date}T00:00:00Z`).getUTCDay();
+    if (!Number.isInteger(weekday)) continue;
+    const summary = weekdaySummaries[weekday];
+    summary.ratingCount += 1;
+    summary.ratingTotal += quality;
+    summary.qualityCounts[quality - 1] += 1;
+  }
+  return weekdaySummaries.map(summary => ({
+    ...summary,
+    averageQuality: summary.ratingCount ? summary.ratingTotal / summary.ratingCount : null,
+  }));
+}
+
 export function sleepReferenceForDate(dateOfBirth: string | null, date: string): SleepReference | null {
   if (!dateOfBirth) return null;
   const months = ageInCalendarMonths(dateOfBirth, date);
