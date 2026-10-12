@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 // @ts-ignore Node's built-in test modules are used only by the direct regression suite.
 import test from 'node:test';
-import { compareHydrationSummaries, estimateSessionSweatRate, hydrationActivityRecords, hydrationReference, hydrationTotals, mergeHydrationSchedule, summarizeHydrationByActivity, summarizeHydrationByWeekday, summarizeHydrationRecords } from './hydration';
+import { compareHydrationSummaries, estimateSessionSweatRate, hydrationActivityRecords, hydrationReference, hydrationTotals, mergeHydrationSchedule, summarizeHydrationByActivity, summarizeHydrationByDate, summarizeHydrationByWeekday, summarizeHydrationRecords } from './hydration';
 import { buildReminders } from './meal-reminders';
 
 test('hydration daily references distinguish total water from beverage intake', () => {
@@ -59,6 +59,30 @@ test('weekly hydration summaries separate missing actuals from recorded zero amo
     plannedForRecordedMl: 650,
     actualMl: 200,
   });
+});
+
+test('daily hydration breakdown separates no entries, missing actuals, and recorded zero', () => {
+  const days = summarizeHydrationByDate([
+    { date: '2026-10-08', hydration: { entries: [], sessions: [] } },
+    { date: '2026-10-06', hydration: { entries: [
+      { id: 'planned', time: '09:00', plannedMl: 250, actualMl: null, alertEnabled: false },
+    ], sessions: [] } },
+    { date: '2026-10-05', hydration: undefined },
+    { date: '2026-10-07', hydration: { entries: [
+      { id: 'zero', time: '09:00', plannedMl: 300, actualMl: 0, alertEnabled: false },
+      { id: 'missing', time: '12:00', plannedMl: 200, actualMl: null, alertEnabled: false },
+    ], sessions: [] } },
+    { date: '2026-10-09', hydration: { entries: [
+      { id: 'future', time: '09:00', plannedMl: 900, actualMl: 900, alertEnabled: false },
+    ], sessions: [] } },
+  ], '2026-10-08');
+
+  assert.deepEqual(days, [
+    { date: '2026-10-05', plannedEntryCount: 0, recordedEntryCount: 0, plannedMl: 0, actualMl: null },
+    { date: '2026-10-06', plannedEntryCount: 1, recordedEntryCount: 0, plannedMl: 250, actualMl: null },
+    { date: '2026-10-07', plannedEntryCount: 2, recordedEntryCount: 1, plannedMl: 500, actualMl: 0 },
+    { date: '2026-10-08', plannedEntryCount: 0, recordedEntryCount: 0, plannedMl: 0, actualMl: null },
+  ]);
 });
 
 test('monthly hydration comparison normalizes planned and recorded totals by observed days', () => {

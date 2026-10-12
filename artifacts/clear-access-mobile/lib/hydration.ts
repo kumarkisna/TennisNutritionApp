@@ -56,6 +56,26 @@ export function summarizeHydrationRecords(records: readonly { date: string; hydr
   };
 }
 
+export function summarizeHydrationByDate(records: readonly { date: string; hydration: HydrationLog | undefined }[], throughDate: string) {
+  return records
+    .filter(record => record.date <= throughDate)
+    .slice()
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map(record => {
+      const entries = record.hydration?.entries ?? [];
+      const recordedEntries = entries.filter(entry => entry.actualMl !== null);
+      return {
+        date: record.date,
+        plannedEntryCount: entries.length,
+        recordedEntryCount: recordedEntries.length,
+        plannedMl: entries.reduce((sum, entry) => sum + entry.plannedMl, 0),
+        actualMl: recordedEntries.length
+          ? recordedEntries.reduce((sum, entry) => sum + entry.actualMl!, 0)
+          : null,
+      };
+    });
+}
+
 export function compareHydrationSummaries(
   current: ReturnType<typeof summarizeHydrationRecords>,
   comparison: ReturnType<typeof summarizeHydrationRecords>,

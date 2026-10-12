@@ -4,7 +4,7 @@ import { getAgeOnDate } from '@/lib/planning-targets';
 import { shiftDate, today } from '@/lib/format';
 import type { SleepInterval } from '@/lib/local-models';
 import { calculateTotalSleepMinutes, formatSleepDuration, reusableSleepTimes, shiftSleepMonth, sleepDurationMinutes, sleepMonthDates, sleepMonthWeekRanges, sleepMonthsBetween, sleepReferenceForDate, sleepWeekDates, summarizeSleepDurationByWeekday, summarizeSleepQualityByMonth, summarizeSleepQualityByWeekday, summarizeSleepRecords } from '@/lib/sleep-tracking';
-import { compareHydrationSummaries, hydrationActivityRecords, summarizeHydrationByActivity, summarizeHydrationByWeekday, summarizeHydrationRecords } from '@/lib/hydration';
+import { compareHydrationSummaries, hydrationActivityRecords, summarizeHydrationByActivity, summarizeHydrationByDate, summarizeHydrationByWeekday, summarizeHydrationRecords } from '@/lib/hydration';
 import type { HydrationActivityRecord } from '@/lib/hydration';
 import { useColors } from '@/hooks/useColors';
 import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, Muted, tap } from '@/components/ui';
@@ -79,6 +79,7 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
   const [qualityRangeEnd, setQualityRangeEnd] = useState(() => date.slice(0, 7));
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
   const [expandedActivityGroup, setExpandedActivityGroup] = useState<'active' | 'rest' | null>(null);
+  const [expandedHydrationWeek, setExpandedHydrationWeek] = useState<string | null>(null);
   const [noteSearch, setNoteSearch] = useState('');
   const [settledNoteSearch, setSettledNoteSearch] = useState('');
   const [noteQualityFilters, setNoteQualityFilters] = useState<number[]>([]);
@@ -188,6 +189,7 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
       ...range,
       sleep: summarizeSleepRecords(weekRecords, today()),
       hydration: summarizeHydrationRecords(weekRecords.map(record => ({ date: record.date, hydration: record.hydration })), today()),
+      hydrationDays: summarizeHydrationByDate(weekRecords.map(record => ({ date: record.date, hydration: record.hydration })), today()),
     };
   }) : [];
   const moveWeek = (amount: number) => {
@@ -466,24 +468,65 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
     {rangeMode === 'month' ? !monthSelectionReady ? <Muted>Loading the selected month breakdown…</Muted> : <View testID="sleep-month-weekly-breakdown" style={{ gap: 7 }}>
       <Text style={{ fontFamily: F.semi, color: c.foreground }}>Week-by-week sleep & hydration</Text>
       {periodLoading || periodFailed ? <Muted>{periodLoading ? 'Loading weekly records…' : 'Weekly summaries unavailable because some dates could not be loaded.'}</Muted> :
-        weeklySummaries.map((week, index) => <View key={week.startDate} testID={`sleep-month-week-${week.startDate}`} style={{
-          borderWidth: 1, borderColor: c.border, borderRadius: 12, padding: 9, gap: 3,
-        }}>
-          <Text style={{ fontFamily: F.semi, color: c.foreground }}>
-            Week {index + 1} · {prettyDate(week.startDate, { month: 'short', day: 'numeric' })}–{prettyDate(week.endDate, { month: 'short', day: 'numeric' })}
-            {week.partial ? ' · partial week' : ''}
-          </Text>
-          <Muted>{week.sleep.elapsedDays ? monthCounts(week.sleep) : 'No past sleep dates in this week yet.'}</Muted>
-          <Muted>{monthAverages(week.sleep)}</Muted>
-          {week.hydration.elapsedDays ? <>
-            <Muted>Hydration: {week.hydration.plannedEntryCount ? `${liters(week.hydration.plannedMl)} planned across ${week.hydration.plannedDays} days` : 'no drink entries planned'}.</Muted>
-            <Muted>{week.hydration.actualMl === null
-              ? 'No actual drink amounts recorded yet.'
-              : `${liters(week.hydration.actualMl)} recorded of ${liters(week.hydration.plannedForRecordedMl)} planned for those entries.`}
-              {` ${week.hydration.recordedEntryCount}/${week.hydration.plannedEntryCount} drink entries recorded; no entries saved on ${week.hydration.noEntryDays}/${week.hydration.elapsedDays} days.`}
-            </Muted>
-          </> : <Muted>No past hydration dates in this week yet.</Muted>}
-        </View>)}
+         weeklySummaries.map((week, index) => {
+           const isExpanded = expandedHydrationWeek === week.startDate;
+           return <View key={week.startDate} testID={`sleep-month-week-${week.startDate}`} style={{
+             borderWidth: 1, borderColor: c.border, borderRadius: 12, padding: 9, gap: 3,
+           }}>
+             <Text style={{ fontFamily: F.semi, color: c.foreground }}>
+               Week {index + 1} · {prettyDate(week.startDate, { month: 'short', day: 'numeric' })}–{prettyDate(week.endDate, { month: 'short', day: 'numeric' })}
+               {week.partial ? ' · partial week' : ''}
+             </Text>
+             <Muted>{week.sleep.elapsedDays ? monthCounts(week.sleep) : 'No past sleep dates in this week yet.'}</Muted>
+             <Muted>{monthAverages(week.sleep)}</Muted>
+             {week.hydration.elapsedDays ? <>
+               <Muted>Hydration: {week.hydration.plannedEntryCount ? `${liters(week.hydration.plannedMl)} planned across ${week.hydration.plannedDays} days` : 'no drink entries planned'}.</Muted>
+               <Muted>{week.hydration.actualMl === null
+                 ? 'No actual drink amounts recorded yet.'
+                 : `${liters(week.hydration.actualMl)} recorded of ${liters(week.hydration.plannedForRecordedMl)} planned for those entries.`}
+                 {` ${week.hydration.recordedEntryCount}/${week.hydration.plannedEntryCount} drink entries recorded; no entries saved on ${week.hydration.noEntryDays}/${week.hydration.elapsedDays} days.`}
+               </Muted>
+               <Pressable
+                 testID={`button-hydration-week-dates-${week.startDate}`}
+                 accessibilityRole="button"
+                 accessibilityLabel={`${isExpanded ? 'Hide' : 'Show'} daily hydration amounts for week ${index + 1}`}
+                 accessibilityState={{ expanded: isExpanded }}
+                 onPress={() => {
+                   tap();
+                   setExpandedHydrationWeek(current => current === week.startDate ? null : week.startDate);
+                 }}
+                 style={({ pressed }) => ({ paddingVertical: 5, opacity: pressed ? 0.7 : 1 })}
+               >
+                 <Text style={{ fontFamily: F.semi, fontSize: 12, color: c.primary }}>
+                   {isExpanded ? 'Hide daily amounts' : 'Show daily amounts'}
+                 </Text>
+               </Pressable>
+               {isExpanded ? <View testID={`hydration-week-dates-${week.startDate}`} style={{ gap: 5, paddingTop: 2 }}>
+                 {week.hydrationDays.map(day => {
+                   const noEntries = day.plannedEntryCount === 0;
+                   const actualLabel = day.actualMl === null ? 'Not recorded' : `${liters(day.actualMl)} recorded`;
+                   const status = noEntries
+                     ? 'No drink entries'
+                     : day.recordedEntryCount === 0
+                       ? 'Planned drinks · no actual amounts entered'
+                       : `${day.recordedEntryCount}/${day.plannedEntryCount} drinks recorded`;
+                   return <View key={day.date} testID={`hydration-week-day-${day.date}`} style={{
+                     borderTopWidth: 1, borderTopColor: c.border, paddingTop: 5, gap: 2,
+                   }}>
+                     <Text style={{ fontFamily: F.semi, fontSize: 12, color: c.foreground }}>
+                       {prettyDate(day.date, { weekday: 'short', month: 'short', day: 'numeric' })}
+                     </Text>
+                     <View style={{ flexDirection: 'row', gap: 8 }}>
+                       <Text style={{ flex: 1, fontSize: 11, color: c.muted }}>Planned · {liters(day.plannedMl)}</Text>
+                       <Text style={{ flex: 1, fontSize: 11, color: c.muted }}>Actual · {actualLabel}</Text>
+                     </View>
+                     <Muted>{status}</Muted>
+                   </View>;
+                 })}
+               </View> : null}
+             </> : <Muted>No past hydration dates in this week yet.</Muted>}
+           </View>;
+         })}
     </View> : null}
     {records.map(record => <Pressable
       key={record.date}
