@@ -10,6 +10,9 @@ async function nativeIO(): Promise<NativeBackupIO> {
   ]);
   return {
     cacheUri: Paths.cache.uri,
+    // Sharing needs a local URI. Keep its source in the OS-managed cache rather
+    // than persistent Documents storage; native handoff completion is not proof
+    // that the receiving app has finished copying it.
     exportFile: name => new File(Paths.cache, name),
     openFile: uri => new File(uri),
     isSharingAvailable: Sharing.isAvailableAsync,

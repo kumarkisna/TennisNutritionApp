@@ -77,13 +77,22 @@ function harness() {
   };
 }
 
-test('share return (including dismissal) leaves the source readable for a late destination copy', async () => {
+test('a late recipient can copy and reopen the complete export after share resolves', async () => {
   const h = harness();
-  await saveNativeBackup('{"saved":true}', 'backup.json', h.io);
+  const serialized = JSON.stringify({
+    format: 'clear-access-backup',
+    people: [{ id: 'person-1', name: 'Sample', meals: [{ slot: 'lunch', food: 'rice' }] }],
+  });
+  await saveNativeBackup(serialized, 'backup.json', h.io);
   assert.equal(h.shares(), 1);
   assert.equal(h.exported.deletes, 0);
-  // The chooser may have returned before the receiving app reads the URI.
-  assert.equal(await h.exported.text(), '{"saved":true}');
+  // Start the receiving-app copy only after the share promise has returned.
+  h.picked.write(await h.exported.text());
+  const reopened = await pickNativeBackup(h.io);
+  assert.equal(reopened?.serialized, serialized);
+  assert.deepEqual(JSON.parse(reopened!.serialized), JSON.parse(serialized));
+  assert.equal(h.exported.exists, true, 'the app retains the handed-off source');
+  assert.equal(h.exported.deletes, 0);
 });
 
 test('a rejected share retains any file already handed to the native sheet', async () => {
@@ -211,6 +220,23 @@ class MemoryStorage implements AsyncKeyValueStorage {
   }
 }
 
+test('temporary-file cleanup failure cannot change planner records', async () => {
+  const storage = new MemoryStorage();
+  const store = createLocalStore(storage);
+  await store.createPerson({ name: 'Saved profile', activityLevel: 'sedentary', baselineCalories: 2000 });
+  const before = await store.exportForTests();
+  const h = harness();
+  const writeError = new Error('disk full');
+  h.exported.writeError = writeError;
+  h.exported.deleteError = new Error('delete denied');
+
+  await assert.rejects(
+    saveNativeBackup(await store.exportBackup(), 'backup.json', h.io),
+    (problem: unknown) => problem === writeError,
+  );
+  assert.deepEqual(await store.exportForTests(), before);
+});
+
 test('export, native reopen, preview, failed restore, retry and reload require no network', async () => {
   const storage = new MemoryStorage();
   const store = createLocalStore(storage);
@@ -235,7 +261,7 @@ test('export, native reopen, preview, failed restore, retry and reload require n
     assert.throws(() => destination.previewBackup('{invalid'), /backup/i);
     await assert.rejects(destination.restoreBackup('{invalid'), /backup/i);
     destinationStorage.fail = true;
-    await assert.rejects(destination.restoreBackup(selected.serialized), /change was not applied/);
+    await assert.rejects(destination.restoreBackup(selected.serialized), /restore was not applied/);
     assert.deepEqual([...destinationStorage.values], originalBytes);
     assert.deepEqual(await createLocalStore(destinationStorage).exportForTests(), original);
     destinationStorage.fail = false;
