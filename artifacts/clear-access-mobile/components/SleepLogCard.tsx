@@ -617,10 +617,11 @@ export function SleepLogCard({ personId, personName, date, dateOfBirth, onSelect
     <Text style={{ fontFamily: F.bold, fontSize: 18, color: c.foreground }}>Sleep log for this date</Text>
     <Muted>Each date has its own sleep record. Enter both overnight times, or leave them blank and record naps only. Overlapping intervals count once.</Muted>
     {day.isLoading ? <Muted>Loading sleep record…</Muted> : day.isError ? <ErrorBox error={day.error} onRetry={() => day.refetch()} /> : <>
+      <Muted>Source person: {personName}</Muted>
       <DateField label="Copy times from saved date" value={sourceDate}
         onChangeText={value => setSourceSelection({ personId, targetDate: date, sourceDate: value })}
         testID="input-sleep-copy-source-date" />
-      <Muted>Choose any date for this person with saved bedtime and wake time.</Muted>
+      <Muted>Choose any date with a saved bedtime and wake time for {personName}.</Muted>
       {sourceDay.isLoading ? <Muted>Checking {sourceDate} for sleep times…</Muted> : sourceDay.isError
         ? <ErrorBox error={sourceDay.error} onRetry={() => sourceDay.refetch()} />
         : sourceTimes && sourceDate === date
