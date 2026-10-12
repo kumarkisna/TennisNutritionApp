@@ -7,6 +7,7 @@ import { MAX_HYDRATION_ENTRIES } from '@/lib/hydration';
 import { dietPhaseLabels, isClockTime, tennisDietChoiceFromFuelWindow, timeMinutes, type TennisFuelWindow } from '@/lib/tennis-planning';
 import { useColors } from '@/hooks/useColors';
 import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, LoadingBlock, Muted, success, tap, warn } from '@/components/ui';
+import TimeField from '@/components/TimeField';
 import { n } from '@/lib/format';
 
 const phaseOptions = (Object.keys(dietPhaseLabels) as TennisDiet['phase'][]).map(value => ({ value, label: dietPhaseLabels[value] }));
@@ -162,7 +163,7 @@ export function TennisDietSchedule({ person, date, plan, suggestions, hydration,
         </View> : null}
       </> : null}
       {editor.suggestionTitle ? <Muted>Selected: {editor.suggestionTitle}. Adjust the time below if needed.</Muted> : null}
-      <Field label="Time (24h HH:MM)" value={editor.time} onChangeText={v => setEditor(e => (e ? { ...e, time: v, suggestionTitle: undefined } : e))} placeholder="12:30" maxLength={5} autoCapitalize="none" keyboardType="numbers-and-punctuation" editable={!busy} testID="input-tennis-diet-time" />
+      <TimeField label="Time (24-hour)" value={editor.time} onChangeText={v => setEditor(e => (e ? { ...e, time: v, suggestionTitle: undefined } : e))} placeholder="12:30" editable={!busy} testID="input-tennis-diet-time" />
       {problem ? <ErrorBox error={new Error(problem)} /> : null}
       <Btn icon="check" label="Save slot" loading={save.isPending} disabled={busy} testID="button-save-tennis-diet" onPress={() => void submit()} />
       <Btn variant="ghost" label="Cancel" disabled={busy} testID="button-cancel-tennis-diet" onPress={() => { setEditor(null); setShowTimingOptions(false); setProblem(null); setError(null); }} />

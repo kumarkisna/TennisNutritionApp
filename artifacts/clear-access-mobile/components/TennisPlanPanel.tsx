@@ -8,6 +8,7 @@ import { getAgeOnDate } from '@/lib/planning-targets';
 import { TennisFoodPlanCopy } from '@/components/TennisFoodPlanCopy';
 import { TennisDietSchedule } from '@/components/TennisDietSchedule';
 import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, LoadingBlock, Muted, success, tap, warn } from '@/components/ui';
+import TimeField from '@/components/TimeField';
 
 type DraftSession = { kind: TennisSession['kind']; startTime: string; duration: string; intensity: TennisSession['intensity'] };
 type Draft = { mode: TennisPlan['mode']; sessions: DraftSession[]; fuel: TennisPlan['fuel'] };
@@ -124,7 +125,7 @@ export function TennisPlanPanel({ person, date, showDetails = true }: { person: 
           </View>
           <Chips testPrefix={`tennis-kind-${i}`} value={s.kind} onChange={v => patchSession(i, { kind: v })} options={kinds} disabled={saving} />
           <View style={{ flexDirection: 'row', gap: 10 }}>
-            <View style={{ flex: 1 }}><Field label="Start (24h HH:MM)" value={s.startTime} onChangeText={v => patchSession(i, { startTime: v })} placeholder="09:00" maxLength={5} autoCapitalize="none" keyboardType="numbers-and-punctuation" editable={!saving} testID={`input-tennis-start-${i}`} /></View>
+            <View style={{ flex: 1 }}><TimeField label="Start (24-hour)" value={s.startTime} onChangeText={v => patchSession(i, { startTime: v })} placeholder="09:00" editable={!saving} testID={`input-tennis-start-${i}`} /></View>
             <View style={{ flex: 1 }}><Field label="Minutes" value={s.duration} onChangeText={v => patchSession(i, { duration: v })} placeholder="60" maxLength={3} keyboardType="number-pad" editable={!saving} testID={`input-tennis-duration-${i}`} /></View>
           </View>
           <Chips testPrefix={`tennis-intensity-${i}`} value={s.intensity} onChange={v => patchSession(i, { intensity: v })} options={intensityOptions} disabled={saving} />

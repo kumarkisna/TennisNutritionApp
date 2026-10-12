@@ -7,6 +7,7 @@ import type { SleepInterval } from '@/lib/local-models';
 import { calculateTotalSleepMinutes, formatSleepDuration, reusableSleepTimes, sleepDurationMinutes, sleepMonthDates, sleepReferenceForDate, sleepWeekDates, summarizeSleepRecords } from '@/lib/sleep-tracking';
 import { useColors } from '@/hooks/useColors';
 import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, Muted, tap } from '@/components/ui';
+import TimeField from '@/components/TimeField';
 
 const qualityChoices = [
   { value: 'unrated', label: 'Choose rating' },
@@ -37,10 +38,10 @@ function SleepIntervalEditor({ label, testPrefix, intervals, onChange, startHint
     <Text style={{ fontFamily: F.semi, color: c.foreground }}>{label}</Text>
     {intervals.map((interval, index) => <View key={`${testPrefix}-${index}`} style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6 }}>
       <View style={{ flex: 1 }}>
-        <Field label={`Start ${index + 1}`} value={interval.startTime} onChangeText={value => onChange(intervals.map((item, i) => i === index ? { ...item, startTime: value } : item))} placeholder={startHint} maxLength={5} keyboardType="numbers-and-punctuation" testID={`input-${testPrefix}-${index}-start`} />
+        <TimeField label={`Start ${index + 1}`} value={interval.startTime} onChangeText={value => onChange(intervals.map((item, i) => i === index ? { ...item, startTime: value } : item))} placeholder={startHint} testID={`input-${testPrefix}-${index}-start`} />
       </View>
       <View style={{ flex: 1 }}>
-        <Field label={`End ${index + 1}`} value={interval.endTime} onChangeText={value => onChange(intervals.map((item, i) => i === index ? { ...item, endTime: value } : item))} placeholder={endHint} maxLength={5} keyboardType="numbers-and-punctuation" testID={`input-${testPrefix}-${index}-end`} />
+        <TimeField label={`End ${index + 1}`} value={interval.endTime} onChangeText={value => onChange(intervals.map((item, i) => i === index ? { ...item, endTime: value } : item))} placeholder={endHint} testID={`input-${testPrefix}-${index}-end`} />
       </View>
       <Btn small variant="ghost" icon="trash-2" label="Remove" testID={`button-remove-${testPrefix}-${index}`} onPress={() => onChange(intervals.filter((_, i) => i !== index))} />
     </View>)}
@@ -296,8 +297,8 @@ export function SleepLogCard({ personId, personName, date, dateOfBirth, onSelect
           : <Muted>No overnight bedtime and wake time are saved for {previousDate}, so there are no times to copy.</Muted>}
       <Muted>Only bedtime and wake time are copied. Ratings, notes, naps, and wake-ups stay unchanged.</Muted>
       <View style={{ flexDirection: 'row', gap: 8 }}>
-        <View style={{ flex: 1 }}><Field label="Bedtime (HH:MM)" value={bedtime} onChangeText={setBedtime} placeholder="22:30" maxLength={5} keyboardType="numbers-and-punctuation" testID="input-sleep-bedtime" /></View>
-        <View style={{ flex: 1 }}><Field label="Wake time (HH:MM)" value={wakeTime} onChangeText={setWakeTime} placeholder="06:45" maxLength={5} keyboardType="numbers-and-punctuation" testID="input-sleep-wake-time" /></View>
+        <View style={{ flex: 1 }}><TimeField label="Bedtime (24-hour)" value={bedtime} onChangeText={setBedtime} placeholder="22:30" testID="input-sleep-bedtime" /></View>
+        <View style={{ flex: 1 }}><TimeField label="Wake time (24-hour)" value={wakeTime} onChangeText={setWakeTime} placeholder="06:45" testID="input-sleep-wake-time" /></View>
       </View>
       {duration !== null ? <Muted>Overnight duration: <Text style={{ fontFamily: F.semi, color: c.foreground }}>{formatSleepDuration(duration)}</Text></Muted> :
         <Muted>Overnight times are optional. Enter both together, or leave both blank for a nap-only record.</Muted>}

@@ -10,7 +10,11 @@
     "ios": {
       "supportsTablet": false
     },
-    "android": { "permissions": ["android.permission.SCHEDULE_EXACT_ALARM"] },
+    "android": {
+      "permissions": [
+        "android.permission.SCHEDULE_EXACT_ALARM"
+      ]
+    },
     "web": {
       "favicon": "./assets/images/icon.png",
       "output": "single"
@@ -18,7 +22,13 @@
     "plugins": [
       "expo-router",
       "expo-notifications",
-      ["expo-camera", { "cameraPermission": "Allow Clear Access to scan food barcodes." }]
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Clear Access to scan food barcodes."
+        }
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true,

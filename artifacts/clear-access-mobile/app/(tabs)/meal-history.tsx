@@ -8,6 +8,7 @@ import {
 } from '@/lib/local-api';
 import { isIsoDate, shiftDate } from '@/lib/format';
 import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, Muted, Screen, Title, success, warn } from '@/components/ui';
+import TimeField from '@/components/TimeField';
 import { dietPhaseLabels, fuelLabels } from '@/lib/tennis-planning';
 import type { MealPlanReview, TennisPlan } from '@/lib/local-models';
 import { filterMealReviews, sortMealReviews, type MealReviewSort } from '@/lib/meal-review-sort';
@@ -259,9 +260,9 @@ export default function MealHistory() {
         {includeTennis ? <>
           <Muted>Session times and durations below are editable for the copied plan. Timed food slots and notes keep their source values. The destination must not already have a tennis plan, and its activity setting is not changed.</Muted>
           {tennis.sessions.map((session, index) => <View key={`copy-session-${index}`} style={{ flexDirection: 'row', gap: 8 }}>
-            <View style={{ flex: 1 }}><Field label={`${sessionLabels[session.kind]} start (24h)`} value={sessionTimes[index] ?? session.startTime}
+            <View style={{ flex: 1 }}><TimeField label={`${sessionLabels[session.kind]} start (24-hour)`} value={sessionTimes[index] ?? session.startTime}
               onChangeText={value => setSessionTimes(current => current.map((time, i) => i === index ? value : time))}
-              maxLength={5} keyboardType="numbers-and-punctuation" testID={`input-copy-tennis-time-${index}`} /></View>
+              testID={`input-copy-tennis-time-${index}`} /></View>
             <View style={{ flex: 1 }}><Field label="Duration (min)" value={sessionDurations[index] ?? String(session.durationMinutes)}
               onChangeText={value => setSessionDurations(current => current.map((duration, i) => i === index ? value : duration))}
               maxLength={3} keyboardType="number-pad" testID={`input-copy-tennis-duration-${index}`} /></View>
