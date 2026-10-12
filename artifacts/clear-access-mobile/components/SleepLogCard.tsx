@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Linking, Text, View } from 'react-native';
+import { Linking, Pressable, Text, View } from 'react-native';
 import { useDayActivitiesForDates, useGetDayActivity, useSaveSleepRecord } from '@/lib/local-api';
 import { getAgeOnDate } from '@/lib/planning-targets';
 import { today } from '@/lib/format';
 import type { SleepInterval } from '@/lib/local-models';
 import { calculateTotalSleepMinutes, formatSleepDuration, sleepDurationMinutes, sleepReferenceForDate, sleepWeekDates } from '@/lib/sleep-tracking';
 import { useColors } from '@/hooks/useColors';
-import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, Muted } from '@/components/ui';
+import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, Muted, tap } from '@/components/ui';
 
 const qualityChoices = [
   { value: 'unrated', label: 'Choose rating' },
@@ -54,9 +54,15 @@ function sleepRange(ageYears: number | null) {
   return '65 years and older: 7–8 hours per day.';
 }
 
-function SleepWeekSummary({ personId, date, dateOfBirth }: { personId: number; date: string; dateOfBirth: string | null }) {
+function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
+  personId: number;
+  date: string;
+  dateOfBirth: string | null;
+  onSelectDate: (date: string) => void;
+}) {
   const c = useColors();
   const [weekStart, setWeekStart] = useState(() => sleepWeekDates(date)[0] ?? date);
+  const [expandedDate, setExpandedDate] = useState<string | null>(null);
   useEffect(() => { setWeekStart(sleepWeekDates(date)[0] ?? date); }, [date]);
   const dates = useMemo(() => sleepWeekDates(weekStart), [weekStart]);
   const days = useDayActivitiesForDates(personId, dates);
@@ -96,8 +102,26 @@ function SleepWeekSummary({ personId, date, dateOfBirth }: { personId: number; d
     </View>
     <Muted>{elapsedDays === 0 ? 'Upcoming week' : `${logged.filter(record => record.date <= today()).length}/${elapsedDays} dates logged`}
       {averageMinutes !== null ? ` · average ${formatSleepDuration(averageMinutes)} · quality ${averageQuality?.toFixed(1)}/5` : ''}</Muted>
+    <Muted>Tap a date to load its sleep record in the Planner. Saved records stay attached to their original dates.</Muted>
     {!dateOfBirth ? <Muted>Add the person’s date of birth in Settings to compare logged nights with age-based ranges.</Muted> : null}
-    {records.map(record => <View key={record.date} style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 7, gap: 2 }}>
+    {records.map(record => <Pressable
+      key={record.date}
+      testID={`button-open-sleep-date-${record.date}`}
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${prettyDate(record.date, { weekday: 'long', month: 'long', day: 'numeric' })} sleep record in Planner`}
+      accessibilityHint="Selects this date in the Planner and shows its saved sleep details."
+      onPress={() => {
+        tap();
+        setExpandedDate(current => current === record.date ? null : record.date);
+        onSelectDate(record.date);
+      }}
+      style={({ pressed }) => ({
+        borderTopWidth: 1, borderTopColor: c.border, borderLeftWidth: 3,
+        borderLeftColor: record.date === date ? c.primary : c.border,
+        backgroundColor: record.date === date ? c.card : 'transparent',
+        paddingTop: 7, paddingLeft: 8, paddingRight: 5, gap: 2, opacity: pressed ? 0.7 : 1,
+      })}
+    >
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 6 }}>
         <Text style={{ fontFamily: F.semi, color: c.foreground }}>
           {prettyDate(record.date, { weekday: 'short', month: 'short', day: 'numeric' })}
@@ -107,12 +131,34 @@ function SleepWeekSummary({ personId, date, dateOfBirth }: { personId: number; d
         </Text>
       </View>
       {record.comparison ? <Muted>{record.comparison}{record.reference?.includesNaps ? ' · reference includes naps' : ''}</Muted> : null}
-    </View>)}
+      {record.date === date ? <Text style={{ fontFamily: F.semi, fontSize: 11, color: c.primary }}>Selected Planner date</Text> : null}
+      {expandedDate === record.date ? <View testID={`sleep-details-${record.date}`} style={{ gap: 2, paddingTop: 4 }}>
+        {record.loading ? <Muted>Loading sleep details…</Muted> : record.sleep ? <>
+          {record.sleep.bedtime && record.sleep.wakeTime
+            ? <Muted>Overnight: {record.sleep.bedtime}–{record.sleep.wakeTime}</Muted>
+            : <Muted>No overnight times recorded.</Muted>}
+          {record.sleep.naps?.length
+            ? <Muted>Naps: {record.sleep.naps.map(interval => `${interval.startTime}–${interval.endTime}`).join(', ')}</Muted>
+            : null}
+          {record.sleep.wakeUps?.length
+            ? <Muted>Wake-ups: {record.sleep.wakeUps.map(interval => `${interval.startTime}–${interval.endTime}`).join(', ')}</Muted>
+            : null}
+          <Muted>Sleep quality: {record.sleep.quality}/5</Muted>
+          {record.sleep.note.trim() ? <Muted>Notes: {record.sleep.note}</Muted> : <Muted>No notes saved.</Muted>}
+        </> : <Muted>No sleep log is saved for this date yet. The Planner is set to this date.</Muted>}
+      </View> : null}
+    </Pressable>)}
     <Muted>Age-based daily ranges are a reference, not a diagnosis. Totals include entered naps and subtract entered wake-ups; unrecorded sleep is not inferred.</Muted>
   </View>;
 }
 
-export function SleepLogCard({ personId, personName, date, dateOfBirth }: { personId: number; personName: string; date: string; dateOfBirth: string | null }) {
+export function SleepLogCard({ personId, personName, date, dateOfBirth, onSelectDate }: {
+  personId: number;
+  personName: string;
+  date: string;
+  dateOfBirth: string | null;
+  onSelectDate: (date: string) => void;
+}) {
   const c = useColors();
   const day = useGetDayActivity({ personId, date });
   const save = useSaveSleepRecord();
@@ -194,7 +240,7 @@ export function SleepLogCard({ personId, personName, date, dateOfBirth }: { pers
       {notice ? <Muted>{notice}</Muted> : null}
       {error ? <ErrorBox error={error} /> : null}
     </>}
-    <SleepWeekSummary personId={personId} date={date} dateOfBirth={dateOfBirth} />
+    <SleepWeekSummary personId={personId} date={date} dateOfBirth={dateOfBirth} onSelectDate={onSelectDate} />
     <View style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 10, gap: 6 }}>
       <Text style={{ fontFamily: F.bold, color: c.foreground }}>Sleep goals that support steady progress</Text>
       <Muted>{sleepRange(age)}</Muted>

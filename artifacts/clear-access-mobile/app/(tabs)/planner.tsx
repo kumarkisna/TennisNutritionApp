@@ -77,7 +77,7 @@ export default function Planner() {
     <Eyebrow>Day totals / planned</Eyebrow>
     <CaloriesMacros large calories={summary.data.totals.calories} protein={summary.data.totals.protein} carbs={summary.data.totals.carbs} fat={summary.data.totals.fat} testPrefix="planner-total" />
   </Card> : null;
-  const sleepLogSection = <SleepLogCard personId={person.id} personName={person.name} date={date} dateOfBirth={person.dateOfBirth} />;
+  const sleepLogSection = <SleepLogCard personId={person.id} personName={person.name} date={date} dateOfBirth={person.dateOfBirth} onSelectDate={setDate} />;
   const tennisPlanSection = <TennisPlanPanel key={`${person.id}-${date}`} person={person} date={date} showDetails={showDetails} />;
   const sectionLabels: Record<PlannerSection, string> = {
     sleep: 'Sleep log', totals: 'Day totals', tennis: 'Tennis plan', guidance: 'Planning guidance', hydration: 'Hydration', meals: 'Planned portions',
