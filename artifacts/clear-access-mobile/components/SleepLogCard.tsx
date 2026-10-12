@@ -4,7 +4,7 @@ import { useDayActivitiesForDates, useGetDayActivity, useSaveSleepRecord, useSea
 import { getAgeOnDate } from '@/lib/planning-targets';
 import { shiftDate, today } from '@/lib/format';
 import type { SleepInterval } from '@/lib/local-models';
-import { calculateTotalSleepMinutes, formatSleepDuration, reusableSleepTimes, sleepDurationMinutes, sleepReferenceForDate, sleepWeekDates } from '@/lib/sleep-tracking';
+import { calculateTotalSleepMinutes, formatSleepDuration, reusableSleepTimes, sleepDurationMinutes, sleepMonthDates, sleepReferenceForDate, sleepWeekDates, summarizeSleepRecords } from '@/lib/sleep-tracking';
 import { useColors } from '@/hooks/useColors';
 import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, Muted, tap } from '@/components/ui';
 
@@ -16,6 +16,12 @@ const qualityChoices = [
   { value: '4', label: '4' },
   { value: '5', label: '5 · Great' },
 ];
+
+function shiftSleepMonth(month: string, amount: number) {
+  const [year, monthNumber] = month.split('-').map(Number);
+  const shifted = new Date(Date.UTC(year, monthNumber - 1 + amount, 1));
+  return shifted.toISOString().slice(0, 7);
+}
 
 function SleepIntervalEditor({ label, testPrefix, intervals, onChange, startHint, endHint, maxEntries }: {
   label: string;
@@ -62,15 +68,21 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
 }) {
   const c = useColors();
   const [weekStart, setWeekStart] = useState(() => sleepWeekDates(date)[0] ?? date);
+  const [month, setMonth] = useState(date.slice(0, 7));
+  const [rangeMode, setRangeMode] = useState<'week' | 'month'>('week');
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
   const [noteSearch, setNoteSearch] = useState('');
   const [settledNoteSearch, setSettledNoteSearch] = useState('');
-  useEffect(() => { setWeekStart(sleepWeekDates(date)[0] ?? date); }, [date]);
+  useEffect(() => {
+    setWeekStart(sleepWeekDates(date)[0] ?? date);
+    setMonth(date.slice(0, 7));
+  }, [date]);
   useEffect(() => {
     const timer = setTimeout(() => setSettledNoteSearch(noteSearch.trim()), 250);
     return () => clearTimeout(timer);
   }, [noteSearch]);
-  const dates = useMemo(() => sleepWeekDates(weekStart), [weekStart]);
+  const dates = useMemo(() => rangeMode === 'week' ? sleepWeekDates(weekStart) : sleepMonthDates(`${month}-01`),
+    [rangeMode, weekStart, month]);
   const days = useDayActivitiesForDates(personId, dates);
   const noteResults = useSearchSleepNotes(personId, settledNoteSearch);
   const records = dates.map((dayDate, index) => {
@@ -83,13 +95,14 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
           `Within daily reference (${reference.label})`;
     return {
       date: dayDate, sleep, minutes, reference, comparison, loading: days[index]?.isLoading ?? true,
-      napOnly: sleep?.bedtime === null && sleep?.wakeTime === null,
+      failed: days[index]?.isError ?? false,
+      napOnly: Boolean(sleep && sleep.bedtime === null && sleep.wakeTime === null && (sleep.naps?.length ?? 0) > 0),
+      overnight: Boolean(sleep && sleep.bedtime !== null && sleep.wakeTime !== null),
     };
   });
-  const logged = records.filter(record => record.minutes !== null);
-  const averageMinutes = logged.length ? Math.round(logged.reduce((sum, record) => sum + record.minutes!, 0) / logged.length) : null;
-  const averageQuality = logged.length ? logged.reduce((sum, record) => sum + (record.sleep?.quality ?? 0), 0) / logged.length : null;
-  const elapsedDays = records.filter(record => record.date <= today()).length;
+  const summary = summarizeSleepRecords(records, today());
+  const periodLoading = records.some(record => record.loading);
+  const periodFailed = records.some(record => record.failed);
   const moveWeek = (amount: number) => {
     const start = new Date(`${weekStart}T00:00:00Z`);
     start.setUTCDate(start.getUTCDate() + amount * 7);
@@ -97,18 +110,29 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
   };
   const prettyDate = (isoDate: string, options: Intl.DateTimeFormatOptions) =>
     new Date(`${isoDate}T00:00:00Z`).toLocaleDateString(undefined, { ...options, timeZone: 'UTC' });
+  const periodTitle = rangeMode === 'week'
+    ? `${prettyDate(dates[0], { month: 'short', day: 'numeric' })} – ${prettyDate(dates[6], { month: 'short', day: 'numeric', year: 'numeric' })}`
+    : new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(new Date(`${month}-01T00:00:00`));
+  const movePeriod = (amount: number) => {
+    if (rangeMode === 'week') moveWeek(amount);
+    else setMonth(current => shiftSleepMonth(current, amount));
+  };
 
   return <View style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 10, gap: 8 }}>
-    <Text style={{ fontFamily: F.bold, color: c.foreground }}>This week’s sleep</Text>
+    <Text style={{ fontFamily: F.bold, color: c.foreground }}>Sleep patterns</Text>
+    <Chips testPrefix="select-sleep-summary-range" value={rangeMode} onChange={value => setRangeMode(value as 'week' | 'month')}
+      options={[{ value: 'week', label: 'Week' }, { value: 'month', label: 'Month' }]} />
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-      <Btn small variant="ghost" label="Previous week" testID="button-sleep-previous-week" onPress={() => moveWeek(-1)} />
-      <Text style={{ fontFamily: F.semi, fontSize: 12, color: c.foreground }}>
-        {prettyDate(dates[0], { month: 'short', day: 'numeric' })} – {prettyDate(dates[6], { month: 'short', day: 'numeric', year: 'numeric' })}
-      </Text>
-      <Btn small variant="ghost" label="Next week" testID="button-sleep-next-week" onPress={() => moveWeek(1)} />
+      <Btn small variant="ghost" label={`Previous ${rangeMode}`} testID={`button-sleep-previous-${rangeMode}`} onPress={() => movePeriod(-1)} />
+      <Text style={{ fontFamily: F.semi, fontSize: 12, color: c.foreground, textAlign: 'center', flex: 1 }}>{periodTitle}</Text>
+      <Btn small variant="ghost" label={`Next ${rangeMode}`} testID={`button-sleep-next-${rangeMode}`} onPress={() => movePeriod(1)} />
     </View>
-    <Muted>{elapsedDays === 0 ? 'Upcoming week' : `${logged.filter(record => record.date <= today()).length}/${elapsedDays} dates logged`}
-      {averageMinutes !== null ? ` · average ${formatSleepDuration(averageMinutes)} · quality ${averageQuality?.toFixed(1)}/5` : ''}</Muted>
+    {periodLoading ? <Muted>Loading sleep records…</Muted> : periodFailed ? <Muted>Some dates could not be loaded. Try reopening this range.</Muted> :
+      summary.elapsedDays === 0 ? <Muted>No past dates in this range yet.</Muted> : <>
+        <Muted>{summary.loggedDays}/{summary.elapsedDays} past dates logged · {summary.overnightDays} overnight · {summary.napOnlyDays} nap-only · {summary.missingDays} missing</Muted>
+        <Muted>{summary.averageMinutes !== null ? `Average recorded duration ${formatSleepDuration(summary.averageMinutes)}` : 'No measurable sleep duration in logged records'}
+          {summary.averageQuality !== null ? ` · average quality ${summary.averageQuality.toFixed(1)}/5` : ''}. Missing dates are excluded from averages.</Muted>
+      </>}
     <Muted>Tap a date to load its sleep record in the Planner. Saved records stay attached to their original dates.</Muted>
     {!dateOfBirth ? <Muted>Add the person’s date of birth in Settings to compare logged nights with age-based ranges.</Muted> : null}
     <View style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 8, gap: 6 }}>
@@ -160,13 +184,16 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
           {prettyDate(record.date, { weekday: 'short', month: 'short', day: 'numeric' })}
         </Text>
         <Text style={{ fontFamily: F.semi, color: c.foreground, textAlign: 'right' }}>
-          {record.loading ? 'Loading…' : record.minutes === null ? (record.date > today() ? 'Upcoming' : dateOfBirth && record.date < dateOfBirth ? 'Before DOB' : 'No log') : `${formatSleepDuration(record.minutes)}${record.napOnly ? ' · nap-only' : ''} · ${record.sleep?.quality}/5`}
+          {record.loading ? 'Loading…' : record.failed ? 'Could not load' : !record.sleep
+            ? (record.date > today() ? 'Upcoming' : dateOfBirth && record.date < dateOfBirth ? 'No log · before DOB' : 'No log')
+            : record.minutes === null ? `${record.napOnly ? 'Nap-only' : record.overnight ? 'Overnight' : 'Logged'} · duration unavailable`
+              : `${formatSleepDuration(record.minutes)} · ${record.napOnly ? 'nap-only' : record.overnight ? 'overnight' : 'logged'} · ${record.sleep.quality}/5`}
         </Text>
       </View>
       {record.comparison ? <Muted>{record.comparison}{record.reference?.includesNaps ? ' · reference includes naps' : ''}</Muted> : null}
       {record.date === date ? <Text style={{ fontFamily: F.semi, fontSize: 11, color: c.primary }}>Selected Planner date</Text> : null}
       {expandedDate === record.date ? <View testID={`sleep-details-${record.date}`} style={{ gap: 2, paddingTop: 4 }}>
-        {record.loading ? <Muted>Loading sleep details…</Muted> : record.sleep ? <>
+        {record.loading ? <Muted>Loading sleep details…</Muted> : record.failed ? <Muted>Could not load this sleep record.</Muted> : record.sleep ? <>
           {record.sleep.bedtime && record.sleep.wakeTime
             ? <Muted>Overnight: {record.sleep.bedtime}–{record.sleep.wakeTime}</Muted>
             : <Muted>No overnight times recorded.</Muted>}

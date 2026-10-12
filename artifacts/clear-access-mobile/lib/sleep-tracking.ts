@@ -21,6 +21,37 @@ export function sleepWeekDates(anchorDate: string): string[] {
   });
 }
 
+export function sleepMonthDates(anchorDate: string): string[] {
+  const [year, month] = anchorDate.slice(0, 7).split('-').map(Number);
+  const days = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return Array.from({ length: days }, (_, index) =>
+    `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(index + 1).padStart(2, '0')}`);
+}
+
+export type SleepPeriodRecord = {
+  date: string;
+  sleep: SleepLog | undefined;
+  minutes: number | null;
+};
+
+export function summarizeSleepRecords(records: readonly SleepPeriodRecord[], throughDate: string) {
+  const elapsed = records.filter(record => record.date <= throughDate);
+  const logged = elapsed.filter(record => record.sleep !== undefined);
+  const measured = logged.filter(record => record.minutes !== null);
+  const napOnly = logged.filter(record => record.sleep!.bedtime === null && record.sleep!.wakeTime === null &&
+    (record.sleep!.naps?.length ?? 0) > 0);
+  const overnight = logged.filter(record => record.sleep!.bedtime !== null && record.sleep!.wakeTime !== null);
+  return {
+    elapsedDays: elapsed.length,
+    loggedDays: logged.length,
+    missingDays: elapsed.length - logged.length,
+    napOnlyDays: napOnly.length,
+    overnightDays: overnight.length,
+    averageMinutes: measured.length ? Math.round(measured.reduce((sum, record) => sum + record.minutes!, 0) / measured.length) : null,
+    averageQuality: logged.length ? logged.reduce((sum, record) => sum + record.sleep!.quality, 0) / logged.length : null,
+  };
+}
+
 export function sleepReferenceForDate(dateOfBirth: string | null, date: string): SleepReference | null {
   if (!dateOfBirth) return null;
   const months = ageInCalendarMonths(dateOfBirth, date);
