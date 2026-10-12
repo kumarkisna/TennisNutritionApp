@@ -202,6 +202,21 @@ export type CopyMealsToDateInput = {
   targetDate: string;
   tennisPlan?: TennisPlan;
 };
+export type MealReuseUndoReceipt = {
+  token: string;
+  sourcePersonId: number;
+  sourceDate: string;
+  targetPersonId: number;
+  targetDate: string;
+  portionCount: number;
+  copiedTennisPlan: boolean;
+  expiresAt: number;
+};
+export type MealReuseUndoInput = Pick<MealReuseUndoReceipt, 'token' | 'targetPersonId'>;
+export type CopyMealsToDateResult = {
+  portionCount: number;
+  undo: MealReuseUndoReceipt | null;
+};
 
 export type TennisSession = {
   kind: 'practice' | 'gym' | 'match';

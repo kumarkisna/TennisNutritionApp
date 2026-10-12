@@ -52,6 +52,9 @@ import {
   type MealPlanReview,
   type MealPlanReviewInput,
   type CopyMealsToDateInput,
+  type CopyMealsToDateResult,
+  type MealReuseUndoInput,
+  type MealReuseUndoReceipt,
   type TennisPlan,
   type MealSummary,
   type Nutrition,
@@ -84,6 +87,7 @@ type StoredEntry = { id: number; date: string; personId: number; meal: MealEntry
 type StoredHeightRecord = HeightRecord;
 type StoredWeightRecord = WeightRecord;
 export const WEIGHT_RECORD_UNDO_WINDOW_MS = 30_000;
+export const MEAL_REUSE_UNDO_WINDOW_MS = 30_000;
 export type DeletedWeightRecord = {
   token: string;
   record: WeightRecord;
@@ -1285,6 +1289,8 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
   let restoreInProgress: Promise<void> | undefined;
   let nextWeightUndoId = 0;
   const pendingWeightUndos = new Map<string, { record: WeightRecord; expiresAt: number }>();
+  let nextMealReuseUndoId = 0;
+  const pendingMealReuseUndos = new Map<string, { receipt: MealReuseUndoReceipt; entries: StoredEntry[] }>();
 
   const load = (): Promise<StoreData> => {
     if (restoreInProgress) return restoreInProgress.then(() => load());
@@ -1849,8 +1855,8 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
         return review;
       });
     },
-    async copyMealsToDate(input: CopyMealsToDateInput): Promise<number> {
-      return transact(draft => {
+    async copyMealsToDate(input: CopyMealsToDateInput): Promise<CopyMealsToDateResult> {
+      const copied = await transact(draft => {
         const sourcePerson = findPerson(draft, input.sourcePersonId);
         findPerson(draft, input.targetPersonId);
         if (!isValidCalendarDate(input.sourceDate) || !isValidCalendarDate(input.targetDate)) fail('Choose valid source and destination dates.');
@@ -1905,19 +1911,77 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
         if (copiedPlan) targetDay.tennis = copiedPlan;
         if (copiedRefs.length) targetDay.tennisFoodImports = [...(targetDay.tennisFoodImports ?? []), ...copiedRefs];
         if (sourceEntries.length) targetDay.mealTimes ??= getMealTimes();
+        const copiedEntries: StoredEntry[] = [];
         for (const entry of sourceEntries) {
           const tennisDietId = entry.tennisDietId ? slotIds.get(entry.tennisDietId) : undefined;
           if (entry.tennisDietId && input.tennisPlan && !tennisDietId) fail('A source food portion refers to a missing tennis food slot.');
-          draft.entries.push({
+          const copiedEntry: StoredEntry = {
             ...entry,
             id: draft.nextEntryId++,
             personId: input.targetPersonId,
             date: input.targetDate,
             ...(tennisDietId ? { tennisDietId } : { tennisDietId: undefined }),
-          });
+          };
+          draft.entries.push(copiedEntry);
+          copiedEntries.push(copiedEntry);
         }
-        return sourceEntries.length;
+        return {
+          portionCount: sourceEntries.length,
+          copiedEntries,
+          sourcePersonId: input.sourcePersonId,
+          sourceDate: input.sourceDate,
+          targetPersonId: input.targetPersonId,
+          targetDate: input.targetDate,
+          copiedTennisPlan: Boolean(copiedPlan),
+        };
       });
+      if (!copied.copiedEntries.length) return { portionCount: copied.portionCount, undo: null };
+      const currentTime = now();
+      for (const [token, pending] of pendingMealReuseUndos) {
+        if (pending.receipt.expiresAt <= currentTime) pendingMealReuseUndos.delete(token);
+      }
+      const token = `meal-reuse-${currentTime.toString(36)}-${++nextMealReuseUndoId}`;
+      const receipt: MealReuseUndoReceipt = {
+        token,
+        sourcePersonId: copied.sourcePersonId,
+        sourceDate: copied.sourceDate,
+        targetPersonId: copied.targetPersonId,
+        targetDate: copied.targetDate,
+        portionCount: copied.portionCount,
+        copiedTennisPlan: copied.copiedTennisPlan,
+        expiresAt: currentTime + MEAL_REUSE_UNDO_WINDOW_MS,
+      };
+      pendingMealReuseUndos.set(token, { receipt, entries: clone(copied.copiedEntries) });
+      return { portionCount: copied.portionCount, undo: receipt };
+    },
+    async undoMealReuse(input: MealReuseUndoInput): Promise<number> {
+      const pending = typeof input.token === 'string' ? pendingMealReuseUndos.get(input.token) : undefined;
+      const currentTime = now();
+      if (!pending || pending.receipt.expiresAt <= currentTime) {
+        if (pending) pendingMealReuseUndos.delete(input.token);
+        fail('Undo is no longer available. It lasts 30 seconds on the Meal History screen.');
+      }
+      if (input.targetPersonId !== pending.receipt.targetPersonId) fail('This undo belongs to a different destination person.');
+      const removedCount = await transact(draft => {
+        findPerson(draft, input.targetPersonId);
+        for (const expected of pending.entries) {
+          const current = draft.entries.find(entry => entry.id === expected.id);
+          if (!current ||
+            current.personId !== expected.personId ||
+            current.date !== expected.date ||
+            current.meal !== expected.meal ||
+            current.foodId !== expected.foodId ||
+            current.grams !== expected.grams ||
+            current.tennisDietId !== expected.tennisDietId) {
+            fail('A copied portion has changed or was removed, so no portions were undone. The destination was left unchanged.');
+          }
+        }
+        const copiedIds = new Set(pending.entries.map(entry => entry.id));
+        draft.entries = draft.entries.filter(entry => !copiedIds.has(entry.id));
+        return copiedIds.size;
+      });
+      pendingMealReuseUndos.delete(input.token);
+      return removedCount;
     },
     async exportBackup(): Promise<string> {
       const pending = writeQueue.then(async () => {

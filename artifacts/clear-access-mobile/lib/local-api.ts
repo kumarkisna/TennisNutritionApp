@@ -48,6 +48,7 @@ import type {
   MealPlanReview,
   MealPlanReviewInput,
   CopyMealsToDateInput,
+  MealReuseUndoInput,
   ImportFoodInput,
   Person,
   PersonInput,
@@ -109,6 +110,7 @@ export type {
   MealPlanReview,
   MealPlanReviewInput,
   CopyMealsToDateInput,
+  MealReuseUndoReceipt,
   MealSummary,
   MealType,
   Nutrition,
@@ -393,6 +395,10 @@ export function useSaveMealPlanReview() {
 export function useCopyMealsToDate() {
   return useLocalMutation(({ data }: { data: CopyMealsToDateInput }) =>
     localStore.copyMealsToDate(data), [['getDayActivity'], ...ENTRIES_REFRESH]);
+}
+export function useUndoMealReuse() {
+  return useLocalMutation(({ data }: { data: MealReuseUndoInput }) =>
+    localStore.undoMealReuse(data), [['getDayActivity'], ...ENTRIES_REFRESH]);
 }
 
 // Retained only as a safe transition bridge for screens removing online discovery.

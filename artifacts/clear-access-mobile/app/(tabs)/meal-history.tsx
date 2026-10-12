@@ -4,19 +4,24 @@ import { usePlanner } from '@/contexts/PlannerProvider';
 import { useMealHistoryPreferences } from '@/contexts/MealHistoryPreferencesProvider';
 import { useColors } from '@/hooks/useColors';
 import {
-  useCopyMealsToDate, useGetDayActivity, useListMealEntries, useListPeople, useMealPlanReviews, useSaveMealPlanReview,
+  useCopyMealsToDate, useGetDayActivity, useListMealEntries, useListPeople, useMealPlanReviews, useSaveMealPlanReview, useUndoMealReuse,
 } from '@/lib/local-api';
 import { isIsoDate, shiftDate } from '@/lib/format';
 import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, Muted, Screen, Title, success, warn } from '@/components/ui';
 import TimeField from '@/components/TimeField';
 import { dietPhaseLabels, fuelLabels } from '@/lib/tennis-planning';
-import type { MealPlanReview, TennisPlan } from '@/lib/local-models';
+import type { MealPlanReview, MealReuseUndoReceipt, TennisPlan } from '@/lib/local-models';
 import { filterMealReviews, sortMealReviews, type MealReviewSort } from '@/lib/meal-review-sort';
 import { HydrationWeekCard } from '@/components/HydrationWeekCard';
 
 const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const planModeLabels = { training: 'Training day', tournament: 'Tournament day', rest: 'Rest day' } as const;
 const sessionLabels = { practice: 'Practice', gym: 'Gym', match: 'Match' } as const;
+type VisibleMealReuseUndo = MealReuseUndoReceipt & {
+  sourcePersonName: string;
+  targetPersonName: string;
+  surface: 'main' | 'compare';
+};
 const monthShift = (key: string, amount: number) => {
   const [y, m] = key.split('-').map(Number);
   const d = new Date(y, m - 1 + amount, 1);
@@ -79,6 +84,7 @@ export default function MealHistory() {
   const people = useListPeople();
   const saveReview = useSaveMealPlanReview();
   const copy = useCopyMealsToDate();
+  const undoReuse = useUndoMealReuse();
   const [month, setMonth] = useState(date.slice(0, 7));
   const [rating, setRating] = useState('');
   const [keyword, setKeyword] = useState('');
@@ -94,6 +100,8 @@ export default function MealHistory() {
   const [notice, setNotice] = useState('');
   const [comparisonError, setComparisonError] = useState<unknown>(null);
   const [comparisonNotice, setComparisonNotice] = useState('');
+  const [reuseUndos, setReuseUndos] = useState<VisibleMealReuseUndo[]>([]);
+  const [reuseUndoError, setReuseUndoError] = useState<{ token: string; error: unknown } | null>(null);
   const minimumRating = historyPreferences.settings.minimumRating === null ? 'all' : String(historyPreferences.settings.minimumRating);
   const reviewSort: MealReviewSort = historyPreferences.settings.sort;
   const review = reviews.data?.find(item => item.date === date);
@@ -125,6 +133,57 @@ export default function MealHistory() {
     setSessionTimes(tennis?.sessions.map(session => session.startTime) ?? []);
     setSessionDurations(tennis?.sessions.map(session => String(session.durationMinutes)) ?? []);
   }, [date, tennis]);
+  useEffect(() => {
+    if (!reuseUndos.length) return;
+    const nearestExpiry = Math.min(...reuseUndos.map(receipt => receipt.expiresAt));
+    const timer = setTimeout(() => {
+      setReuseUndos(current => current.filter(receipt => receipt.expiresAt > Date.now()));
+    }, Math.max(0, nearestExpiry - Date.now()) + 25);
+    return () => clearTimeout(timer);
+  }, [reuseUndos]);
+
+  function rememberReuseUndo(receipt: MealReuseUndoReceipt | null, surface: VisibleMealReuseUndo['surface'], sourcePersonName: string, targetPersonId: number) {
+    if (!receipt) return;
+    const targetPersonName = people.data?.find(item => item.id === targetPersonId)?.name ?? 'the selected person';
+    setReuseUndos(current => [...current, { ...receipt, surface, sourcePersonName, targetPersonName }]);
+  }
+
+  function renderReuseUndos(surface: VisibleMealReuseUndo['surface']) {
+    const visible = reuseUndos.filter(receipt => receipt.surface === surface);
+    if (!visible.length) return null;
+    return <View style={{ gap: 10, marginTop: 10 }}>
+      {visible.map(receipt => <Card key={receipt.token}>
+        <Eyebrow>Undo recent reuse</Eyebrow>
+        <Text style={{ fontFamily: F.semi, color: c.foreground }}>
+          {receipt.portionCount} meal {receipt.portionCount === 1 ? 'portion' : 'portions'} copied from {receipt.sourcePersonName} · {receipt.sourceDate} to {receipt.targetPersonName} · {receipt.targetDate}.
+        </Text>
+        <Muted>Undo removes only these added portions. The source and any portions already at the destination stay unchanged.{receipt.copiedTennisPlan ? ' Any copied tennis plan stays in place.' : ''}</Muted>
+        <Muted>Undo is available for 30 seconds. Keep this screen open; leaving Meal History or closing the app may remove the option.</Muted>
+        {reuseUndoError?.token === receipt.token ? <ErrorBox error={reuseUndoError.error} /> : null}
+        <Btn small variant="ghost" icon="rotate-ccw" label="Undo added portions" loading={undoReuse.isPending}
+          testID={`button-undo-meal-reuse-${receipt.token}`} onPress={() => void undoMealReuseAction(receipt)} />
+      </Card>)}
+    </View>;
+  }
+
+  async function undoMealReuseAction(receipt: VisibleMealReuseUndo) {
+    if (Date.now() >= receipt.expiresAt) {
+      setReuseUndos(current => current.filter(item => item.token !== receipt.token));
+      setReuseUndoError({ token: receipt.token, error: new Error('The 30-second Undo window has ended.') });
+      return;
+    }
+    setReuseUndoError(null);
+    try {
+      const removedCount = await undoReuse.mutateAsync({ data: { token: receipt.token, targetPersonId: receipt.targetPersonId } });
+      setReuseUndos(current => current.filter(item => item.token !== receipt.token));
+      setReuseUndoError(null);
+      success();
+      setNotice(`${removedCount} copied meal ${removedCount === 1 ? 'portion' : 'portions'} removed. Existing destination and source portions were kept.${receipt.copiedTennisPlan ? ' The copied tennis plan remains.' : ''}`);
+    } catch (problem) {
+      setReuseUndoError({ token: receipt.token, error: problem });
+      warn();
+    }
+  }
 
   async function save() {
     setError(null);
@@ -152,11 +211,12 @@ export default function MealHistory() {
           })),
         };
       }
-      const count = await copy.mutateAsync({ data: { sourcePersonId: person.id, sourceDate: date, targetPersonId, targetDate, ...(tennisPlan ? { tennisPlan } : {}) } });
+      const result = await copy.mutateAsync({ data: { sourcePersonId: person.id, sourceDate: date, targetPersonId, targetDate, ...(tennisPlan ? { tennisPlan } : {}) } });
+      rememberReuseUndo(result.undo, 'main', person.name, targetPersonId);
       success();
       setNotice(includeTennis
-        ? `${count ? `${count} meal portions and ` : ''}The edited tennis plan was copied. The source rating was not copied.`
-        : `${count} meal portions added. Existing meals and destination settings were kept.`);
+        ? `${result.portionCount ? `${result.portionCount} meal portions and ` : ''}The edited tennis plan was copied. The source rating was not copied.`
+        : `${result.portionCount} meal portions added. Existing meals and destination settings were kept.`);
     } catch (problem) { setError(problem); warn(); }
   }
   async function reuseCompared(sourceDate: string) {
@@ -164,9 +224,10 @@ export default function MealHistory() {
     setComparisonNotice('');
     if (!isIsoDate(targetDate)) { setComparisonError(new Error('Enter a valid destination date.')); return; }
     try {
-      const count = await copy.mutateAsync({ data: { sourcePersonId: person.id, sourceDate, targetPersonId, targetDate } });
+      const result = await copy.mutateAsync({ data: { sourcePersonId: person.id, sourceDate, targetPersonId, targetDate } });
+      rememberReuseUndo(result.undo, 'compare', person.name, targetPersonId);
       success();
-      setComparisonNotice(`${count} meal portions from ${sourceDate} added. The comparison and current date were left unchanged.`);
+      setComparisonNotice(`${result.portionCount} meal portions from ${sourceDate} added. The comparison and current date were left unchanged.`);
     } catch (problem) { setComparisonError(problem); warn(); }
   }
   function toggleComparison(reviewDate: string) {
@@ -246,6 +307,7 @@ export default function MealHistory() {
       {notice ? <Muted>{notice}</Muted> : null}
       {error ? <ErrorBox error={error} /> : null}
     </Card>
+    {renderReuseUndos('main')}
     <Card>
       <Eyebrow>Reuse</Eyebrow>
       <Text style={{ fontFamily: F.bold, fontSize: 19, color: c.foreground }}>Use these meals again</Text>
@@ -309,6 +371,7 @@ export default function MealHistory() {
       {comparisonNotice ? <Muted>{comparisonNotice}</Muted> : null}
       {comparisonError ? <ErrorBox error={comparisonError} /> : null}
     </> : null}
+    {renderReuseUndos('compare')}
     {notice ? <Muted>{notice}</Muted> : null}
     {error ? <ErrorBox error={error} /> : null}
   </Screen>;

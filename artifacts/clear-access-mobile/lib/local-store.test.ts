@@ -1921,7 +1921,9 @@ test('meal reviews stay with their date and reusing meals adds portions without 
   await store.createMealEntry({ personId: person.id, date: sourceDate, meal: 'breakfast', foodId: food.id, grams: 150 });
   await store.createMealEntry({ personId: person.id, date: targetDate, meal: 'snack', foodId: food.id, grams: 40 });
   await store.saveMealPlanReview({ personId: person.id, date: sourceDate, rating: 9, keyword: 'match day', note: 'Felt good through practice.' });
-  assert.equal(await store.copyMealsToDate({ sourcePersonId: person.id, sourceDate, targetPersonId: person.id, targetDate }), 1);
+  const copied = await store.copyMealsToDate({ sourcePersonId: person.id, sourceDate, targetPersonId: person.id, targetDate });
+  assert.equal(copied.portionCount, 1);
+  assert.ok(copied.undo);
   assert.deepEqual((await store.listMealEntries({ personId: person.id, date: targetDate })).map(entry => [entry.meal, entry.grams]), [
     ['snack', 40], ['breakfast', 150],
   ]);
@@ -1941,6 +1943,100 @@ test('meal review inputs and same-date reuse are validated', async () => {
   const person = (await store.listPeople())[0];
   await assert.rejects(store.saveMealPlanReview({ personId: person.id, date: '2026-08-10', rating: 11, keyword: 'x', note: '' }), /rating/i);
   await assert.rejects(store.copyMealsToDate({ sourcePersonId: person.id, sourceDate: '2026-08-10', targetPersonId: person.id, targetDate: '2026-08-10' }), /different destination/i);
+});
+
+test('meal reuse undo removes only the portions from that reuse and preserves source and existing destination portions', async () => {
+  let time = 10_000;
+  const storage = new MemoryStorage();
+  const store = createLocalStore(storage, undefined, () => time);
+  const sourcePerson = (await store.listPeople())[0];
+  const targetPerson = await store.createPerson({ ...baselinePerson('Reuse destination') });
+  const food = (await store.listFoods())[0];
+  const sourceDate = '2026-08-20';
+  const targetDate = '2026-08-21';
+  await store.createMealEntry({ personId: sourcePerson.id, date: sourceDate, meal: 'breakfast', foodId: food.id, grams: 150 });
+  await store.createMealEntry({ personId: sourcePerson.id, date: sourceDate, meal: 'lunch', foodId: food.id, grams: 75 });
+  await store.createMealEntry({ personId: targetPerson.id, date: targetDate, meal: 'breakfast', foodId: food.id, grams: 40 });
+  const sourceBefore = await store.listMealEntries({ personId: sourcePerson.id, date: sourceDate });
+  const destinationBefore = await store.listMealEntries({ personId: targetPerson.id, date: targetDate });
+
+  const firstCopy = await store.copyMealsToDate({
+    sourcePersonId: sourcePerson.id, sourceDate, targetPersonId: targetPerson.id, targetDate,
+  });
+  assert.equal(firstCopy.portionCount, 2);
+  assert.ok(firstCopy.undo);
+  const firstIds = new Set((await store.listMealEntries({ personId: targetPerson.id, date: targetDate }))
+    .filter(entry => !destinationBefore.some(original => original.id === entry.id)).map(entry => entry.id));
+  assert.equal(firstIds.size, 2);
+
+  const secondCopy = await store.copyMealsToDate({
+    sourcePersonId: sourcePerson.id, sourceDate, targetPersonId: targetPerson.id, targetDate,
+  });
+  assert.equal(secondCopy.portionCount, 2);
+  assert.ok(secondCopy.undo);
+  const entriesAfterSecondCopy = await store.listMealEntries({ personId: targetPerson.id, date: targetDate });
+  const secondIds = new Set(entriesAfterSecondCopy.map(entry => entry.id)
+    .filter(id => !destinationBefore.some(original => original.id === id) && !firstIds.has(id)));
+  assert.equal(secondIds.size, 2);
+  await store.createMealEntry({ personId: targetPerson.id, date: targetDate, meal: 'snack', foodId: food.id, grams: 25 });
+
+  await assert.rejects(store.undoMealReuse({ token: firstCopy.undo!.token, targetPersonId: sourcePerson.id }), /different destination/i);
+  assert.equal((await store.listMealEntries({ personId: targetPerson.id, date: targetDate })).length, 6);
+
+  const beforeFailedUndo = await store.listMealEntries({ personId: targetPerson.id, date: targetDate });
+  storage.failNextWrite = true;
+  await assert.rejects(store.undoMealReuse({ token: firstCopy.undo!.token, targetPersonId: targetPerson.id }), /change was not applied/i);
+  assert.deepEqual(await store.listMealEntries({ personId: targetPerson.id, date: targetDate }), beforeFailedUndo);
+
+  assert.equal(await store.undoMealReuse({ token: firstCopy.undo!.token, targetPersonId: targetPerson.id }), 2);
+  const afterFirstUndo = await store.listMealEntries({ personId: targetPerson.id, date: targetDate });
+  assert.equal(afterFirstUndo.some(entry => firstIds.has(entry.id)), false);
+  assert.equal(afterFirstUndo.filter(entry => secondIds.has(entry.id)).length, 2);
+  assert.deepEqual(afterFirstUndo.filter(entry => destinationBefore.some(original => original.id === entry.id)), destinationBefore);
+  assert.equal(afterFirstUndo.some(entry => entry.grams === 25), true);
+  assert.deepEqual(await store.listMealEntries({ personId: sourcePerson.id, date: sourceDate }), sourceBefore);
+
+  assert.equal(await store.undoMealReuse({ token: secondCopy.undo!.token, targetPersonId: targetPerson.id }), 2);
+  const afterSecondUndo = await store.listMealEntries({ personId: targetPerson.id, date: targetDate });
+  assert.deepEqual(afterSecondUndo.filter(entry => destinationBefore.some(original => original.id === entry.id)), destinationBefore);
+  assert.deepEqual(afterSecondUndo.map(entry => entry.grams), [40, 25]);
+  assert.deepEqual(await store.listMealEntries({ personId: sourcePerson.id, date: sourceDate }), sourceBefore);
+  await assert.rejects(store.undoMealReuse({ token: firstCopy.undo!.token, targetPersonId: targetPerson.id }), /no longer available/i);
+});
+
+test('meal reuse undo refuses to remove a batch after any copied portion was edited', async () => {
+  const store = createLocalStore(new MemoryStorage());
+  const person = (await store.listPeople())[0];
+  const food = (await store.listFoods())[0];
+  await store.createMealEntry({ personId: person.id, date: '2026-08-22', meal: 'breakfast', foodId: food.id, grams: 100 });
+  await store.createMealEntry({ personId: person.id, date: '2026-08-22', meal: 'lunch', foodId: food.id, grams: 80 });
+  const reuse = await store.copyMealsToDate({
+    sourcePersonId: person.id, sourceDate: '2026-08-22', targetPersonId: person.id, targetDate: '2026-08-23',
+  });
+  assert.ok(reuse.undo);
+  const target = await store.listMealEntries({ personId: person.id, date: '2026-08-23' });
+  await store.updateMealEntry(target[0].id, { grams: target[0].grams + 10 });
+  const before = await store.listMealEntries({ personId: person.id, date: '2026-08-23' });
+  await assert.rejects(
+    store.undoMealReuse({ token: reuse.undo!.token, targetPersonId: person.id }),
+    /changed or was removed/i,
+  );
+  assert.deepEqual(await store.listMealEntries({ personId: person.id, date: '2026-08-23' }), before);
+});
+
+test('meal reuse undo expires after 30 seconds without removing the copied portions', async () => {
+  let time = 50_000;
+  const store = createLocalStore(new MemoryStorage(), undefined, () => time);
+  const person = (await store.listPeople())[0];
+  const food = (await store.listFoods())[0];
+  await store.createMealEntry({ personId: person.id, date: '2026-08-24', meal: 'breakfast', foodId: food.id, grams: 120 });
+  const reuse = await store.copyMealsToDate({
+    sourcePersonId: person.id, sourceDate: '2026-08-24', targetPersonId: person.id, targetDate: '2026-08-25',
+  });
+  assert.ok(reuse.undo);
+  time = reuse.undo!.expiresAt;
+  await assert.rejects(store.undoMealReuse({ token: reuse.undo!.token, targetPersonId: person.id }), /no longer available/i);
+  assert.equal((await store.listMealEntries({ personId: person.id, date: '2026-08-25' })).length, 1);
 });
 
 test('custom foods retain barcode lookup brand and source link', async () => {
@@ -1977,7 +2073,9 @@ test('meal-history reuse optionally copies the tennis plan with edited session t
     ...sourcePlan,
     sessions: [{ ...sourcePlan.sessions[0], startTime: '10:15', durationMinutes: 120 }],
   };
-  await store.copyMealsToDate({ sourcePersonId: person.id, sourceDate, targetPersonId: person.id, targetDate, tennisPlan: changedPlan });
+  const copyResult = await store.copyMealsToDate({ sourcePersonId: person.id, sourceDate, targetPersonId: person.id, targetDate, tennisPlan: changedPlan });
+  assert.equal(copyResult.portionCount, 1);
+  assert.ok(copyResult.undo);
   const copiedDay = await store.getDayActivity({ personId: person.id, date: targetDate });
   assert.equal(copiedDay.tennis?.sessions[0].startTime, '10:15');
   assert.equal(copiedDay.tennis?.sessions[0].durationMinutes, 120);
@@ -1986,6 +2084,10 @@ test('meal-history reuse optionally copies the tennis plan with edited session t
   assert.equal(copiedDay.tennis?.experienceRating, undefined);
   const copiedEntry = (await store.listMealEntries({ personId: person.id, date: targetDate }))[0];
   assert.equal(copiedEntry.tennisDietId, copiedDay.tennis?.diets?.[0].id);
+  assert.equal(await store.undoMealReuse({ token: copyResult.undo!.token, targetPersonId: person.id }), 1);
+  assert.equal((await store.listMealEntries({ personId: person.id, date: targetDate })).length, 0);
+  assert.equal((await store.getDayActivity({ personId: person.id, date: targetDate })).tennis?.sessions[0].startTime, '10:15');
+  assert.equal((await store.listMealEntries({ personId: person.id, date: sourceDate })).length, 1);
 
   const restDate = '2026-08-14';
   await assert.rejects(
