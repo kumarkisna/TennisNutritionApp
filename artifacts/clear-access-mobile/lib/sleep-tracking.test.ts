@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 // @ts-ignore Node's built-in test modules are used only by the direct regression suite.
 import test from 'node:test';
-import { calculateTotalSleepMinutes, formatSleepDuration, reusableSleepTimes, shiftSleepMonth, sleepDurationMinutes, sleepMonthDates, sleepReferenceForDate, sleepWeekDates, summarizeSleepRecords } from './sleep-tracking';
+import { calculateTotalSleepMinutes, formatSleepDuration, reusableSleepTimes, shiftSleepMonth, sleepDurationMinutes, sleepMonthDates, sleepMonthWeekRanges, sleepReferenceForDate, sleepWeekDates, summarizeSleepRecords } from './sleep-tracking';
 
 test('sleep duration handles overnight sleep and daytime sleep', () => {
   assert.equal(sleepDurationMinutes('22:30', '06:45'), 495);
@@ -49,6 +49,14 @@ test('sleep month ranges include every date, including leap days', () => {
 test('sleep month navigation crosses year boundaries', () => {
   assert.equal(shiftSleepMonth('2026-01', -1), '2025-12');
   assert.equal(shiftSleepMonth('2026-12', 1), '2027-01');
+});
+
+test('month weeks use Monday boundaries and mark partial calendar weeks', () => {
+  const ranges = sleepMonthWeekRanges('2026-10');
+  assert.equal(ranges.length, 5);
+  assert.deepEqual([ranges[0].startDate, ranges[0].endDate, ranges[0].partial], ['2026-10-01', '2026-10-04', true]);
+  assert.deepEqual([ranges[1].startDate, ranges[1].endDate, ranges[1].partial], ['2026-10-05', '2026-10-11', false]);
+  assert.deepEqual([ranges[4].startDate, ranges[4].endDate, ranges[4].partial], ['2026-10-26', '2026-10-31', true]);
 });
 
 test('sleep summaries separate missing dates from nap-only, overnight, and zero-minute records', () => {

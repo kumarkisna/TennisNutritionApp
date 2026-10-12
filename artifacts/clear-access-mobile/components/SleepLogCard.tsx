@@ -4,7 +4,8 @@ import { useDayActivitiesForDates, useGetDayActivity, useSaveSleepRecord, useSea
 import { getAgeOnDate } from '@/lib/planning-targets';
 import { shiftDate, today } from '@/lib/format';
 import type { SleepInterval } from '@/lib/local-models';
-import { calculateTotalSleepMinutes, formatSleepDuration, reusableSleepTimes, shiftSleepMonth, sleepDurationMinutes, sleepMonthDates, sleepReferenceForDate, sleepWeekDates, summarizeSleepRecords } from '@/lib/sleep-tracking';
+import { calculateTotalSleepMinutes, formatSleepDuration, reusableSleepTimes, shiftSleepMonth, sleepDurationMinutes, sleepMonthDates, sleepMonthWeekRanges, sleepReferenceForDate, sleepWeekDates, summarizeSleepRecords } from '@/lib/sleep-tracking';
+import { summarizeHydrationRecords } from '@/lib/hydration';
 import { useColors } from '@/hooks/useColors';
 import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, Muted, tap } from '@/components/ui';
 import TimeField from '@/components/TimeField';
@@ -95,7 +96,7 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
         reference.maxMinutes !== null && minutes > reference.maxMinutes ? `Above daily reference (${reference.label})` :
           `Within daily reference (${reference.label})`;
     return {
-      date: dayDate, sleep, minutes, reference, comparison, loading: query?.isLoading ?? true,
+      date: dayDate, sleep, hydration: query?.data?.hydration, minutes, reference, comparison, loading: query?.isLoading ?? true,
       failed: query?.isError ?? false,
       napOnly: Boolean(sleep && sleep.bedtime === null && sleep.wakeTime === null && (sleep.naps?.length ?? 0) > 0),
       overnight: Boolean(sleep && sleep.bedtime !== null && sleep.wakeTime !== null),
@@ -107,10 +108,20 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
   const previousRecords = rangeMode === 'month' ? previousMonthDates.map((dayDate, index) => toRecord(dayDate, index)) : [];
   const summary = summarizeSleepRecords(records, today());
   const previousSummary = summarizeSleepRecords(previousRecords, today());
+  const hydrationSummary = summarizeHydrationRecords(records.map(record => ({ date: record.date, hydration: record.hydration })), today());
+  const previousHydrationSummary = summarizeHydrationRecords(previousRecords.map(record => ({ date: record.date, hydration: record.hydration })), today());
   const periodLoading = records.some(record => record.loading);
   const periodFailed = records.some(record => record.failed);
   const previousPeriodLoading = previousRecords.some(record => record.loading);
   const previousPeriodFailed = previousRecords.some(record => record.failed);
+  const weeklySummaries = rangeMode === 'month' ? sleepMonthWeekRanges(month).map(range => {
+    const weekRecords = records.filter(record => record.date >= range.startDate && record.date <= range.endDate);
+    return {
+      ...range,
+      sleep: summarizeSleepRecords(weekRecords, today()),
+      hydration: summarizeHydrationRecords(weekRecords.map(record => ({ date: record.date, hydration: record.hydration })), today()),
+    };
+  }) : [];
   const moveWeek = (amount: number) => {
     const start = new Date(`${weekStart}T00:00:00Z`);
     start.setUTCDate(start.getUTCDate() + amount * 7);
@@ -127,6 +138,10 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
     `${value.loggedDays}/${value.elapsedDays} past dates logged · ${value.overnightDays} overnight · ${value.napOnlyDays} nap-only · ${value.missingDays} missing`;
   const monthAverages = (value: typeof summary) =>
     `Average duration ${value.averageMinutes === null ? 'unavailable' : formatSleepDuration(value.averageMinutes)} · quality ${value.averageQuality === null ? 'unrated' : `${value.averageQuality.toFixed(1)}/5`}`;
+  const hydrationMonthDetails = (value: typeof hydrationSummary) =>
+    `${value.plannedEntryCount ? `${liters(value.plannedMl)} planned across ${value.plannedDays} days` : 'No drink entries planned'} · ` +
+    `${value.actualMl === null ? 'no actual amounts recorded' : `${liters(value.actualMl)} recorded of ${liters(value.plannedForRecordedMl)} planned for recorded drinks`} · ` +
+    `${value.recordedEntryCount}/${value.plannedEntryCount} drinks recorded · no entries saved on ${value.noEntryDays}/${value.elapsedDays} days`;
   const durationDelta = summary.averageMinutes === null || previousSummary.averageMinutes === null
     ? 'unavailable'
     : summary.averageMinutes === previousSummary.averageMinutes ? 'no change'
@@ -138,6 +153,7 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
     if (rangeMode === 'week') moveWeek(amount);
     else setMonth(current => shiftSleepMonth(current, amount));
   };
+  const liters = (milliliters: number) => `${(milliliters / 1000).toFixed(2)} L`;
 
   return <View style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 10, gap: 8 }}>
     <Text style={{ fontFamily: F.bold, color: c.foreground }}>Sleep patterns</Text>
@@ -155,9 +171,11 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
           <Text style={{ fontFamily: F.semi, color: c.foreground }}>{monthTitle(month)}</Text>
           <Muted>{summary.elapsedDays ? monthCounts(summary) : 'No past dates in this month yet.'}</Muted>
           <Muted>{monthAverages(summary)}</Muted>
+          <Muted>Hydration · {hydrationMonthDetails(hydrationSummary)}</Muted>
           <Text style={{ fontFamily: F.semi, color: c.foreground }}>{monthTitle(previousMonth)}</Text>
           <Muted>{monthCounts(previousSummary)}</Muted>
           <Muted>{monthAverages(previousSummary)}</Muted>
+          <Muted>Hydration · {hydrationMonthDetails(previousHydrationSummary)}</Muted>
           <Muted>Change: duration {durationDelta} · quality {qualityDelta} versus {monthTitle(previousMonth)}.</Muted>
           <Muted>Missing dates are shown separately and excluded from averages.</Muted>
         </>}
@@ -193,6 +211,28 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
               <Muted>{result.sleep.note}</Muted>
             </Pressable>) : <Muted>No saved sleep notes match “{noteSearch.trim()}”.</Muted>}
     </View>
+    {rangeMode === 'month' ? <View testID="sleep-month-weekly-breakdown" style={{ gap: 7 }}>
+      <Text style={{ fontFamily: F.semi, color: c.foreground }}>Week-by-week sleep & hydration</Text>
+      {periodLoading || periodFailed ? <Muted>{periodLoading ? 'Loading weekly records…' : 'Weekly summaries unavailable because some dates could not be loaded.'}</Muted> :
+        weeklySummaries.map((week, index) => <View key={week.startDate} testID={`sleep-month-week-${week.startDate}`} style={{
+          borderWidth: 1, borderColor: c.border, borderRadius: 12, padding: 9, gap: 3,
+        }}>
+          <Text style={{ fontFamily: F.semi, color: c.foreground }}>
+            Week {index + 1} · {prettyDate(week.startDate, { month: 'short', day: 'numeric' })}–{prettyDate(week.endDate, { month: 'short', day: 'numeric' })}
+            {week.partial ? ' · partial week' : ''}
+          </Text>
+          <Muted>{week.sleep.elapsedDays ? monthCounts(week.sleep) : 'No past sleep dates in this week yet.'}</Muted>
+          <Muted>{monthAverages(week.sleep)}</Muted>
+          {week.hydration.elapsedDays ? <>
+            <Muted>Hydration: {week.hydration.plannedEntryCount ? `${liters(week.hydration.plannedMl)} planned across ${week.hydration.plannedDays} days` : 'no drink entries planned'}.</Muted>
+            <Muted>{week.hydration.actualMl === null
+              ? 'No actual drink amounts recorded yet.'
+              : `${liters(week.hydration.actualMl)} recorded of ${liters(week.hydration.plannedForRecordedMl)} planned for those entries.`}
+              {` ${week.hydration.recordedEntryCount}/${week.hydration.plannedEntryCount} drink entries recorded; no entries saved on ${week.hydration.noEntryDays}/${week.hydration.elapsedDays} days.`}
+            </Muted>
+          </> : <Muted>No past hydration dates in this week yet.</Muted>}
+        </View>)}
+    </View> : null}
     {records.map(record => <Pressable
       key={record.date}
       testID={`button-open-sleep-date-${record.date}`}

@@ -37,6 +37,25 @@ export function hydrationTotals(log?: HydrationLog) {
   }), { plannedMl: 0, actualMl: 0 });
 }
 
+export function summarizeHydrationRecords(records: readonly { date: string; hydration: HydrationLog | undefined }[], throughDate: string) {
+  const elapsed = records.filter(record => record.date <= throughDate);
+  const entries = elapsed.flatMap(record => record.hydration?.entries ?? []);
+  const recordedEntries = entries.filter(entry => entry.actualMl !== null);
+  const plannedDays = elapsed.filter(record => (record.hydration?.entries.length ?? 0) > 0).length;
+  const actualDays = elapsed.filter(record => (record.hydration?.entries.some(entry => entry.actualMl !== null) ?? false)).length;
+  return {
+    elapsedDays: elapsed.length,
+    plannedDays,
+    noEntryDays: elapsed.length - plannedDays,
+    actualDays,
+    plannedEntryCount: entries.length,
+    recordedEntryCount: recordedEntries.length,
+    plannedMl: entries.reduce((sum, entry) => sum + entry.plannedMl, 0),
+    plannedForRecordedMl: recordedEntries.reduce((sum, entry) => sum + entry.plannedMl, 0),
+    actualMl: recordedEntries.length ? recordedEntries.reduce((sum, entry) => sum + entry.actualMl!, 0) : null,
+  };
+}
+
 export function mergeHydrationSchedule(current: HydrationEntry[], source: HydrationEntry[], createId: (index: number) => string) {
   const merged = [...current];
   source.forEach((entry, index) => {

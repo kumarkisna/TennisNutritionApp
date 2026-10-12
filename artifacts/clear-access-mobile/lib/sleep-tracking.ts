@@ -28,6 +28,20 @@ export function sleepMonthDates(anchorDate: string): string[] {
     `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(index + 1).padStart(2, '0')}`);
 }
 
+export function sleepMonthWeekRanges(month: string) {
+  const weeks = new Map<string, string[]>();
+  for (const date of sleepMonthDates(`${month}-01`)) {
+    const monday = sleepWeekDates(date)[0];
+    weeks.set(monday, [...(weeks.get(monday) ?? []), date]);
+  }
+  return [...weeks.values()].map(dates => ({
+    startDate: dates[0],
+    endDate: dates[dates.length - 1],
+    dates,
+    partial: dates.length < 7,
+  }));
+}
+
 export function shiftSleepMonth(month: string, amount: number): string {
   const [year, monthNumber] = month.split('-').map(Number);
   return new Date(Date.UTC(year, monthNumber - 1 + amount, 1)).toISOString().slice(0, 7);

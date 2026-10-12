@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 // @ts-ignore Node's built-in test modules are used only by the direct regression suite.
 import test from 'node:test';
-import { estimateSessionSweatRate, hydrationReference, hydrationTotals, mergeHydrationSchedule } from './hydration';
+import { estimateSessionSweatRate, hydrationReference, hydrationTotals, mergeHydrationSchedule, summarizeHydrationRecords } from './hydration';
 import { buildReminders } from './meal-reminders';
 
 test('hydration daily references distinguish total water from beverage intake', () => {
@@ -35,6 +35,30 @@ test('schedule reuse copies only planned amounts and preserves destination actua
     { id: 'new-1', time: '11:00', plannedMl: 250, actualMl: null, alertEnabled: false },
   ]);
   assert.deepEqual(hydrationTotals({ entries: merged, sessions: [] }), { plannedMl: 550, actualMl: 150 });
+});
+
+test('weekly hydration summaries separate missing actuals from recorded zero amounts', () => {
+  const stats = summarizeHydrationRecords([
+    { date: '2026-10-05', hydration: { entries: [
+      { id: 'one', time: '09:00', plannedMl: 250, actualMl: 200, alertEnabled: false },
+      { id: 'two', time: '12:00', plannedMl: 300, actualMl: null, alertEnabled: false },
+    ], sessions: [] } },
+    { date: '2026-10-06', hydration: { entries: [
+      { id: 'three', time: '15:00', plannedMl: 400, actualMl: 0, alertEnabled: false },
+    ], sessions: [] } },
+    { date: '2026-10-07', hydration: undefined },
+  ], '2026-10-07');
+  assert.deepEqual(stats, {
+    elapsedDays: 3,
+    plannedDays: 2,
+    noEntryDays: 1,
+    actualDays: 2,
+    plannedEntryCount: 3,
+    recordedEntryCount: 2,
+    plannedMl: 950,
+    plannedForRecordedMl: 650,
+    actualMl: 200,
+  });
 });
 
 test('hydration alerts use their planned date/time and stop once actual intake is logged', () => {
