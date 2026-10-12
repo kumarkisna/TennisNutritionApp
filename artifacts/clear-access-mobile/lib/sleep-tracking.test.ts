@@ -45,6 +45,20 @@ test('total sleep subtracts overnight wake-ups and includes naps', () => {
   }), 570);
 });
 
+test('nap-only logs calculate from naps and merge overlapping nap intervals', () => {
+  assert.equal(calculateTotalSleepMinutes({
+    bedtime: null, wakeTime: null, wakeUps: [],
+    naps: [{ startTime: '13:00', endTime: '14:00' }, { startTime: '13:30', endTime: '14:30' }],
+  }), 90);
+  assert.equal(calculateTotalSleepMinutes({
+    bedtime: null, wakeTime: null, naps: [{ startTime: '09:00', endTime: '10:15' }],
+  }), 75);
+  assert.equal(calculateTotalSleepMinutes({
+    bedtime: null, wakeTime: null, wakeUps: [{ startTime: '02:00', endTime: '02:10' }],
+    naps: [{ startTime: '13:00', endTime: '14:00' }],
+  }), null);
+});
+
 test('overlapping wake-ups are subtracted once and invalid wake intervals fail', () => {
   assert.equal(calculateTotalSleepMinutes({
     bedtime: '22:00', wakeTime: '06:00',

@@ -150,9 +150,12 @@ export function buildPlannedDietHtml({
     const minutes = intervalDurationMinutes(wakeUp);
     return minutes === null ? '' : `<li>${escapeHtml(wakeUp.startTime)}–${escapeHtml(wakeUp.endTime)} · awake ${escapeHtml(formatSleepDuration(minutes))}</li>`;
   }).join('') ?? '';
-  const sleepSection = sleepLog && sleepMinutes !== null && totalSleepMinutes !== null
-    ? `<p><strong>Bedtime:</strong> ${escapeHtml(sleepLog.bedtime)} &nbsp; <strong>Wake time:</strong> ${escapeHtml(sleepLog.wakeTime)}</p>
-       <p><strong>Overnight interval:</strong> ${escapeHtml(formatSleepDuration(sleepMinutes))} &nbsp; <strong>Total logged sleep:</strong> ${escapeHtml(formatSleepDuration(totalSleepMinutes))} &nbsp; <strong>Quality:</strong> ${sleepLog.quality}/5</p>
+  const overnightSection = sleepLog?.bedtime && sleepLog.wakeTime && sleepMinutes !== null
+    ? `<p><strong>Bedtime:</strong> ${escapeHtml(sleepLog.bedtime)} &nbsp; <strong>Wake time:</strong> ${escapeHtml(sleepLog.wakeTime)} &nbsp; <strong>Overnight interval:</strong> ${escapeHtml(formatSleepDuration(sleepMinutes))}</p>`
+    : '<p>No overnight times recorded.</p>';
+  const sleepSection = sleepLog && totalSleepMinutes !== null
+    ? `${overnightSection}
+       <p><strong>Total logged sleep:</strong> ${escapeHtml(formatSleepDuration(totalSleepMinutes))} &nbsp; <strong>Quality:</strong> ${sleepLog.quality}/5</p>
        ${napRows ? `<p><strong>Naps</strong></p><ul>${napRows}</ul>` : ''}
        ${wakeUpRows ? `<p><strong>Overnight wake-ups</strong></p><ul>${wakeUpRows}</ul>` : ''}
        ${sleepLog.note ? `<p><strong>Notes:</strong> ${escapeHtml(sleepLog.note)}</p>` : ''}`

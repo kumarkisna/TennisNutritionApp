@@ -31,8 +31,8 @@ export function sleepReferenceForDate(dateOfBirth: string | null, date: string):
   return { label: '7–8 h', minMinutes: 7 * 60, maxMinutes: 8 * 60, includesNaps: false };
 }
 
-export function sleepDurationMinutes(bedtime: string, wakeTime: string): number | null {
-  if (!isClockTime(bedtime) || !isClockTime(wakeTime) || bedtime === wakeTime) return null;
+export function sleepDurationMinutes(bedtime: string | null, wakeTime: string | null): number | null {
+  if (typeof bedtime !== 'string' || typeof wakeTime !== 'string' || !isClockTime(bedtime) || !isClockTime(wakeTime) || bedtime === wakeTime) return null;
   const bedtimeMinutes = Number(bedtime.slice(0, 2)) * 60 + Number(bedtime.slice(3));
   const wakeMinutes = Number(wakeTime.slice(0, 2)) * 60 + Number(wakeTime.slice(3));
   return (wakeMinutes - bedtimeMinutes + 1440) % 1440;
@@ -63,13 +63,25 @@ function intervalTotal(intervals: [number, number][]): number {
 }
 
 export function calculateTotalSleepMinutes(sleep: Pick<SleepLog, 'bedtime' | 'wakeTime'> & Partial<Pick<SleepLog, 'naps' | 'wakeUps'>>): number | null {
-  const nightMinutes = sleepDurationMinutes(sleep.bedtime, sleep.wakeTime);
-  if (nightMinutes === null) return null;
-  const bedMinute = minuteOfDay(sleep.bedtime);
-  const nightEnd = bedMinute + nightMinutes;
   const wakeUps = sleep.wakeUps ?? [];
   const naps = sleep.naps ?? [];
   if (!Array.isArray(wakeUps) || !Array.isArray(naps)) return null;
+  const nightMinutes = sleepDurationMinutes(sleep.bedtime, sleep.wakeTime);
+  if (nightMinutes === null) {
+    if (wakeUps.length > 0) return null;
+    const napRanges: [number, number][] = [];
+    for (const nap of naps) {
+      const duration = intervalDurationMinutes(nap);
+      if (duration === null) return null;
+      const start = minuteOfDay(nap.startTime);
+      napRanges.push([start, start + duration]);
+    }
+    const napTotal = intervalTotal(mergeIntervals(napRanges));
+    return napTotal > 0 && napTotal <= 1440 ? napTotal : null;
+  }
+  if (sleep.bedtime === null || sleep.wakeTime === null) return null;
+  const bedMinute = minuteOfDay(sleep.bedtime);
+  const nightEnd = bedMinute + nightMinutes;
 
   const awakeRanges: [number, number][] = [];
   for (const wakeUp of wakeUps) {

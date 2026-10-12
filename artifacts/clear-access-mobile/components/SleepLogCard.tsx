@@ -68,7 +68,10 @@ function SleepWeekSummary({ personId, date, dateOfBirth }: { personId: number; d
       minutes < reference.minMinutes ? `Below daily reference (${reference.label})` :
         reference.maxMinutes !== null && minutes > reference.maxMinutes ? `Above daily reference (${reference.label})` :
           `Within daily reference (${reference.label})`;
-    return { date: dayDate, sleep, minutes, reference, comparison, loading: days[index]?.isLoading ?? true };
+    return {
+      date: dayDate, sleep, minutes, reference, comparison, loading: days[index]?.isLoading ?? true,
+      napOnly: sleep?.bedtime === null && sleep?.wakeTime === null,
+    };
   });
   const logged = records.filter(record => record.minutes !== null);
   const averageMinutes = logged.length ? Math.round(logged.reduce((sum, record) => sum + record.minutes!, 0) / logged.length) : null;
@@ -91,7 +94,7 @@ function SleepWeekSummary({ personId, date, dateOfBirth }: { personId: number; d
       </Text>
       <Btn small variant="ghost" label="Next week" testID="button-sleep-next-week" onPress={() => moveWeek(1)} />
     </View>
-    <Muted>{elapsedDays === 0 ? 'Upcoming week' : `${logged.filter(record => record.date <= today()).length}/${elapsedDays} nights logged`}
+    <Muted>{elapsedDays === 0 ? 'Upcoming week' : `${logged.filter(record => record.date <= today()).length}/${elapsedDays} dates logged`}
       {averageMinutes !== null ? ` · average ${formatSleepDuration(averageMinutes)} · quality ${averageQuality?.toFixed(1)}/5` : ''}</Muted>
     {!dateOfBirth ? <Muted>Add the person’s date of birth in Settings to compare logged nights with age-based ranges.</Muted> : null}
     {records.map(record => <View key={record.date} style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 7, gap: 2 }}>
@@ -100,7 +103,7 @@ function SleepWeekSummary({ personId, date, dateOfBirth }: { personId: number; d
           {prettyDate(record.date, { weekday: 'short', month: 'short', day: 'numeric' })}
         </Text>
         <Text style={{ fontFamily: F.semi, color: c.foreground, textAlign: 'right' }}>
-          {record.loading ? 'Loading…' : record.minutes === null ? (record.date > today() ? 'Upcoming' : dateOfBirth && record.date < dateOfBirth ? 'Before DOB' : 'No log') : `${formatSleepDuration(record.minutes)} · ${record.sleep?.quality}/5`}
+          {record.loading ? 'Loading…' : record.minutes === null ? (record.date > today() ? 'Upcoming' : dateOfBirth && record.date < dateOfBirth ? 'Before DOB' : 'No log') : `${formatSleepDuration(record.minutes)}${record.napOnly ? ' · nap-only' : ''} · ${record.sleep?.quality}/5`}
         </Text>
       </View>
       {record.comparison ? <Muted>{record.comparison}{record.reference?.includesNaps ? ' · reference includes naps' : ''}</Muted> : null}
@@ -121,8 +124,11 @@ export function SleepLogCard({ personId, personName, date, dateOfBirth }: { pers
   const [wakeUps, setWakeUps] = useState<SleepInterval[]>([]);
   const [error, setError] = useState<unknown>(null);
   const [notice, setNotice] = useState('');
-  const duration = sleepDurationMinutes(bedtime, wakeTime);
-  const totalDuration = calculateTotalSleepMinutes({ bedtime, wakeTime, naps, wakeUps });
+  const duration = sleepDurationMinutes(bedtime.trim() || null, wakeTime.trim() || null);
+  const totalDuration = calculateTotalSleepMinutes({ bedtime: bedtime.trim() || null, wakeTime: wakeTime.trim() || null, naps, wakeUps });
+  const hasOvernightInput = Boolean(bedtime.trim() || wakeTime.trim());
+  const overnightPairValid = !hasOvernightInput || (Boolean(bedtime.trim() && wakeTime.trim()) && duration !== null);
+  const wakeUpsValid = duration !== null || wakeUps.length === 0;
   const age = dateOfBirth ? getAgeOnDate(dateOfBirth, date) : null;
 
   useEffect(() => {
@@ -143,7 +149,7 @@ export function SleepLogCard({ personId, personName, date, dateOfBirth }: { pers
     try {
       await save.mutateAsync({ data: {
         personId, date, sleep: {
-          bedtime, wakeTime, quality: Number(quality), note: note.trim(), naps, wakeUps,
+          bedtime: bedtime.trim() || null, wakeTime: wakeTime.trim() || null, quality: Number(quality), note: note.trim(), naps, wakeUps,
         },
       } });
       setNotice(`Sleep record saved for ${date}.`);
@@ -159,22 +165,25 @@ export function SleepLogCard({ personId, personName, date, dateOfBirth }: { pers
     } catch (problem) { setError(problem); }
   }
 
-  const canSave = totalDuration !== null && quality !== 'unrated' && note.length <= 1000 && !save.isPending;
+  const canSave = totalDuration !== null && overnightPairValid && wakeUpsValid && quality !== 'unrated' && note.length <= 1000 && !save.isPending;
   return <Card>
     <Eyebrow>Sleep · {personName} · {date}</Eyebrow>
     <Text style={{ fontFamily: F.bold, fontSize: 18, color: c.foreground }}>Sleep log for this date</Text>
-    <Muted>Each date has its own sleep record. Enter 24-hour times; add naps and awake periods for a fuller total. Overlapping intervals count only once.</Muted>
+    <Muted>Each date has its own sleep record. Enter both overnight times, or leave them blank and record naps only. Overlapping intervals count once.</Muted>
     {day.isLoading ? <Muted>Loading sleep record…</Muted> : day.isError ? <ErrorBox error={day.error} onRetry={() => day.refetch()} /> : <>
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <View style={{ flex: 1 }}><Field label="Bedtime (HH:MM)" value={bedtime} onChangeText={setBedtime} placeholder="22:30" maxLength={5} keyboardType="numbers-and-punctuation" testID="input-sleep-bedtime" /></View>
         <View style={{ flex: 1 }}><Field label="Wake time (HH:MM)" value={wakeTime} onChangeText={setWakeTime} placeholder="06:45" maxLength={5} keyboardType="numbers-and-punctuation" testID="input-sleep-wake-time" /></View>
       </View>
-      {duration !== null ? <Muted>Calculated duration: <Text style={{ fontFamily: F.semi, color: c.foreground }}>{formatSleepDuration(duration)}</Text></Muted> :
-        <Muted>Enter two different valid times to calculate sleep duration.</Muted>}
+      {duration !== null ? <Muted>Overnight duration: <Text style={{ fontFamily: F.semi, color: c.foreground }}>{formatSleepDuration(duration)}</Text></Muted> :
+        <Muted>Overnight times are optional. Enter both together, or leave both blank for a nap-only record.</Muted>}
       <SleepIntervalEditor label="Naps (optional)" testPrefix="nap" intervals={naps} onChange={setNaps} startHint="13:00" endHint="14:00" maxEntries={10} />
-      <SleepIntervalEditor label="Overnight wake-ups (optional)" testPrefix="wake-up" intervals={wakeUps} onChange={setWakeUps} startHint="02:00" endHint="02:15" maxEntries={20} />
-      {totalDuration !== null ? <Muted>Total sleep after subtracting wake-ups and counting overlapping intervals once: <Text style={{ fontFamily: F.semi, color: c.foreground }}>{formatSleepDuration(totalDuration)}</Text></Muted> :
-        duration !== null ? <Muted>Check the added interval times. Overnight wake-ups must fall between bedtime and wake time.</Muted> : null}
+      {duration !== null || wakeUps.length > 0
+        ? <SleepIntervalEditor label="Overnight wake-ups (optional)" testPrefix="wake-up" intervals={wakeUps} onChange={setWakeUps} startHint="02:00" endHint="02:15" maxEntries={20} />
+        : <Muted>Overnight wake-ups can be added when both overnight times are entered.</Muted>}
+      {totalDuration !== null ? <Muted>Total recorded sleep{duration === null ? ' from naps' : ' after wake-ups and overlapping intervals are accounted for'}: <Text style={{ fontFamily: F.semi, color: c.foreground }}>{formatSleepDuration(totalDuration)}</Text></Muted> :
+        hasOvernightInput ? <Muted>Enter both valid overnight times, or clear them and add at least one valid nap.</Muted> :
+          <Muted>Add at least one valid nap or enter overnight times to calculate total sleep.</Muted>}
       <Text style={{ fontFamily: F.semi, color: c.foreground }}>Sleep quality</Text>
       <Chips testPrefix="select-sleep-quality" value={quality} onChange={setQuality} options={qualityChoices} />
       <Field label="Notes (optional)" value={note} onChangeText={setNote} placeholder="Anything to remember about this night" maxLength={1000} multiline testID="input-sleep-note" />

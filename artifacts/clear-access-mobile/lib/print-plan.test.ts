@@ -113,6 +113,21 @@ test('printed sleep log includes naps, wake-ups, and overlap-aware total sleep',
   assert.match(html, /awake 30 min/);
 });
 
+test('printed nap-only sleep shows totals, quality, and notes without inventing overnight times', () => {
+  const html = buildPlannedDietHtml({
+    personName: 'Me',
+    date: '2026-10-05',
+    activityType: 'rest',
+    entries: [],
+    mealTimes,
+    sleepLog: { bedtime: null, wakeTime: null, quality: 5, note: 'Nap only', naps: [{ startTime: '13:00', endTime: '14:00' }] },
+  });
+  assert.match(html, /No overnight times recorded/);
+  assert.match(html, /Total logged sleep:<\/strong> 1 hr/);
+  assert.match(html, /Quality:<\/strong> 5\/5/);
+  assert.match(html, /Nap only/);
+});
+
 test('print HTML includes tennis plan type, sorted sessions, intensity, and rating', () => {
   const tennisPlan: TennisPlan = {
     mode: 'training',

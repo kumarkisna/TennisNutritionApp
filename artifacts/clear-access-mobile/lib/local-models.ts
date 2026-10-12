@@ -247,8 +247,8 @@ export type MealAlert = { id: string; minutesBefore: number; enabled: boolean };
 export type MealAlertInput = { date: string; personId: number; meal: Meal; alerts: MealAlert[] };
 export type SleepInterval = { startTime: string; endTime: string };
 export type SleepLog = {
-  bedtime: string;
-  wakeTime: string;
+  bedtime: string | null;
+  wakeTime: string | null;
   quality: number;
   note: string;
   naps?: SleepInterval[];

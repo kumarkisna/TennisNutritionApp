@@ -190,6 +190,28 @@ test('sleep logs are separate by person and date and survive local backup restor
   await assert.rejects(store.saveSleepRecord({ ...first, sleep: { ...sleep, naps: Array.from({ length: 11 }, () => ({ startTime: '13:00', endTime: '13:30' })) } }), /valid bedtime/i);
 });
 
+test('nap-only sleep records preserve their date, quality, note, and count as logged in backups', async () => {
+  const storage = new MemoryStorage();
+  const store = createLocalStore(storage);
+  const person = await store.createPerson({ ...baselinePerson('Nap only'), dateOfBirth: '2024-01-01' });
+  const input = {
+    personId: person.id, date: '2026-10-10',
+    sleep: {
+      bedtime: null, wakeTime: null, quality: 5, note: 'Nap after lunch',
+      naps: [{ startTime: '13:00', endTime: '14:00' }, { startTime: '13:30', endTime: '14:30' }],
+      wakeUps: [],
+    },
+  };
+  await store.saveSleepRecord(input);
+  assert.deepEqual((await store.getDayActivity(input)).sleep, input.sleep);
+  const backup = await store.exportBackup();
+  const restored = createLocalStore(new MemoryStorage());
+  await restored.restoreBackup(backup);
+  assert.deepEqual((await restored.getDayActivity(input)).sleep, input.sleep);
+  await assert.rejects(store.saveSleepRecord({ ...input, sleep: { ...input.sleep, bedtime: '22:00' } }), /valid bedtime/i);
+  await assert.rejects(store.saveSleepRecord({ ...input, sleep: { ...input.sleep, wakeUps: [{ startTime: '02:00', endTime: '02:10' }] } }), /valid bedtime/i);
+});
+
 test('hydrates from the versioned seed and preserves changes across store restarts', async () => {
   const storage = new MemoryStorage();
   const firstStore = createLocalStore(storage);

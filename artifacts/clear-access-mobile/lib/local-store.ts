@@ -230,8 +230,10 @@ function isSleepLog(value: unknown): value is DayActivity['sleep'] {
   const isIntervalList = (intervals: unknown, max: number) => Array.isArray(intervals) && intervals.length <= max &&
     intervals.every(interval => isRecord(interval) && hasExactKeys(interval, ['startTime', 'endTime']) &&
       isClockTime(interval.startTime) && isClockTime(interval.endTime) && interval.startTime !== interval.endTime);
+  const noOvernight = isRecord(value) && value.bedtime === null && value.wakeTime === null;
+  const validOvernight = isRecord(value) && isClockTime(value.bedtime) && isClockTime(value.wakeTime) && value.bedtime !== value.wakeTime;
   return isRecord(value) && hasExactKeys(value, ['bedtime', 'wakeTime', 'quality', 'note'], ['naps', 'wakeUps']) &&
-    isClockTime(value.bedtime) && isClockTime(value.wakeTime) && value.bedtime !== value.wakeTime &&
+    (noOvernight || validOvernight) &&
     Number.isInteger(value.quality) && isFiniteInRange(value.quality, 1, 5) &&
     typeof value.note === 'string' && value.note.length <= 1000 &&
     (value.naps === undefined || isIntervalList(value.naps, 10)) &&
