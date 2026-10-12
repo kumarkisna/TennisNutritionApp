@@ -76,6 +76,7 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
   const latestDateMonth = useRef(date.slice(0, 7));
   latestDateMonth.current = date.slice(0, 7);
   const [rangeMode, setRangeMode] = useState<'week' | 'month' | 'quality-range'>('week');
+  const [preferredRangeMode, setPreferredRangeMode] = useState<'week' | 'month'>('week');
   const [qualityRangeStart, setQualityRangeStart] = useState(() => shiftSleepMonth(date.slice(0, 7), -11));
   const [qualityRangeEnd, setQualityRangeEnd] = useState(() => date.slice(0, 7));
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
@@ -96,12 +97,16 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
       const initialMonth = latestDateMonth.current;
       setMonth(saved?.month ?? initialMonth);
       setComparisonMonth(saved?.comparisonMonth ?? shiftSleepMonth(initialMonth, -1));
+      setRangeMode(saved?.view ?? 'week');
+      setPreferredRangeMode(saved?.view ?? 'week');
       setMonthSelectionReadyFor(personId);
     }).catch(problem => {
       if (!active) return;
       const initialMonth = latestDateMonth.current;
       setMonth(initialMonth);
       setComparisonMonth(shiftSleepMonth(initialMonth, -1));
+      setRangeMode('week');
+      setPreferredRangeMode('week');
       setMonthPreferenceError(problem instanceof Error ? problem.message : 'Could not load saved sleep month selections.');
       setMonthSelectionReadyFor(personId);
     });
@@ -110,13 +115,13 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
   useEffect(() => {
     if (monthSelectionReadyFor !== personId) return;
     let active = true;
-    sleepMonthPreferences.save(personId, { month, comparisonMonth }).then(() => {
+    sleepMonthPreferences.save(personId, { month, comparisonMonth, view: preferredRangeMode }).then(() => {
       if (active) setMonthPreferenceError(null);
     }).catch(problem => {
       if (active) setMonthPreferenceError(problem instanceof Error ? problem.message : 'Could not save sleep month selections.');
     });
     return () => { active = false; };
-  }, [personId, monthSelectionReadyFor, month, comparisonMonth]);
+  }, [personId, monthSelectionReadyFor, month, comparisonMonth, preferredRangeMode]);
   useEffect(() => {
     const timer = setTimeout(() => setSettledNoteSearch(noteSearch.trim()), 250);
     return () => clearTimeout(timer);
@@ -269,11 +274,17 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
     setMonth(selection.month);
     setComparisonMonth(selection.comparisonMonth);
   };
+  const selectRangeMode = (value: string) => {
+    if (value === 'week' || value === 'month') setPreferredRangeMode(value);
+    if (value === 'week' || value === 'month' || value === 'quality-range') {
+      setRangeMode(value);
+    }
+  };
   const liters = (milliliters: number) => `${(milliliters / 1000).toFixed(2)} L`;
 
   return <View style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 10, gap: 8 }}>
     <Text style={{ fontFamily: F.bold, color: c.foreground }}>Sleep patterns</Text>
-    <Chips testPrefix="select-sleep-summary-range" value={rangeMode} onChange={value => setRangeMode(value as 'week' | 'month' | 'quality-range')}
+    <Chips testPrefix="select-sleep-summary-range" value={rangeMode} onChange={selectRangeMode}
       options={[{ value: 'week', label: 'Week' }, { value: 'month', label: 'Month' }, { value: 'quality-range', label: 'Quality range' }]} />
     {rangeMode === 'month' ? monthSelectionReady ? <>
       <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -294,7 +305,7 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
       <Text style={{ fontFamily: F.semi, fontSize: 12, color: c.foreground, textAlign: 'center', flex: 1 }}>{periodTitle}</Text>
       <Btn small variant="ghost" label={`Next ${rangeMode}`} testID={`button-sleep-next-${rangeMode}`} onPress={() => movePeriod(1)} />
     </View> : null}
-    {rangeMode === 'month' && monthPreferenceError ? <Muted>{monthPreferenceError}</Muted> : null}
+    {rangeMode !== 'quality-range' && monthPreferenceError ? <Muted>{monthPreferenceError}</Muted> : null}
     {rangeMode === 'quality-range' ? !qualityRangeValid ? <Muted>Choose a valid range of up to 10 years, with the start month on or before the end month.</Muted> :
       qualityRangeRecords.isLoading ? <Muted>Loading sleep-quality history…</Muted> :
         qualityRangeRecords.isError ? <Muted>Sleep-quality history could not be loaded.</Muted> :
