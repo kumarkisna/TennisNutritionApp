@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { usePlanner } from '@/contexts/PlannerProvider';
+import { useMealHistoryPreferences } from '@/contexts/MealHistoryPreferencesProvider';
 import { useColors } from '@/hooks/useColors';
 import {
   useCopyMealsToDate, useGetDayActivity, useListMealEntries, useListPeople, useMealPlanReviews, useSaveMealPlanReview,
@@ -70,6 +71,7 @@ function ComparedMealReview({ review, personId, targetPersonId, targetDate, copy
 export default function MealHistory() {
   const c = useColors();
   const { person, date, setDate } = usePlanner();
+  const historyPreferences = useMealHistoryPreferences();
   const entries = useListMealEntries({ personId: person.id, date });
   const activity = useGetDayActivity({ personId: person.id, date });
   const reviews = useMealPlanReviews(person.id);
@@ -81,8 +83,6 @@ export default function MealHistory() {
   const [keyword, setKeyword] = useState('');
   const [note, setNote] = useState('');
   const [search, setSearch] = useState('');
-  const [reviewSort, setReviewSort] = useState<MealReviewSort>('recent');
-  const [minimumRating, setMinimumRating] = useState('all');
   const [comparisonDates, setComparisonDates] = useState<string[]>([]);
   const [targetPersonId, setTargetPersonId] = useState(person.id);
   const [targetDate, setTargetDate] = useState(shiftDate(date, 1));
@@ -93,6 +93,8 @@ export default function MealHistory() {
   const [notice, setNotice] = useState('');
   const [comparisonError, setComparisonError] = useState<unknown>(null);
   const [comparisonNotice, setComparisonNotice] = useState('');
+  const minimumRating = historyPreferences.settings.minimumRating === null ? 'all' : String(historyPreferences.settings.minimumRating);
+  const reviewSort: MealReviewSort = historyPreferences.settings.sort;
   const review = reviews.data?.find(item => item.date === date);
   const tennis = activity.data?.tennis;
   const filteredReviews = useMemo(() => filterMealReviews(reviews.data ?? [], search, minimumRating === 'all' ? null : Number(minimumRating)),
@@ -276,11 +278,14 @@ export default function MealHistory() {
       <Eyebrow>Saved meal history</Eyebrow>
       <Field label="Find by keyword or note" value={search} onChangeText={setSearch} placeholder="e.g. match day, felt energized" testID="input-meal-history-search" />
       <Text style={{ fontFamily: F.semi, color: c.foreground }}>Minimum rating</Text>
-      <Chips testPrefix="select-meal-history-min-rating" value={minimumRating} onChange={setMinimumRating}
+      <Chips testPrefix="select-meal-history-min-rating" value={minimumRating} disabled={historyPreferences.loading}
+        onChange={value => { void historyPreferences.updateSettings({ minimumRating: value === 'all' ? null : Number(value) }); }}
         options={[{ value: 'all', label: 'Any rating' }, ...Array.from({ length: 10 }, (_, i) => ({ value: String(i + 1), label: `${i + 1}+` }))]} />
-      <Chips testPrefix="select-meal-history-sort" value={reviewSort} onChange={value => setReviewSort(value as MealReviewSort)}
+      <Chips testPrefix="select-meal-history-sort" value={reviewSort} disabled={historyPreferences.loading}
+        onChange={value => { void historyPreferences.updateSettings({ sort: value as MealReviewSort }); }}
         options={[{ value: 'recent', label: 'Newest first' }, { value: 'rating', label: 'Highest rated' }]} />
-      {sortedReviews.length ? sortedReviews.map(item => <View key={`${item.personId}:${item.date}`}
+      {historyPreferences.error ? <ErrorBox error={new Error(historyPreferences.error)} /> : null}
+      {historyPreferences.loading ? <Muted>Loading saved history filters…</Muted> : sortedReviews.length ? sortedReviews.map(item => <View key={`${item.personId}:${item.date}`}
         style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 9, gap: 6 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Pressable style={{ flex: 1, gap: 3 }} onPress={() => { setDate(item.date); setMonth(item.date.slice(0, 7)); }}>
