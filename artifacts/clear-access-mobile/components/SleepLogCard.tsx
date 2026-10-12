@@ -11,7 +11,7 @@ import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, Muted, tap } from '@/com
 import DateField from '@/components/DateField';
 import TimeField from '@/components/TimeField';
 import MonthField from '@/components/MonthField';
-import { sleepMonthPreferences, useDayActivitiesForDates, useGetDayActivity, useSaveSleepRecord, useSearchSleepNotes, useSleepRecordsForDateRange } from '@/lib/local-api';
+import { sleepMonthPreferences, sleepRoutinePreferences, useDayActivitiesForDates, useGetDayActivity, useSaveSleepRecord, useSearchSleepNotes, useSleepRecordsForDateRange } from '@/lib/local-api';
 
 const qualityChoices = [
   { value: 'unrated', label: 'Choose rating' },
@@ -554,6 +554,18 @@ export function SleepLogCard({ personId, personName, date, dateOfBirth, onSelect
   const sourceDay = useGetDayActivity({ personId, date: sourceDate });
   const sourceTimes = reusableSleepTimes(sourceDay.data?.sleep);
   const save = useSaveSleepRecord();
+  const [routineState, setRoutineState] = useState<{
+    personId: number | null;
+    value: ReturnType<typeof reusableSleepTimes>;
+    loading: boolean;
+    error: string | null;
+    errorKind: 'load' | 'save' | null;
+  }>({ personId: null, value: null, loading: true, error: null, errorKind: null });
+  const routine = routineState.personId === personId ? routineState.value : null;
+  const routineLoading = routineState.personId !== personId || routineState.loading;
+  const routineError = routineState.personId === personId && routineState.errorKind === 'load' ? routineState.error : null;
+  const [routineSaving, setRoutineSaving] = useState(false);
+  const [routineNotice, setRoutineNotice] = useState('');
   const [bedtime, setBedtime] = useState('');
   const [wakeTime, setWakeTime] = useState('');
   const [quality, setQuality] = useState('unrated');
@@ -568,6 +580,22 @@ export function SleepLogCard({ personId, personName, date, dateOfBirth, onSelect
   const overnightPairValid = !hasOvernightInput || (Boolean(bedtime.trim() && wakeTime.trim()) && duration !== null);
   const wakeUpsValid = duration !== null || wakeUps.length === 0;
   const age = dateOfBirth ? getAgeOnDate(dateOfBirth, date) : null;
+  const currentTimes = reusableSleepTimes({ bedtime: bedtime.trim(), wakeTime: wakeTime.trim() });
+
+  useEffect(() => {
+    let active = true;
+    setRoutineState({ personId, value: null, loading: true, error: null, errorKind: null });
+    sleepRoutinePreferences.load(personId).then(value => {
+      if (active) setRoutineState({ personId, value, loading: false, error: null, errorKind: null });
+    }).catch(problem => {
+      if (active) setRoutineState({
+        personId, value: null, loading: false,
+        error: problem instanceof Error ? problem.message : String(problem),
+        errorKind: 'load',
+      });
+    });
+    return () => { active = false; };
+  }, [personId]);
 
   useEffect(() => {
     if (!day.isSuccess) return;
@@ -611,6 +639,33 @@ export function SleepLogCard({ personId, personName, date, dateOfBirth, onSelect
     setError(null);
   }
 
+  function applyRoutine() {
+    if (!routine) return;
+    setBedtime(routine.bedtime);
+    setWakeTime(routine.wakeTime);
+    setRoutineNotice('Filled bedtime and wake time from your routine. Review and save this date to keep them.');
+  }
+
+  async function saveRoutine() {
+    if (!currentTimes || routineSaving || routineLoading) return;
+    setRoutineSaving(true);
+    setRoutineNotice('');
+    setRoutineState({ personId, value: routine, loading: false, error: null, errorKind: null });
+    try {
+      await sleepRoutinePreferences.save(personId, currentTimes);
+      setRoutineState({ personId, value: currentTimes, loading: false, error: null, errorKind: null });
+      setRoutineNotice('Bedtime and wake-time routine saved for this person.');
+    } catch (problem) {
+      setRoutineState({
+        personId, value: routine, loading: false,
+        error: problem instanceof Error ? problem.message : String(problem),
+        errorKind: 'save',
+      });
+    } finally {
+      setRoutineSaving(false);
+    }
+  }
+
   const canSave = totalDuration !== null && overnightPairValid && wakeUpsValid && quality !== 'unrated' && note.length <= 1000 && !save.isPending;
   return <Card>
     <Eyebrow>Sleep · {personName} · {date}</Eyebrow>
@@ -631,6 +686,23 @@ export function SleepLogCard({ personId, personName, date, dateOfBirth, onSelect
               testID="button-copy-sleep-times-from-date" onPress={copySourceTimes} />
           : <Muted>No overnight bedtime and wake time are saved for {sourceDate}. Choose a different date.</Muted>}
       <Muted>Only bedtime and wake time are copied. Ratings, notes, naps, and wake-ups stay unchanged.</Muted>
+      <View testID="sleep-routine-controls" style={{ borderWidth: 1, borderColor: c.border, borderRadius: 12, padding: 10, gap: 6 }}>
+        <Text style={{ fontFamily: F.semi, color: c.foreground }}>Reusable sleep routine</Text>
+        <Muted>This routine is saved on this device for {personName}, separately from dated sleep logs.</Muted>
+        {routineLoading ? <Muted>Loading this person’s sleep routine…</Muted> :
+          routine ? <>
+            <Muted>Saved: {routine.bedtime} bedtime · {routine.wakeTime} wake time</Muted>
+            <Btn small variant="ghost" icon="copy" label="Apply routine"
+              testID="button-apply-sleep-routine" onPress={applyRoutine} />
+          </> : <Muted>No routine saved for {personName}.</Muted>}
+        <Btn small variant="ghost" icon="check" label={routine ? 'Update routine from these times' : 'Save these times as a routine'}
+          loading={routineSaving} disabled={routineLoading || routineSaving || !currentTimes}
+          testID="button-save-sleep-routine" onPress={() => void saveRoutine()} />
+        {routineError ? <Muted>Could not load this person’s sleep routine. {routineError}</Muted> : null}
+        {routineState.personId === personId && routineState.errorKind === 'save' && routineState.error
+          ? <Muted>Could not save this person’s sleep routine. {routineState.error}</Muted> : null}
+        {routineNotice ? <Muted>{routineNotice}</Muted> : null}
+      </View>
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <View style={{ flex: 1 }}><TimeField label="Bedtime (24-hour)" value={bedtime} onChangeText={setBedtime} placeholder="22:30" testID="input-sleep-bedtime" /></View>
         <View style={{ flex: 1 }}><TimeField label="Wake time (24-hour)" value={wakeTime} onChangeText={setWakeTime} placeholder="06:45" testID="input-sleep-wake-time" /></View>
