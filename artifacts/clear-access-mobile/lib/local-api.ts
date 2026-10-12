@@ -319,12 +319,13 @@ export function useSleepRecordsForDateRange(personId: number, startDate: string,
     { query: { enabled } },
   );
 }
-export function useSearchSleepNotes(personId: number, searchTerm: string) {
+export function useSearchSleepNotes(personId: number, searchTerm: string, qualityRatings: number[] = []) {
   const normalized = searchTerm.trim();
+  const qualities = [...new Set(qualityRatings.filter(rating => Number.isInteger(rating) && rating >= 1 && rating <= 5))].sort((a, b) => a - b);
   return useLocalQuery(
-    ['searchSleepNotes', personId, normalized.toLowerCase()],
-    () => localStore.searchSleepNotes(personId, normalized),
-    { query: { enabled: normalized.length > 0 } },
+    ['searchSleepNotes', personId, normalized.toLowerCase(), qualities.join(',')],
+    () => localStore.searchSleepNotes(personId, normalized, qualities),
+    { query: { enabled: normalized.length > 0 || qualities.length > 0 } },
   );
 }
 export function useDayActivitiesForDates(personId: number, dates: string[]) {

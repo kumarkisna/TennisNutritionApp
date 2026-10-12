@@ -1822,13 +1822,16 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
           .sort((left, right) => left.date.localeCompare(right.date));
       });
     },
-    async searchSleepNotes(personId: number, query: string): Promise<Array<{ date: string; sleep: NonNullable<DayActivity['sleep']> }>> {
+    async searchSleepNotes(personId: number, query: string, qualityRatings: number[] = []): Promise<Array<{ date: string; sleep: NonNullable<DayActivity['sleep']> }>> {
       const normalizedQuery = query.trim().toLowerCase();
+      const selectedQualities = new Set(qualityRatings.filter(rating => Number.isInteger(rating) && rating >= 1 && rating <= 5));
       return read(current => {
         findPerson(current, personId);
-        if (!normalizedQuery) return [];
+        if (!normalizedQuery && selectedQualities.size === 0) return [];
         return current.activities
-          .filter(activity => activity.personId === personId && activity.sleep?.note.toLowerCase().includes(normalizedQuery))
+          .filter(activity => activity.personId === personId && activity.sleep !== undefined &&
+            (!normalizedQuery || activity.sleep.note.toLowerCase().includes(normalizedQuery)) &&
+            (!selectedQualities.size || selectedQualities.has(activity.sleep.quality)))
           .sort((left, right) => right.date.localeCompare(left.date))
           .map(activity => ({ date: activity.date, sleep: clone(activity.sleep!) }));
       });

@@ -20,6 +20,7 @@ const qualityChoices = [
   { value: '4', label: '4' },
   { value: '5', label: '5 · Great' },
 ];
+const sleepNoteQualityChoices = qualityChoices.slice(1).map(choice => ({ value: Number(choice.value), label: choice.label }));
 
 function SleepIntervalEditor({ label, testPrefix, intervals, onChange, startHint, endHint, maxEntries }: {
   label: string;
@@ -79,6 +80,7 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
   const [expandedActivityGroup, setExpandedActivityGroup] = useState<'active' | 'rest' | null>(null);
   const [noteSearch, setNoteSearch] = useState('');
   const [settledNoteSearch, setSettledNoteSearch] = useState('');
+  const [noteQualityFilters, setNoteQualityFilters] = useState<number[]>([]);
   useEffect(() => {
     setWeekStart(sleepWeekDates(date)[0] ?? date);
   }, [date]);
@@ -132,7 +134,9 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
   const qualitySummaries = useMemo(() => summarizeSleepQualityByMonth(
     qualityRangeRecords.data ?? [], qualityRangeStart, qualityRangeEnd, today(),
   ), [qualityRangeRecords.data, qualityRangeStart, qualityRangeEnd]);
-  const noteResults = useSearchSleepNotes(personId, settledNoteSearch);
+  const noteResults = useSearchSleepNotes(personId, settledNoteSearch, noteQualityFilters);
+  const noteFiltersActive = Boolean(noteSearch.trim()) || noteQualityFilters.length > 0;
+  const noteSearchPending = noteSearch.trim().toLowerCase() !== settledNoteSearch.toLowerCase();
   const toRecord = (dayDate: string, queryIndex: number) => {
     const query = days[queryIndex];
     const sleep = query?.data?.sleep;
@@ -408,18 +412,40 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
     <Muted>Tap a date to load its sleep record in the Planner. Saved records stay attached to their original dates.</Muted>
     {!dateOfBirth ? <Muted>Add the person’s date of birth in Settings to compare logged nights with age-based ranges.</Muted> : null}
     <View style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 8, gap: 6 }}>
-      <Text style={{ fontFamily: F.semi, color: c.foreground }}>Find a sleep note</Text>
+      <Text style={{ fontFamily: F.semi, color: c.foreground }}>Find sleep notes by words or quality</Text>
       <Field label="Search this person’s saved sleep notes" value={noteSearch} onChangeText={setNoteSearch} placeholder="Search words in notes" maxLength={100} testID="input-sleep-note-search" />
-      {noteSearch.trim() ? <Btn small variant="ghost" label="Clear search" testID="button-clear-sleep-note-search" onPress={() => setNoteSearch('')} /> : null}
-      {!noteSearch.trim() ? <Muted>Search notes saved on any date for this person.</Muted> :
-        noteSearch.trim().toLowerCase() !== settledNoteSearch.toLowerCase() ? <Muted>Searching saved notes…</Muted> :
+      <Text style={{ fontFamily: F.semi, color: c.foreground }}>Quality rating · select any that match</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7 }}>
+        {sleepNoteQualityChoices.map(choice => {
+          const selected = noteQualityFilters.includes(choice.value);
+          return <Pressable key={choice.value} testID={`button-sleep-note-quality-${choice.value}`}
+            accessibilityRole="button" accessibilityLabel={`Filter by sleep quality ${choice.label}`}
+            accessibilityState={{ selected }}
+            onPress={() => {
+              tap();
+              setNoteQualityFilters(current => current.includes(choice.value)
+                ? current.filter(value => value !== choice.value)
+                : [...current, choice.value].sort((a, b) => a - b));
+            }}
+            style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999,
+              backgroundColor: selected ? c.primary : c.secondary, borderWidth: 1,
+              borderColor: selected ? c.primary : c.border }}>
+            <Text style={{ fontFamily: F.semi, fontSize: 12, color: selected ? c.primaryForeground : c.foreground }}>{choice.label}</Text>
+          </Pressable>;
+        })}
+      </View>
+      <Muted>Choose one or more ratings. When you also search words, both filters apply.</Muted>
+      {noteFiltersActive ? <Btn small variant="ghost" label="Clear filters" testID="button-clear-sleep-note-filters"
+        onPress={() => { setNoteSearch(''); setNoteQualityFilters([]); }} /> : null}
+      {!noteFiltersActive ? <Muted>Search notes or filter rated sleep logs for this person. Your normal date-based review stays below.</Muted> :
+        noteSearchPending ? <Muted>Searching saved sleep logs…</Muted> :
         noteResults.isLoading ? <Muted>Searching saved notes…</Muted> :
           noteResults.isError ? <ErrorBox error={noteResults.error} /> :
             noteResults.data?.length ? noteResults.data.map(result => <Pressable
               key={result.date}
               testID={`button-sleep-note-result-${result.date}`}
               accessibilityRole="button"
-              accessibilityLabel={`Open sleep note from ${result.date}: ${result.sleep.note}`}
+              accessibilityLabel={`Open sleep record from ${result.date}, rated ${result.sleep.quality} out of 5`}
               onPress={() => {
                 tap();
                 setExpandedDate(result.date);
@@ -429,9 +455,12 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
                 borderTopWidth: 1, borderTopColor: c.border, paddingTop: 6, opacity: pressed ? 0.7 : 1,
               })}
             >
-              <Text style={{ fontFamily: F.semi, color: c.primary }}>{result.date} · {formatSleepDuration(calculateTotalSleepMinutes(result.sleep) ?? 0)}</Text>
-              <Muted>{result.sleep.note}</Muted>
-            </Pressable>) : <Muted>No saved sleep notes match “{noteSearch.trim()}”.</Muted>}
+              <Text style={{ fontFamily: F.semi, color: c.primary }}>{result.date} · {formatSleepDuration(calculateTotalSleepMinutes(result.sleep) ?? 0)} · {result.sleep.quality}/5</Text>
+              <Muted>{result.sleep.note.trim() || 'No note saved for this date.'}</Muted>
+            </Pressable>) : <Muted>{noteSearch.trim() && noteQualityFilters.length
+              ? 'No saved sleep logs match this text and rating selection.'
+              : noteQualityFilters.length ? 'No saved sleep logs match these ratings.'
+                : `No saved sleep notes match “${noteSearch.trim()}”.`}</Muted>}
     </View>
     {rangeMode === 'month' ? !monthSelectionReady ? <Muted>Loading the selected month breakdown…</Muted> : <View testID="sleep-month-weekly-breakdown" style={{ gap: 7 }}>
       <Text style={{ fontFamily: F.semi, color: c.foreground }}>Week-by-week sleep & hydration</Text>
