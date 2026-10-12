@@ -67,11 +67,7 @@ function ThemeReadyApp() {
           <QueryClientProvider client={queryClient}>
             <PlannerProvider>
               <MealReminderProvider>
-              <GestureHandlerRootView style={{ flex: 1 }}>
-                <KeyboardProvider>
                   <RootLayoutNav />
-                </KeyboardProvider>
-              </GestureHandlerRootView>
               </MealReminderProvider>
             </PlannerProvider>
           </QueryClientProvider>
@@ -92,10 +88,14 @@ export default function RootLayout() {
   if (!fontsLoaded && !fontError) return null;
 
   return (
-    <SafeAreaProvider>
-      <ThemeProvider>
-        <ThemeReadyApp />
-      </ThemeProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <KeyboardProvider>
+        <SafeAreaProvider>
+          <ThemeProvider>
+            <ThemeReadyApp />
+          </ThemeProvider>
+        </SafeAreaProvider>
+      </KeyboardProvider>
+    </GestureHandlerRootView>
   );
 }
