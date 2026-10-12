@@ -23,3 +23,4 @@
 - [Evidence-based hydration guidance](hydration-guidance-boundary.md) — label daily water values as population references and avoid fixed activity-based fluid prescriptions.
 - [Native backup handoff](native-backup-handoff.md) — share-sheet return is not proof of a saved destination; avoid deleting exports while recipients may still read them.
 - [History event timestamps](history-event-timestamps.md) — after a row-lock wait, timestamp at insertion rather than transaction start to preserve edit order.
+- [Goal-review reminder policy](goal-review-reminder-policy.md) — review reminders are nonclinical prompts, not medical expiry dates; dismissal is browser-local.

@@ -16,6 +16,7 @@ import {
   type Food, type FoodCategory, type FoodInput, type Meal, type MealEntry, type ActivityLevel, type Nutrition,
   type DiscoveredFood, type Person, type PersonInput,
 } from '@workspace/api-client-react';
+import { GoalReviewReminders } from './components/GoalReviewReminder';
 
 const categories: FoodCategory[] = ['grains', 'protein', 'vegetables', 'fruit', 'dairy', 'other'];
 const meals: Meal[] = ['breakfast', 'lunch', 'dinner', 'snack'];
@@ -486,6 +487,7 @@ function BodyDetails({ person }: { person: Person }) {
 }
 
 function NutrientGoals({ person }: { person: Person }) {
+  const { user } = useUser();
   const [iron, setIron] = useState(person.ironGoalMg === null ? '' : String(person.ironGoalMg));
   const [fat, setFat] = useState(person.fatGoalG === null ? '' : String(person.fatGoalG));
   const [ironSource, setIronSource] = useState(person.ironGoalSource ?? '');
@@ -533,6 +535,7 @@ function NutrientGoals({ person }: { person: Person }) {
 
   return <div className="workspace-card workspace-card-pad" data-testid="section-nutrient-goals">
     <SectionHeading kicker="Personal goals / optional" title={`${person.name}'s iron and fat goals`} />
+    {user && <GoalReviewReminders person={person} userId={user.id} today={today()} />}
     <p className="text-sm leading-6 text-[#6d7a79]">Enter goals you already have from a qualified professional or a source you trust. We do not calculate these from age, sex, activity, or the workbook. The workbook’s iron cells are invalid dates, and its fat ranges require person groups we cannot safely assign.</p>
     <form onSubmit={submit} className="mt-6">
       <p className="mb-4 text-xs leading-5 text-[#6d7a79]">Source notes and review dates are optional and provided by you. The app does not check the source or verify a professional review. Avoid entering private medical details or a professional’s contact information.</p>
