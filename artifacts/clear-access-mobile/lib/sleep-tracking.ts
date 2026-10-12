@@ -28,6 +28,11 @@ export function sleepMonthDates(anchorDate: string): string[] {
     `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(index + 1).padStart(2, '0')}`);
 }
 
+export function shiftSleepMonth(month: string, amount: number): string {
+  const [year, monthNumber] = month.split('-').map(Number);
+  return new Date(Date.UTC(year, monthNumber - 1 + amount, 1)).toISOString().slice(0, 7);
+}
+
 export type SleepPeriodRecord = {
   date: string;
   sleep: SleepLog | undefined;

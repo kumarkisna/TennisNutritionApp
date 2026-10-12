@@ -4,7 +4,7 @@ import { useDayActivitiesForDates, useGetDayActivity, useSaveSleepRecord, useSea
 import { getAgeOnDate } from '@/lib/planning-targets';
 import { shiftDate, today } from '@/lib/format';
 import type { SleepInterval } from '@/lib/local-models';
-import { calculateTotalSleepMinutes, formatSleepDuration, reusableSleepTimes, sleepDurationMinutes, sleepMonthDates, sleepReferenceForDate, sleepWeekDates, summarizeSleepRecords } from '@/lib/sleep-tracking';
+import { calculateTotalSleepMinutes, formatSleepDuration, reusableSleepTimes, shiftSleepMonth, sleepDurationMinutes, sleepMonthDates, sleepReferenceForDate, sleepWeekDates, summarizeSleepRecords } from '@/lib/sleep-tracking';
 import { useColors } from '@/hooks/useColors';
 import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, Muted, tap } from '@/components/ui';
 import TimeField from '@/components/TimeField';
@@ -17,12 +17,6 @@ const qualityChoices = [
   { value: '4', label: '4' },
   { value: '5', label: '5 · Great' },
 ];
-
-function shiftSleepMonth(month: string, amount: number) {
-  const [year, monthNumber] = month.split('-').map(Number);
-  const shifted = new Date(Date.UTC(year, monthNumber - 1 + amount, 1));
-  return shifted.toISOString().slice(0, 7);
-}
 
 function SleepIntervalEditor({ label, testPrefix, intervals, onChange, startHint, endHint, maxEntries }: {
   label: string;
@@ -84,10 +78,16 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
   }, [noteSearch]);
   const dates = useMemo(() => rangeMode === 'week' ? sleepWeekDates(weekStart) : sleepMonthDates(`${month}-01`),
     [rangeMode, weekStart, month]);
-  const days = useDayActivitiesForDates(personId, dates);
+  const currentMonthDates = useMemo(() => sleepMonthDates(`${month}-01`), [month]);
+  const previousMonth = useMemo(() => shiftSleepMonth(month, -1), [month]);
+  const previousMonthDates = useMemo(() => sleepMonthDates(`${previousMonth}-01`), [previousMonth]);
+  const queriedDates = useMemo(() => rangeMode === 'month' ? [...previousMonthDates, ...currentMonthDates] : dates,
+    [rangeMode, previousMonthDates, currentMonthDates, dates]);
+  const days = useDayActivitiesForDates(personId, queriedDates);
   const noteResults = useSearchSleepNotes(personId, settledNoteSearch);
-  const records = dates.map((dayDate, index) => {
-    const sleep = days[index]?.data?.sleep;
+  const toRecord = (dayDate: string, queryIndex: number) => {
+    const query = days[queryIndex];
+    const sleep = query?.data?.sleep;
     const minutes = sleep ? calculateTotalSleepMinutes(sleep) : null;
     const reference = sleepReferenceForDate(dateOfBirth, dayDate);
     const comparison = minutes === null ? null : reference === null ? 'Add date of birth for an age-based comparison.' :
@@ -95,15 +95,22 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
         reference.maxMinutes !== null && minutes > reference.maxMinutes ? `Above daily reference (${reference.label})` :
           `Within daily reference (${reference.label})`;
     return {
-      date: dayDate, sleep, minutes, reference, comparison, loading: days[index]?.isLoading ?? true,
-      failed: days[index]?.isError ?? false,
+      date: dayDate, sleep, minutes, reference, comparison, loading: query?.isLoading ?? true,
+      failed: query?.isError ?? false,
       napOnly: Boolean(sleep && sleep.bedtime === null && sleep.wakeTime === null && (sleep.naps?.length ?? 0) > 0),
       overnight: Boolean(sleep && sleep.bedtime !== null && sleep.wakeTime !== null),
     };
-  });
+  };
+  const records = rangeMode === 'month'
+    ? currentMonthDates.map((dayDate, index) => toRecord(dayDate, previousMonthDates.length + index))
+    : dates.map((dayDate, index) => toRecord(dayDate, index));
+  const previousRecords = rangeMode === 'month' ? previousMonthDates.map((dayDate, index) => toRecord(dayDate, index)) : [];
   const summary = summarizeSleepRecords(records, today());
+  const previousSummary = summarizeSleepRecords(previousRecords, today());
   const periodLoading = records.some(record => record.loading);
   const periodFailed = records.some(record => record.failed);
+  const previousPeriodLoading = previousRecords.some(record => record.loading);
+  const previousPeriodFailed = previousRecords.some(record => record.failed);
   const moveWeek = (amount: number) => {
     const start = new Date(`${weekStart}T00:00:00Z`);
     start.setUTCDate(start.getUTCDate() + amount * 7);
@@ -111,9 +118,22 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
   };
   const prettyDate = (isoDate: string, options: Intl.DateTimeFormatOptions) =>
     new Date(`${isoDate}T00:00:00Z`).toLocaleDateString(undefined, { ...options, timeZone: 'UTC' });
+  const monthTitle = (monthValue: string) => new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' })
+    .format(new Date(`${monthValue}-01T00:00:00`));
   const periodTitle = rangeMode === 'week'
     ? `${prettyDate(dates[0], { month: 'short', day: 'numeric' })} – ${prettyDate(dates[6], { month: 'short', day: 'numeric', year: 'numeric' })}`
-    : new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(new Date(`${month}-01T00:00:00`));
+    : monthTitle(month);
+  const monthCounts = (value: typeof summary) =>
+    `${value.loggedDays}/${value.elapsedDays} past dates logged · ${value.overnightDays} overnight · ${value.napOnlyDays} nap-only · ${value.missingDays} missing`;
+  const monthAverages = (value: typeof summary) =>
+    `Average duration ${value.averageMinutes === null ? 'unavailable' : formatSleepDuration(value.averageMinutes)} · quality ${value.averageQuality === null ? 'unrated' : `${value.averageQuality.toFixed(1)}/5`}`;
+  const durationDelta = summary.averageMinutes === null || previousSummary.averageMinutes === null
+    ? 'unavailable'
+    : summary.averageMinutes === previousSummary.averageMinutes ? 'no change'
+      : `${summary.averageMinutes > previousSummary.averageMinutes ? '+' : '−'}${formatSleepDuration(Math.abs(summary.averageMinutes - previousSummary.averageMinutes))}`;
+  const qualityDelta = summary.averageQuality === null || previousSummary.averageQuality === null
+    ? 'unavailable'
+    : `${summary.averageQuality === previousSummary.averageQuality ? '' : summary.averageQuality > previousSummary.averageQuality ? '+' : '−'}${Math.abs(summary.averageQuality - previousSummary.averageQuality).toFixed(1)} points`;
   const movePeriod = (amount: number) => {
     if (rangeMode === 'week') moveWeek(amount);
     else setMonth(current => shiftSleepMonth(current, amount));
@@ -129,10 +149,21 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
       <Btn small variant="ghost" label={`Next ${rangeMode}`} testID={`button-sleep-next-${rangeMode}`} onPress={() => movePeriod(1)} />
     </View>
     {periodLoading ? <Muted>Loading sleep records…</Muted> : periodFailed ? <Muted>Some dates could not be loaded. Try reopening this range.</Muted> :
-      summary.elapsedDays === 0 ? <Muted>No past dates in this range yet.</Muted> : <>
-        <Muted>{summary.loggedDays}/{summary.elapsedDays} past dates logged · {summary.overnightDays} overnight · {summary.napOnlyDays} nap-only · {summary.missingDays} missing</Muted>
-        <Muted>{summary.averageMinutes !== null ? `Average recorded duration ${formatSleepDuration(summary.averageMinutes)}` : 'No measurable sleep duration in logged records'}
-          {summary.averageQuality !== null ? ` · average quality ${summary.averageQuality.toFixed(1)}/5` : ''}. Missing dates are excluded from averages.</Muted>
+      rangeMode === 'month' ? <View testID="sleep-month-comparison" style={{ borderWidth: 1, borderColor: c.border, borderRadius: 12, padding: 10, gap: 5 }}>
+        <Text style={{ fontFamily: F.semi, color: c.foreground }}>Compared with the previous month</Text>
+        {previousPeriodLoading ? <Muted>Loading {monthTitle(previousMonth)}…</Muted> : previousPeriodFailed ? <Muted>Previous month records could not be loaded.</Muted> : <>
+          <Text style={{ fontFamily: F.semi, color: c.foreground }}>{monthTitle(month)}</Text>
+          <Muted>{summary.elapsedDays ? monthCounts(summary) : 'No past dates in this month yet.'}</Muted>
+          <Muted>{monthAverages(summary)}</Muted>
+          <Text style={{ fontFamily: F.semi, color: c.foreground }}>{monthTitle(previousMonth)}</Text>
+          <Muted>{monthCounts(previousSummary)}</Muted>
+          <Muted>{monthAverages(previousSummary)}</Muted>
+          <Muted>Change: duration {durationDelta} · quality {qualityDelta} versus {monthTitle(previousMonth)}.</Muted>
+          <Muted>Missing dates are shown separately and excluded from averages.</Muted>
+        </>}
+      </View> : summary.elapsedDays === 0 ? <Muted>No past dates in this range yet.</Muted> : <>
+        <Muted>{monthCounts(summary)}</Muted>
+        <Muted>{monthAverages(summary)}. Missing dates are excluded from averages.</Muted>
       </>}
     <Muted>Tap a date to load its sleep record in the Planner. Saved records stay attached to their original dates.</Muted>
     {!dateOfBirth ? <Muted>Add the person’s date of birth in Settings to compare logged nights with age-based ranges.</Muted> : null}

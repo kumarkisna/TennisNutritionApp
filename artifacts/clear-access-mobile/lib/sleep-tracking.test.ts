@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 // @ts-ignore Node's built-in test modules are used only by the direct regression suite.
 import test from 'node:test';
-import { calculateTotalSleepMinutes, formatSleepDuration, reusableSleepTimes, sleepDurationMinutes, sleepMonthDates, sleepReferenceForDate, sleepWeekDates, summarizeSleepRecords } from './sleep-tracking';
+import { calculateTotalSleepMinutes, formatSleepDuration, reusableSleepTimes, shiftSleepMonth, sleepDurationMinutes, sleepMonthDates, sleepReferenceForDate, sleepWeekDates, summarizeSleepRecords } from './sleep-tracking';
 
 test('sleep duration handles overnight sleep and daytime sleep', () => {
   assert.equal(sleepDurationMinutes('22:30', '06:45'), 495);
@@ -44,6 +44,11 @@ test('sleep month ranges include every date, including leap days', () => {
   assert.equal(sleepMonthDates('2028-02-01')[0], '2028-02-01');
   assert.equal(sleepMonthDates('2028-02-28').at(-1), '2028-02-29');
   assert.equal(sleepMonthDates('2026-10-12').length, 31);
+});
+
+test('sleep month navigation crosses year boundaries', () => {
+  assert.equal(shiftSleepMonth('2026-01', -1), '2025-12');
+  assert.equal(shiftSleepMonth('2026-12', 1), '2027-01');
 });
 
 test('sleep summaries separate missing dates from nap-only, overnight, and zero-minute records', () => {
