@@ -119,7 +119,7 @@ export type {
   PreferencesInput,
   ImportFoodInput,
 } from './local-models';
-export { createLocalStore, LOCAL_STORAGE_KEY, isValidCalendarDate } from './local-store';
+export { createLocalStore, LOCAL_STORAGE_KEY, WEIGHT_RECORD_UNDO_WINDOW_MS, isValidCalendarDate } from './local-store';
 export type {
   FoodLibraryImportPreview,
   FoodLibraryImportResult,
@@ -127,6 +127,7 @@ export type {
   AllPeoplePlannerImportResult,
   PersonPlannerImportPreview,
   PersonPlannerImportResult,
+  DeletedWeightRecord,
 } from './local-store';
 
 export const localStore = createLocalStore(AsyncStorage);
@@ -269,7 +270,12 @@ export function useUpdateWeightRecord() {
     localStore.updateWeightRecord(id, data), WEIGHT_RECORDS_REFRESH);
 }
 export function useDeleteWeightRecord() {
-  return useLocalMutation(({ id }: { id: number }) => localStore.deleteWeightRecord(id), WEIGHT_RECORDS_REFRESH);
+  return useLocalMutation(({ id, personId }: { id: number; personId: number }) =>
+    localStore.deleteWeightRecord(id, personId), WEIGHT_RECORDS_REFRESH);
+}
+export function useUndoDeleteWeightRecord() {
+  return useLocalMutation(({ token, personId }: { token: string; personId: number }) =>
+    localStore.undoDeleteWeightRecord(token, personId), WEIGHT_RECORDS_REFRESH);
 }
 
 export function useListFoods(params?: ListFoodsParams, options?: LocalQueryOptions<Food[]>) {

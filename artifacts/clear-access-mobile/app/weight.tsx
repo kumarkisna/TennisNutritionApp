@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { usePlanner } from '@/contexts/PlannerProvider';
@@ -9,6 +9,9 @@ import {
   useDeleteWeightRecord,
   useListWeightRecords,
   useUpdateWeightRecord,
+  useUndoDeleteWeightRecord,
+  WEIGHT_RECORD_UNDO_WINDOW_MS,
+  type DeletedWeightRecord,
   type WeightRecord,
 } from '@/lib/local-api';
 import { isIsoDate, today } from '@/lib/format';
@@ -28,6 +31,7 @@ function WeightTracker() {
   const create = useCreateWeightRecord();
   const update = useUpdateWeightRecord();
   const remove = useDeleteWeightRecord();
+  const undoDelete = useUndoDeleteWeightRecord();
   const records = recordsQuery.data ?? [];
   const sortedRecords = useMemo(
     () => [...records].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id),
@@ -39,8 +43,20 @@ function WeightTracker() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [undoReceipts, setUndoReceipts] = useState<DeletedWeightRecord[]>([]);
+  const [undoError, setUndoError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const saveBusy = create.isPending || update.isPending;
+
+  useEffect(() => {
+    if (undoReceipts.length === 0) return;
+    const nextExpiry = Math.min(...undoReceipts.map(receipt => receipt.expiresAt));
+    const timer = setTimeout(() => {
+      const currentTime = Date.now();
+      setUndoReceipts(current => current.filter(receipt => receipt.expiresAt > currentTime));
+    }, Math.max(0, nextExpiry - Date.now()) + 10);
+    return () => clearTimeout(timer);
+  }, [undoReceipts]);
 
   function resetForm() {
     setEditingRecordId(null);
@@ -100,14 +116,29 @@ function WeightTracker() {
   async function deleteMeasurement(record: WeightRecord) {
     setDeleteError(null);
     try {
-      await remove.mutateAsync({ id: record.id });
+      const deleted = await remove.mutateAsync({ id: record.id, personId });
+      setUndoReceipts(current => [...current.filter(receipt => receipt.expiresAt > Date.now()), deleted]);
+      setUndoError(null);
       setConfirmDeleteId(null);
       if (editingRecordId === record.id) resetForm();
       success();
-      setSuccessMessage(`Weigh-in from ${record.date} deleted.`);
+      setSuccessMessage(`Weigh-in from ${record.date} deleted. You can undo this for ${WEIGHT_RECORD_UNDO_WINDOW_MS / 1000} seconds.`);
     } catch (error) {
       warn();
       setDeleteError(error instanceof Error ? error.message : 'The weigh-in could not be deleted. Try again.');
+    }
+  }
+
+  async function undoDeleteMeasurement(receipt: DeletedWeightRecord) {
+    setUndoError(null);
+    try {
+      await undoDelete.mutateAsync({ token: receipt.token, personId });
+      setUndoReceipts(current => current.filter(item => item.token !== receipt.token));
+      setSuccessMessage(`Weigh-in from ${receipt.record.date} restored.`);
+      success();
+    } catch (error) {
+      warn();
+      setUndoError(error instanceof Error ? error.message : 'This weigh-in could not be restored.');
     }
   }
 
@@ -179,6 +210,15 @@ function WeightTracker() {
     </Card>
 
     {successMessage ? <Text testID="weight-success" accessibilityLiveRegion="polite" style={{ fontFamily: F.semi, fontSize: 13, lineHeight: 19, color: c.primary }}>{successMessage}</Text> : null}
+    {undoReceipts.map(receipt => <Card key={receipt.token} tone="mint" style={{ gap: 7 }}>
+      <Text accessibilityLiveRegion="polite" style={{ fontFamily: F.semi, fontSize: 13, lineHeight: 19, color: c.foreground }}>
+        Deleted {receipt.record.date} · {receipt.record.weightKg.toFixed(1)} kg. Undo is available for {WEIGHT_RECORD_UNDO_WINDOW_MS / 1000} seconds.
+      </Text>
+      <Btn small variant="ghost" icon="rotate-ccw" label="Undo delete" testID={`button-undo-weight-${receipt.record.id}`}
+        loading={undoDelete.isPending} disabled={remove.isPending || undoDelete.isPending}
+        onPress={() => void undoDeleteMeasurement(receipt)} />
+      {undoError ? <Text testID="weight-undo-error" accessibilityRole="alert" style={{ fontFamily: F.medium, fontSize: 13, color: c.destructive }}>{undoError}</Text> : null}
+    </Card>)}
 
     <Card>
       <SectionTitle kicker="Chart">Weight over time</SectionTitle>
@@ -213,7 +253,7 @@ function WeightTracker() {
           <Btn small variant="danger" icon="trash-2" label="Delete" testID={`button-delete-weight-${record.id}`} disabled={saveBusy || remove.isPending} onPress={() => { setConfirmDeleteId(record.id); setDeleteError(null); }} />
         </View>
         {confirmDeleteId === record.id ? <View testID={`panel-confirm-delete-weight-${record.id}`} accessibilityRole="alert" style={{ gap: 8 }}>
-          <Text style={{ fontFamily: F.semi, fontSize: 13, lineHeight: 19, color: c.destructive }}>Delete the {record.date} weigh-in? This cannot be undone.</Text>
+          <Text style={{ fontFamily: F.semi, fontSize: 13, lineHeight: 19, color: c.destructive }}>Delete the {record.date} weigh-in? You can undo this for {WEIGHT_RECORD_UNDO_WINDOW_MS / 1000} seconds.</Text>
           {deleteError ? <Text testID="weight-delete-error" style={{ fontFamily: F.medium, fontSize: 13, color: c.destructive }}>{deleteError}</Text> : null}
           <Btn small variant="danger" icon="trash-2" label="Confirm delete" testID={`button-confirm-delete-weight-${record.id}`} loading={remove.isPending} onPress={() => void deleteMeasurement(record)} />
           <Btn small variant="ghost" label="Keep weigh-in" testID={`button-cancel-delete-weight-${record.id}`} disabled={remove.isPending} onPress={() => setConfirmDeleteId(null)} />

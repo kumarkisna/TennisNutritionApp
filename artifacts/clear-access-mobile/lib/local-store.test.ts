@@ -532,7 +532,7 @@ test('keeps dated weigh-ins separate from planning weight and supports isolated 
   assert.equal(updatedTarget.targetWeightKg, 64);
   assert.deepEqual(await store.getDailySummary(params), summaryBefore);
   assert.equal((await createLocalStore(storage).listWeightRecords({ personId: alice.id })).length, 2);
-  await store.deleteWeightRecord(newer.id);
+  await store.deleteWeightRecord(newer.id, alice.id);
   assert.deepEqual((await store.listWeightRecords({ personId: alice.id })).map(record => record.id), [older.id]);
 });
 
@@ -630,6 +630,78 @@ test('deleting a person cascades only that person’s height and weight records 
   assert.equal((await store.listHeightRecords()).length, 1);
   assert.equal((await store.listWeightRecords({ personId: retained.id })).length, 1);
   assert.equal((await store.listWeightRecords()).length, 1);
+});
+
+test('weigh-in deletion returns a short-lived, person-bound single-use undo and restores the exact record', async () => {
+  const storage = new MemoryStorage();
+  let currentTime = 1_000_000;
+  const store = createLocalStore(storage, undefined, () => currentTime);
+  const alice = await store.createPerson(baselinePerson('Undo Alice'));
+  const bob = await store.createPerson(baselinePerson('Undo Bob'));
+  const original = await store.createWeightRecord({ personId: alice.id, date: '2025-04-12', weightKg: 61.7 });
+  await assert.rejects(store.deleteWeightRecord(original.id, bob.id), /not found for this person/i);
+  assert.deepEqual(await store.listWeightRecords({ personId: alice.id }), [original]);
+
+  const receipt = await store.deleteWeightRecord(original.id, alice.id);
+  assert.deepEqual(receipt.record, original);
+  assert.equal(receipt.expiresAt, currentTime + 30_000);
+  assert.deepEqual(await store.listWeightRecords({ personId: alice.id }), []);
+  await assert.rejects(store.undoDeleteWeightRecord('forged-token', alice.id), /invalid|already been used/i);
+  await assert.rejects(store.undoDeleteWeightRecord(receipt.token, bob.id), /different person/i);
+  assert.deepEqual(await store.listWeightRecords({ personId: bob.id }), []);
+  const restored = await store.undoDeleteWeightRecord(receipt.token, alice.id);
+  assert.deepEqual(restored, original, 'original record id, person, date and weight are restored');
+  assert.deepEqual(await store.listWeightRecords({ personId: alice.id }), [original]);
+  await assert.rejects(store.undoDeleteWeightRecord(receipt.token, alice.id), /invalid|already been used/i);
+  assert.deepEqual(await createLocalStore(storage).listWeightRecords({ personId: alice.id }), [original]);
+});
+
+test('expired or conflicting weigh-in undo fails without restoring to the wrong person or date', async () => {
+  let currentTime = 50_000;
+  const store = createLocalStore(new MemoryStorage(), undefined, () => currentTime);
+  const alice = await store.createPerson(baselinePerson('Undo conflict Alice'));
+  const bob = await store.createPerson(baselinePerson('Undo conflict Bob'));
+  const expiredRecord = await store.createWeightRecord({ personId: alice.id, date: '2025-05-01', weightKg: 70 });
+  const expiredReceipt = await store.deleteWeightRecord(expiredRecord.id, alice.id);
+  currentTime = expiredReceipt.expiresAt;
+  await assert.rejects(store.undoDeleteWeightRecord(expiredReceipt.token, alice.id), /expired/i);
+  assert.deepEqual(await store.listWeightRecords(), []);
+
+  const record = await store.createWeightRecord({ personId: alice.id, date: '2025-05-02', weightKg: 69 });
+  const receipt = await store.deleteWeightRecord(record.id, alice.id);
+  const replacement = await store.createWeightRecord({ personId: alice.id, date: record.date, weightKg: 68 });
+  await assert.rejects(store.undoDeleteWeightRecord(receipt.token, alice.id), /another weigh-in now exists/i);
+  assert.deepEqual(await store.listWeightRecords({ personId: alice.id }), [replacement]);
+  await assert.rejects(store.undoDeleteWeightRecord(receipt.token, bob.id), /invalid|different person/i);
+  assert.deepEqual(await store.listWeightRecords({ personId: bob.id }), []);
+});
+
+test('a storage write failure does not report a deletion or consume an undo before restoration is saved', async () => {
+  const storage = new MemoryStorage();
+  const store = createLocalStore(storage);
+  const person = await store.createPerson(baselinePerson('Undo durable'));
+  const record = await store.createWeightRecord({ personId: person.id, date: '2025-06-01', weightKg: 72 });
+  storage.failNextWrite = true;
+  await assert.rejects(store.deleteWeightRecord(record.id, person.id), /change was not applied/i);
+  assert.deepEqual(await store.listWeightRecords({ personId: person.id }), [record]);
+  const receipt = await store.deleteWeightRecord(record.id, person.id);
+  storage.failNextWrite = true;
+  await assert.rejects(store.undoDeleteWeightRecord(receipt.token, person.id), /change was not applied/i);
+  assert.deepEqual(await store.listWeightRecords({ personId: person.id }), []);
+  assert.deepEqual(await store.undoDeleteWeightRecord(receipt.token, person.id), record);
+  assert.deepEqual(await createLocalStore(storage).listWeightRecords({ personId: person.id }), [record]);
+});
+
+test('weight history presents a timed Undo action and scopes it to the currently selected person', () => {
+  const weightPath = [
+    resolve(process.cwd(), 'app/weight.tsx'),
+    resolve(process.cwd(), 'artifacts/clear-access-mobile/app/weight.tsx'),
+  ].find(existsSync);
+  assert.ok(weightPath, 'weight progress screen source should be available to the regression test');
+  const source = readFileSync(weightPath, 'utf8');
+  assert.match(source, /label="Undo delete"/);
+  assert.match(source, /You can undo this for \{WEIGHT_RECORD_UNDO_WINDOW_MS \/ 1000\} seconds/);
+  assert.match(source, /undoDelete\.mutateAsync\(\{ token: receipt\.token, personId \}\)/);
 });
 
 test('a failed measurement persistence leaves committed and durable records unchanged', async () => {

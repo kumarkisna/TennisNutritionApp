@@ -83,6 +83,12 @@ type StoredFood = Food & { referenceKey?: string };
 type StoredEntry = { id: number; date: string; personId: number; meal: MealEntryInput['meal']; grams: number; foodId: number; tennisDietId?: string };
 type StoredHeightRecord = HeightRecord;
 type StoredWeightRecord = WeightRecord;
+export const WEIGHT_RECORD_UNDO_WINDOW_MS = 30_000;
+export type DeletedWeightRecord = {
+  token: string;
+  record: WeightRecord;
+  expiresAt: number;
+};
 type StoreData = {
   version: number;
   people: Person[];
@@ -1272,11 +1278,13 @@ function validateFood(data: FoodInput | FoodUpdate, existing?: Food): Omit<Food,
   };
 }
 
-export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOCAL_STORAGE_KEY) {
+export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOCAL_STORAGE_KEY, now: () => number = Date.now) {
   let data: StoreData | undefined;
   let hydration: Promise<StoreData> | undefined;
   let writeQueue: Promise<unknown> = Promise.resolve();
   let restoreInProgress: Promise<void> | undefined;
+  let nextWeightUndoId = 0;
+  const pendingWeightUndos = new Map<string, { record: WeightRecord; expiresAt: number }>();
 
   const load = (): Promise<StoreData> => {
     if (restoreInProgress) return restoreInProgress.then(() => load());
@@ -1603,11 +1611,57 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
         return record;
       });
     },
-    async deleteWeightRecord(id: number): Promise<void> {
-      return transact(draft => {
-        if (!draft.weightRecords.some(record => record.id === id)) fail('Weight record not found.');
+    async deleteWeightRecord(id: number, personId: number): Promise<DeletedWeightRecord> {
+      const record = await transact(draft => {
+        if (!Number.isSafeInteger(personId) || personId < 1) fail('Choose a valid person.');
+        findPerson(draft, personId);
+        const target = draft.weightRecords.find(candidate => candidate.id === id && candidate.personId === personId);
+        if (!target) fail('Weight record not found for this person.');
         draft.weightRecords = draft.weightRecords.filter(record => record.id !== id);
+        return target;
       });
+      const currentTime = now();
+      for (const [token, pending] of pendingWeightUndos) {
+        if (pending.expiresAt <= currentTime) pendingWeightUndos.delete(token);
+      }
+      const token = `${currentTime.toString(36)}-${(++nextWeightUndoId).toString(36)}-${Math.random().toString(36).slice(2)}`;
+      const expiresAt = currentTime + WEIGHT_RECORD_UNDO_WINDOW_MS;
+      pendingWeightUndos.set(token, { record, expiresAt });
+      return { token, record, expiresAt };
+    },
+    async undoDeleteWeightRecord(token: string, personId: number): Promise<WeightRecord> {
+      const pending = typeof token === 'string' ? pendingWeightUndos.get(token) : undefined;
+      if (!pending) fail('This undo action is invalid or has already been used.');
+      if (!Number.isSafeInteger(personId) || personId < 1 || pending.record.personId !== personId) {
+        fail('This undo action belongs to a different person.');
+      }
+      const currentTime = now();
+      if (!Number.isFinite(currentTime) || currentTime >= pending.expiresAt) {
+        pendingWeightUndos.delete(token);
+        fail('The weigh-in undo window has expired.');
+      }
+      const restored = await transact(draft => {
+        const person = findPerson(draft, personId);
+        if (!isValidCalendarDate(pending.record.date) || pending.record.date > todayDate()) {
+          fail('This weigh-in date is no longer valid. No data was changed.');
+        }
+        if (person.dateOfBirth && pending.record.date < person.dateOfBirth) {
+          fail('This weigh-in is before the person’s current date of birth. No data was changed.');
+        }
+        if (!isFiniteInRange(pending.record.weightKg, 1, 500)) {
+          fail('This weigh-in value is no longer valid. No data was changed.');
+        }
+        if (draft.weightRecords.some(record => record.id === pending.record.id)) {
+          fail('This weigh-in has already been restored.');
+        }
+        if (draft.weightRecords.some(record => record.personId === personId && record.date === pending.record.date)) {
+          fail('Another weigh-in now exists for this person and date. No data was changed.');
+        }
+        draft.weightRecords.push(pending.record);
+        return pending.record;
+      });
+      pendingWeightUndos.delete(token);
+      return restored;
     },
     async createFood(input: FoodInput): Promise<Food> {
       return transact(draft => {
