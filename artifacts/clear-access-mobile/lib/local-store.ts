@@ -1749,6 +1749,19 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
           { date: params.date, personId: params.personId, activityType: 'rest' as const };
       });
     },
+    async listSleepRecordsForDateRange(personId: number, startDate: string, endDate: string) {
+      if (!isValidCalendarDate(startDate) || !isValidCalendarDate(endDate) || endDate < startDate) {
+        fail('Choose a valid sleep date range.');
+      }
+      return read(current => {
+        findPerson(current, personId);
+        return current.activities
+          .filter(activity => activity.personId === personId && activity.date >= startDate &&
+            activity.date <= endDate && activity.sleep !== undefined)
+          .map(activity => ({ date: activity.date, sleep: clone(activity.sleep!) }))
+          .sort((left, right) => left.date.localeCompare(right.date));
+      });
+    },
     async searchSleepNotes(personId: number, query: string): Promise<Array<{ date: string; sleep: NonNullable<DayActivity['sleep']> }>> {
       const normalizedQuery = query.trim().toLowerCase();
       return read(current => {

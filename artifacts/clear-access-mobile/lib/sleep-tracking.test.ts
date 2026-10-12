@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 // @ts-ignore Node's built-in test modules are used only by the direct regression suite.
 import test from 'node:test';
-import { calculateTotalSleepMinutes, formatSleepDuration, reusableSleepTimes, shiftSleepMonth, sleepDurationMinutes, sleepMonthDates, sleepMonthWeekRanges, sleepReferenceForDate, sleepWeekDates, summarizeSleepQualityByWeekday, summarizeSleepRecords } from './sleep-tracking';
+import { calculateTotalSleepMinutes, formatSleepDuration, reusableSleepTimes, shiftSleepMonth, sleepDurationMinutes, sleepMonthDates, sleepMonthWeekRanges, sleepMonthsBetween, sleepReferenceForDate, summarizeSleepQualityByMonth, sleepWeekDates, summarizeSleepQualityByWeekday, summarizeSleepRecords } from './sleep-tracking';
 
 test('sleep duration handles overnight sleep and daytime sleep', () => {
   assert.equal(sleepDurationMinutes('22:30', '06:45'), 495);
@@ -30,25 +30,27 @@ test('reusable previous-day values include only valid bedtime and wake time', ()
   assert.equal(reusableSleepTimes({ bedtime: '25:30', wakeTime: '06:45' }), null);
 });
 
-test('sleep weeks are Monday to Sunday across month and year boundaries', () => {
-  assert.deepEqual(sleepWeekDates('2026-10-10'), [
-    '2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09', '2026-10-10', '2026-10-11',
-  ]);
-  assert.deepEqual(sleepWeekDates('2027-01-01'), [
-    '2026-12-28', '2026-12-29', '2026-12-30', '2026-12-31', '2027-01-01', '2027-01-02', '2027-01-03',
-  ]);
+test('sleep quality ranges include every selected month and reject reversed or excessive ranges', () => {
+  assert.deepEqual(sleepMonthsBetween('2025-12', '2026-02'), ['2025-12', '2026-01', '2026-02']);
+  assert.deepEqual(sleepMonthsBetween('2026-02', '2026-01'), []);
+  assert.deepEqual(sleepMonthsBetween('2026-13', '2027-01'), []);
+  assert.deepEqual(sleepMonthsBetween('2015-01', '2026-01'), []);
 });
 
-test('sleep month ranges include every date, including leap days', () => {
-  assert.equal(sleepMonthDates('2028-02-17').length, 29);
-  assert.equal(sleepMonthDates('2028-02-01')[0], '2028-02-01');
-  assert.equal(sleepMonthDates('2028-02-28').at(-1), '2028-02-29');
-  assert.equal(sleepMonthDates('2026-10-12').length, 31);
-});
-
-test('sleep month navigation crosses year boundaries', () => {
-  assert.equal(shiftSleepMonth('2026-01', -1), '2025-12');
-  assert.equal(shiftSleepMonth('2026-12', 1), '2027-01');
+test('monthly quality averages and counts ignore missing dates, unrated logs, and future ratings', () => {
+  const results = summarizeSleepQualityByMonth([
+    { date: '2026-01-02', sleep: { bedtime: '22:00', wakeTime: '06:00', quality: 5, note: '', naps: [], wakeUps: [] } },
+    { date: '2026-01-03', sleep: { bedtime: null, wakeTime: null, quality: 0, note: '', naps: [], wakeUps: [] } },
+    { date: '2026-01-04', sleep: { bedtime: null, wakeTime: null, quality: 1, note: '', naps: [], wakeUps: [] } },
+    { date: '2026-02-01', sleep: { bedtime: '22:00', wakeTime: '06:00', quality: 4, note: '', naps: [], wakeUps: [] } },
+    { date: '2026-02-02', sleep: { bedtime: '22:00', wakeTime: '06:00', quality: 2, note: '', naps: [], wakeUps: [] } },
+    { date: '2026-03-02', sleep: { bedtime: '22:00', wakeTime: '06:00', quality: 5, note: '', naps: [], wakeUps: [] } },
+  ], '2026-01', '2026-03', '2026-02-28');
+  assert.deepEqual(results, [
+    { month: '2026-01', averageQuality: 3, ratedDays: 2, qualityCounts: [1, 0, 0, 0, 1] },
+    { month: '2026-02', averageQuality: 3, ratedDays: 2, qualityCounts: [0, 1, 0, 1, 0] },
+    { month: '2026-03', averageQuality: null, ratedDays: 0, qualityCounts: [0, 0, 0, 0, 0] },
+  ]);
 });
 
 test('month weeks use Monday boundaries and mark partial calendar weeks', () => {

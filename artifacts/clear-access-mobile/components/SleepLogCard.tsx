@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
-import { sleepMonthPreferences, useDayActivitiesForDates, useGetDayActivity, useSaveSleepRecord, useSearchSleepNotes } from '@/lib/local-api';
 import { getAgeOnDate } from '@/lib/planning-targets';
 import { shiftDate, today } from '@/lib/format';
 import type { SleepInterval } from '@/lib/local-models';
-import { calculateTotalSleepMinutes, formatSleepDuration, reusableSleepTimes, shiftSleepMonth, sleepDurationMinutes, sleepMonthDates, sleepMonthWeekRanges, sleepReferenceForDate, sleepWeekDates, summarizeSleepQualityByWeekday, summarizeSleepRecords } from '@/lib/sleep-tracking';
+import { calculateTotalSleepMinutes, formatSleepDuration, reusableSleepTimes, shiftSleepMonth, sleepDurationMinutes, sleepMonthDates, sleepMonthWeekRanges, sleepMonthsBetween, sleepReferenceForDate, sleepWeekDates, summarizeSleepQualityByMonth, summarizeSleepQualityByWeekday, summarizeSleepRecords } from '@/lib/sleep-tracking';
 import { compareHydrationSummaries, summarizeHydrationByWeekday, summarizeHydrationRecords } from '@/lib/hydration';
 import { useColors } from '@/hooks/useColors';
 import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, Muted, tap } from '@/components/ui';
 import TimeField from '@/components/TimeField';
 import MonthField from '@/components/MonthField';
+import { sleepMonthPreferences, useDayActivitiesForDates, useGetDayActivity, useSaveSleepRecord, useSearchSleepNotes, useSleepRecordsForDateRange } from '@/lib/local-api';
 
 const qualityChoices = [
   { value: 'unrated', label: 'Choose rating' },
@@ -71,7 +71,9 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
   const [monthPreferenceError, setMonthPreferenceError] = useState<string | null>(null);
   const latestDateMonth = useRef(date.slice(0, 7));
   latestDateMonth.current = date.slice(0, 7);
-  const [rangeMode, setRangeMode] = useState<'week' | 'month'>('week');
+  const [rangeMode, setRangeMode] = useState<'week' | 'month' | 'quality-range'>('week');
+  const [qualityRangeStart, setQualityRangeStart] = useState(() => shiftSleepMonth(date.slice(0, 7), -11));
+  const [qualityRangeEnd, setQualityRangeEnd] = useState(() => date.slice(0, 7));
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
   const [noteSearch, setNoteSearch] = useState('');
   const [settledNoteSearch, setSettledNoteSearch] = useState('');
@@ -116,9 +118,18 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
     [rangeMode, weekStart, month]);
   const currentMonthDates = useMemo(() => sleepMonthDates(`${month}-01`), [month]);
   const comparisonMonthDates = useMemo(() => sleepMonthDates(`${comparisonMonth}-01`), [comparisonMonth]);
-  const queriedDates = useMemo(() => rangeMode === 'month' ? [...comparisonMonthDates, ...currentMonthDates] : dates,
+  const queriedDates = useMemo(() => rangeMode === 'month' ? [...comparisonMonthDates, ...currentMonthDates] : rangeMode === 'week' ? dates : [],
     [rangeMode, comparisonMonthDates, currentMonthDates, dates]);
   const days = useDayActivitiesForDates(personId, queriedDates);
+  const qualityMonths = useMemo(() => sleepMonthsBetween(qualityRangeStart, qualityRangeEnd), [qualityRangeStart, qualityRangeEnd]);
+  const qualityRangeValid = qualityMonths.length > 0;
+  const qualityRangeStartDate = `${qualityRangeStart}-01`;
+  const qualityRangeEndDate = `${qualityRangeEnd}-${String(new Date(Date.UTC(Number(qualityRangeEnd.slice(0, 4)), Number(qualityRangeEnd.slice(5, 7)), 0)).getUTCDate()).padStart(2, '0')}`;
+  const qualityRangeRecords = useSleepRecordsForDateRange(personId, qualityRangeStartDate, qualityRangeEndDate,
+    rangeMode === 'quality-range' && qualityRangeValid);
+  const qualitySummaries = useMemo(() => summarizeSleepQualityByMonth(
+    qualityRangeRecords.data ?? [], qualityRangeStart, qualityRangeEnd, today(),
+  ), [qualityRangeRecords.data, qualityRangeStart, qualityRangeEnd]);
   const noteResults = useSearchSleepNotes(personId, settledNoteSearch);
   const toRecord = (dayDate: string, queryIndex: number) => {
     const query = days[queryIndex];
@@ -138,7 +149,7 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
   };
   const records = rangeMode === 'month'
     ? currentMonthDates.map((dayDate, index) => toRecord(dayDate, comparisonMonthDates.length + index))
-    : dates.map((dayDate, index) => toRecord(dayDate, index));
+    : rangeMode === 'week' ? dates.map((dayDate, index) => toRecord(dayDate, index)) : [];
   const comparisonRecords = rangeMode === 'month' ? comparisonMonthDates.map((dayDate, index) => toRecord(dayDate, index)) : [];
   const summary = summarizeSleepRecords(records, today());
   const comparisonSummary = summarizeSleepRecords(comparisonRecords, today());
@@ -216,19 +227,38 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
 
   return <View style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 10, gap: 8 }}>
     <Text style={{ fontFamily: F.bold, color: c.foreground }}>Sleep patterns</Text>
-    <Chips testPrefix="select-sleep-summary-range" value={rangeMode} onChange={value => setRangeMode(value as 'week' | 'month')}
-      options={[{ value: 'week', label: 'Week' }, { value: 'month', label: 'Month' }]} />
+    <Chips testPrefix="select-sleep-summary-range" value={rangeMode} onChange={value => setRangeMode(value as 'week' | 'month' | 'quality-range')}
+      options={[{ value: 'week', label: 'Week' }, { value: 'month', label: 'Month' }, { value: 'quality-range', label: 'Quality range' }]} />
     {rangeMode === 'month' ? monthSelectionReady ? <View style={{ flexDirection: 'row', gap: 8 }}>
       <MonthField label="Month to review" value={month} onChangeText={setMonth} testID="select-sleep-month" />
       <MonthField label="Compare with" value={comparisonMonth} onChangeText={setComparisonMonth} testID="select-sleep-comparison-month" />
     </View> : <Muted>Loading this person’s saved month selections…</Muted> : null}
-    {rangeMode === 'week' || monthSelectionReady ? <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+    {rangeMode === 'quality-range' ? <View style={{ flexDirection: 'row', gap: 8 }}>
+      <MonthField label="Start month" value={qualityRangeStart} onChangeText={setQualityRangeStart} testID="select-sleep-quality-start-month" />
+      <MonthField label="End month" value={qualityRangeEnd} onChangeText={setQualityRangeEnd} testID="select-sleep-quality-end-month" />
+    </View> : null}
+    {rangeMode === 'week' || (rangeMode === 'month' && monthSelectionReady) ? <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
       <Btn small variant="ghost" label={`Previous ${rangeMode}`} testID={`button-sleep-previous-${rangeMode}`} onPress={() => movePeriod(-1)} />
       <Text style={{ fontFamily: F.semi, fontSize: 12, color: c.foreground, textAlign: 'center', flex: 1 }}>{periodTitle}</Text>
       <Btn small variant="ghost" label={`Next ${rangeMode}`} testID={`button-sleep-next-${rangeMode}`} onPress={() => movePeriod(1)} />
     </View> : null}
     {rangeMode === 'month' && monthPreferenceError ? <Muted>{monthPreferenceError}</Muted> : null}
-    {rangeMode === 'month' && !monthSelectionReady ? <Muted>Loading the selected month comparison…</Muted> :
+    {rangeMode === 'quality-range' ? !qualityRangeValid ? <Muted>Choose a valid range of up to 10 years, with the start month on or before the end month.</Muted> :
+      qualityRangeRecords.isLoading ? <Muted>Loading sleep-quality history…</Muted> :
+        qualityRangeRecords.isError ? <Muted>Sleep-quality history could not be loaded.</Muted> :
+          <View testID="sleep-quality-trend" style={{ borderWidth: 1, borderColor: c.border, borderRadius: 12, padding: 10, gap: 7 }}>
+            <Text style={{ fontFamily: F.semi, color: c.foreground }}>Month-by-month sleep quality</Text>
+            <Muted>Average self-reported rating and counts include only saved ratings from 1–5. Missing dates and unrated records are excluded.</Muted>
+            {qualitySummaries.map(item => <View key={item.month} testID={`sleep-quality-month-${item.month}`} style={{
+              borderTopWidth: 1, borderTopColor: c.border, paddingTop: 6, gap: 2,
+            }}>
+              <Text style={{ fontFamily: F.semi, color: c.foreground }}>{monthTitle(item.month)}</Text>
+              <Muted>{item.averageQuality === null ? 'No past quality ratings.' :
+                `Average rating ${item.averageQuality.toFixed(1)}/5 · ${item.ratedDays} ${item.ratedDays === 1 ? 'rating' : 'ratings'}`}</Muted>
+              <Muted>Rating counts (1–5): {item.qualityCounts.map((count, index) => `${index + 1}: ${count}`).join(' · ')}</Muted>
+            </View>)}
+          </View> :
+    rangeMode === 'month' && !monthSelectionReady ? <Muted>Loading the selected month comparison…</Muted> :
       periodLoading ? <Muted>Loading sleep records…</Muted> : periodFailed ? <Muted>Some dates could not be loaded. Try reopening this range.</Muted> :
       rangeMode === 'month' ? <View testID="sleep-month-comparison" style={{ borderWidth: 1, borderColor: c.border, borderRadius: 12, padding: 10, gap: 5 }}>
         <Text style={{ fontFamily: F.semi, color: c.foreground }}>Month comparison</Text>

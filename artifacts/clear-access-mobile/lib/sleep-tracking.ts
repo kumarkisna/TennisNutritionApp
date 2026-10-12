@@ -47,12 +47,40 @@ export function shiftSleepMonth(month: string, amount: number): string {
   return new Date(Date.UTC(year, monthNumber - 1 + amount, 1)).toISOString().slice(0, 7);
 }
 
+export function sleepMonthsBetween(startMonth: string, endMonth: string): string[] {
+  const isMonth = (value: string) => /^\d{4}-(0[1-9]|1[0-2])$/.test(value);
+  if (!isMonth(startMonth) || !isMonth(endMonth) || endMonth < startMonth) return [];
+  const [startYear, startNumber] = startMonth.split('-').map(Number);
+  const [endYear, endNumber] = endMonth.split('-').map(Number);
+  const monthCount = (endYear - startYear) * 12 + endNumber - startNumber + 1;
+  if (monthCount > 120) return [];
+  return Array.from({ length: monthCount }, (_, offset) => shiftSleepMonth(startMonth, offset));
+}
 export type SleepPeriodRecord = {
   date: string;
   sleep: SleepLog | undefined;
   minutes: number | null;
 };
 
+export function summarizeSleepQualityByMonth(
+  records: readonly { date: string; sleep: SleepLog | undefined }[],
+  startMonth: string,
+  endMonth: string,
+  throughDate: string,
+) {
+  return sleepMonthsBetween(startMonth, endMonth).map(month => {
+    const monthRecords: SleepPeriodRecord[] = records
+      .filter(record => record.date.startsWith(`${month}-`) && record.date <= throughDate)
+      .map(record => ({ ...record, minutes: null }));
+    const summary = summarizeSleepRecords(monthRecords, throughDate);
+    return {
+      month,
+      averageQuality: summary.averageQuality,
+      ratedDays: summary.ratedDays,
+      qualityCounts: summary.qualityCounts,
+    };
+  });
+}
 export function summarizeSleepRecords(records: readonly SleepPeriodRecord[], throughDate: string) {
   const elapsed = records.filter(record => record.date <= throughDate);
   const logged = elapsed.filter(record => record.sleep !== undefined);

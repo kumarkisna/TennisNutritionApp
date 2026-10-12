@@ -304,6 +304,13 @@ export function useGetDailySummary(params: GetDailySummaryParams, options?: Loca
 export function useGetDayActivity(params: GetDayActivityParams, options?: LocalQueryOptions<DayActivity>) {
   return useLocalQuery(getGetDayActivityQueryKey(params), () => localStore.getDayActivity(params), options);
 }
+export function useSleepRecordsForDateRange(personId: number, startDate: string, endDate: string, enabled = true) {
+  return useLocalQuery(
+    ['listSleepRecordsForDateRange', personId, startDate, endDate],
+    () => localStore.listSleepRecordsForDateRange(personId, startDate, endDate),
+    { query: { enabled } },
+  );
+}
 export function useSearchSleepNotes(personId: number, searchTerm: string) {
   const normalized = searchTerm.trim();
   return useLocalQuery(
@@ -338,7 +345,7 @@ export function useSaveMealAlerts() {
 }
 export function useSaveSleepRecord() {
   return useLocalMutation(({ data }: { data: SleepLogInput }) =>
-    localStore.saveSleepRecord(data), [['getDayActivity'], ['searchSleepNotes']]);
+    localStore.saveSleepRecord(data), [['getDayActivity'], ['searchSleepNotes'], ['listSleepRecordsForDateRange']]);
 }
 export function useSaveHydrationLog() {
   return useLocalMutation(({ data }: { data: HydrationLogInput }) =>

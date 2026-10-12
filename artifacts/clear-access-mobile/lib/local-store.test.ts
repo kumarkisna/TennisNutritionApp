@@ -229,6 +229,24 @@ test('sleep note search is case-insensitive, date-sorted, and scoped to one pers
   assert.deepEqual(await store.searchSleepNotes(firstPerson.id, '   '), []);
 });
 
+test('sleep quality range records are date-bounded and scoped to one person', async () => {
+  const store = createLocalStore(new MemoryStorage());
+  const firstPerson = await store.createPerson({ ...baselinePerson('Sleep range one'), dateOfBirth: '2012-01-01' });
+  const secondPerson = await store.createPerson({ ...baselinePerson('Sleep range two'), dateOfBirth: '2012-01-01' });
+  const save = (personId: number, date: string, quality: number) => store.saveSleepRecord({
+    personId, date, sleep: { bedtime: '22:00', wakeTime: '06:00', quality, note: '', naps: [], wakeUps: [] },
+  });
+  await save(firstPerson.id, '2026-09-30', 2);
+  await save(firstPerson.id, '2026-10-08', 4);
+  await save(firstPerson.id, '2026-11-01', 5);
+  await save(secondPerson.id, '2026-10-09', 1);
+
+  const records = await store.listSleepRecordsForDateRange(firstPerson.id, '2026-10-01', '2026-10-31');
+  assert.deepEqual(records.map(record => [record.date, record.sleep.quality]), [['2026-10-08', 4]]);
+  await assert.rejects(store.listSleepRecordsForDateRange(firstPerson.id, '2026-11-01', '2026-10-01'), /valid sleep date range/i);
+  await assert.rejects(store.listSleepRecordsForDateRange(999999, '2026-10-01', '2026-10-31'), /person/i);
+});
+
 test('hydrates from the versioned seed and preserves changes across store restarts', async () => {
   const storage = new MemoryStorage();
   const firstStore = createLocalStore(storage);
