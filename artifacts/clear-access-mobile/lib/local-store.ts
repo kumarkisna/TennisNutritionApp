@@ -1283,6 +1283,7 @@ function validateFood(data: FoodInput | FoodUpdate, existing?: Food): Omit<Food,
 }
 
 export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOCAL_STORAGE_KEY, now: () => number = Date.now) {
+  const restoreUndoStorageKey = `${storageKey}:restore-undo:v1`;
   let data: StoreData | undefined;
   let hydration: Promise<StoreData> | undefined;
   let writeQueue: Promise<unknown> = Promise.resolve();
@@ -2491,20 +2492,112 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
       const current = await load();
       return summarizeBackup(current, new Date().toISOString());
     },
+    async hasUndoableRestore(): Promise<boolean> {
+      const pending = writeQueue.then(async () => {
+        let serialized: string | null;
+        try {
+          serialized = await storage.getItem(restoreUndoStorageKey);
+        } catch (error) {
+          throw new Error(`Could not check the saved pre-restore copy: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        if (!serialized) return false;
+        try {
+          validateStoredData(JSON.parse(serialized));
+        } catch (error) {
+          throw new Error(`The saved pre-restore copy could not be read. Your current planner was not changed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        return true;
+      });
+      return pending;
+    },
+    async undoLastRestore(): Promise<{ snapshotCleared: boolean }> {
+      let restorationGuard: Promise<void> = Promise.resolve();
+      const pending = writeQueue.then(async () => {
+        const pendingHydration = hydration;
+        if (pendingHydration) await pendingHydration;
+        if (!data) await load();
+        restoreInProgress = restorationGuard;
+
+        let serialized: string | null;
+        try {
+          serialized = await storage.getItem(restoreUndoStorageKey);
+        } catch (error) {
+          throw new Error(`Could not read the saved pre-restore copy; your current planner was not changed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        if (!serialized) fail('There is no saved restore to undo.');
+
+        let previousPlanner: StoreData;
+        try {
+          previousPlanner = validateStoredData(JSON.parse(serialized));
+        } catch (error) {
+          throw new Error(`The saved pre-restore copy is invalid; your current planner was not changed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        try {
+          await storage.setItem(storageKey, serialized);
+        } catch (error) {
+          throw new Error(`Could not undo the restore; your current planner was not changed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        data = clone(previousPlanner);
+        hydration = undefined;
+
+        let snapshotCleared = false;
+        try {
+          await storage.setItem(restoreUndoStorageKey, '');
+          snapshotCleared = true;
+        } catch {
+          // The planner has already been restored. Keeping the snapshot makes
+          // a repeated undo safe and idempotent if clearing storage fails.
+        }
+        return { snapshotCleared };
+      });
+      writeQueue = pending.then(() => undefined, () => undefined);
+      restorationGuard = pending.then(() => undefined, () => undefined);
+      void restorationGuard.then(() => {
+        if (restoreInProgress === restorationGuard) restoreInProgress = undefined;
+      });
+      return pending;
+    },
     async restoreBackup(serialized: string): Promise<void> {
       // Validate immediately for useful failures, then validate again when this operation
       // reaches the write queue so no state can be committed from stale assumptions.
       parseBackup(serialized);
       let restorationGuard: Promise<void> = Promise.resolve();
       const pending = writeQueue.then(async () => {
-        restoreInProgress = restorationGuard;
         const pendingHydration = hydration;
-        if (pendingHydration) await pendingHydration.catch(() => undefined);
+        if (pendingHydration) await pendingHydration;
+        if (!data) await load();
+        restoreInProgress = restorationGuard;
         const restored = parseBackup(serialized).data;
+
+        let previousSerialized: string | null;
+        let previousUndoSnapshot: string | null;
+        try {
+          previousSerialized = await storage.getItem(storageKey);
+          previousUndoSnapshot = await storage.getItem(restoreUndoStorageKey);
+        } catch (error) {
+          throw new Error(`Could not read the current planner to prepare a recovery copy; restore was not applied: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        if (!previousSerialized) {
+          throw new Error('Could not find the current planner to prepare a recovery copy; restore was not applied.');
+        }
+        try {
+          await storage.setItem(restoreUndoStorageKey, previousSerialized);
+        } catch (error) {
+          throw new Error(`Could not save a recovery copy of the current planner; restore was not applied: ${error instanceof Error ? error.message : String(error)}`);
+        }
         try {
           await storage.setItem(storageKey, JSON.stringify(restored));
         } catch (error) {
-          throw new Error(`Could not restore local planner data; the change was not applied: ${error instanceof Error ? error.message : String(error)}`);
+          let recoverySlotRestored = true;
+          try {
+            await storage.setItem(restoreUndoStorageKey, previousUndoSnapshot ?? '');
+          } catch {
+            recoverySlotRestored = false;
+          }
+          throw new Error(
+            `Could not restore local planner data; the change was not applied: ${error instanceof Error ? error.message : String(error)}` +
+            (recoverySlotRestored ? '' : ' The recovery copy could not be returned to its previous state.'),
+          );
         }
         data = clone(restored);
         hydration = undefined;

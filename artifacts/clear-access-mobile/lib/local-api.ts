@@ -425,6 +425,8 @@ export const LOCAL_PLANNER_QUERY_PREFIXES = [
 export const previewLocalBackup = (serialized: string) => localStore.previewBackup(serialized);
 
 export const restoreLocalBackup = (serialized: string) => localStore.restoreBackup(serialized);
+export const canUndoLocalRestore = () => localStore.hasUndoableRestore();
+export const undoLocalRestore = () => localStore.undoLastRestore();
 
 export const getLocalPeople = () => localStore.listPeople();
 export const getLocalBackupSummary = () => localStore.getBackupSummary();

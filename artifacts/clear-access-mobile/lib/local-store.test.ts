@@ -6,7 +6,7 @@ import test from 'node:test';
 import { existsSync, readFileSync } from 'node:fs';
 // @ts-ignore Node's built-in test modules are used only by this direct store regression suite.
 import { resolve } from 'node:path';
-import { createLocalStore, type AsyncKeyValueStorage } from './local-store';
+import { createLocalStore, LOCAL_STORAGE_KEY, type AsyncKeyValueStorage } from './local-store';
 import type { FoodIngredient, PersonInput } from './local-models';
 import {
   calculateFoodNutrition,
@@ -20,6 +20,7 @@ import { today } from './format';
 class MemoryStorage implements AsyncKeyValueStorage {
   values = new Map<string, string>();
   failNextWrite = false;
+  failKeyOnce: string | null = null;
   nextWriteGate: Promise<void> | null = null;
   activeWrites = 0;
   maxActiveWrites = 0;
@@ -35,6 +36,10 @@ class MemoryStorage implements AsyncKeyValueStorage {
         const gate = this.nextWriteGate;
         this.nextWriteGate = null;
         await gate;
+      }
+      if (this.failKeyOnce === key) {
+        this.failKeyOnce = null;
+        throw new Error('injected write failure');
       }
       if (this.failNextWrite) {
         this.failNextWrite = false;
@@ -1268,10 +1273,60 @@ test('failed atomic backup restore leaves durable and in-memory state unchanged'
   await source.createPerson(baselinePerson('Imported person'));
   const backup = await source.exportBackup();
   destinationStorage.failNextWrite = true;
-  await assert.rejects(destination.restoreBackup(backup), /change was not applied/i);
+  await assert.rejects(destination.restoreBackup(backup), /recovery copy.*restore was not applied/i);
   assert.equal(destinationStorage.values.get('clear-access-mobile:planner:v1'), originalBytes);
   assert.deepEqual(await destination.exportForTests(), originalState);
   assert.deepEqual(await createLocalStore(destinationStorage).exportForTests(), originalState);
+});
+
+test('restore keeps an on-device recovery copy that can undo after reopening the local store', async () => {
+  const destinationStorage = new MemoryStorage();
+  const destination = createLocalStore(destinationStorage);
+  const existingPerson = await destination.createPerson(baselinePerson('Previous planner person'));
+  const existingFood = (await destination.listFoods())[0];
+  await destination.createMealEntry({
+    personId: existingPerson.id,
+    date: '2026-10-12',
+    meal: 'lunch',
+    foodId: existingFood.id,
+    grams: 125,
+  });
+  const previousPlanner = await destination.exportForTests();
+
+  const source = createLocalStore(new MemoryStorage());
+  await source.createPerson(baselinePerson('Restored planner person'));
+  const incomingBackup = await source.exportBackup();
+  await destination.restoreBackup(incomingBackup);
+  assert.equal((await destination.listPeople()).some(person => person.name === 'Restored planner person'), true);
+  assert.equal(await destination.hasUndoableRestore(), true);
+
+  const reopenedStore = createLocalStore(destinationStorage);
+  assert.equal(await reopenedStore.hasUndoableRestore(), true);
+  assert.equal((await reopenedStore.listPeople()).some(person => person.name === 'Restored planner person'), true);
+  const undoResult = await reopenedStore.undoLastRestore();
+  assert.equal(undoResult.snapshotCleared, true);
+  assert.deepEqual(await reopenedStore.exportForTests(), previousPlanner);
+  assert.equal(await createLocalStore(destinationStorage).hasUndoableRestore(), false);
+});
+
+test('failed planner replacement keeps its current data and does not replace the prior recovery slot', async () => {
+  const destinationStorage = new MemoryStorage();
+  const destination = createLocalStore(destinationStorage);
+  await destination.createPerson(baselinePerson('Existing planner'));
+  const priorSnapshot = '{"existing":"undo snapshot"}';
+  destinationStorage.values.set(`${LOCAL_STORAGE_KEY}:restore-undo:v1`, priorSnapshot);
+  const originalBytes = destinationStorage.values.get(LOCAL_STORAGE_KEY);
+  const originalState = await destination.exportForTests();
+
+  const source = createLocalStore(new MemoryStorage());
+  await source.createPerson(baselinePerson('Incoming planner'));
+  const backup = await source.exportBackup();
+  destinationStorage.failKeyOnce = LOCAL_STORAGE_KEY;
+  await assert.rejects(destination.restoreBackup(backup), /change was not applied/i);
+
+  assert.equal(destinationStorage.values.get(LOCAL_STORAGE_KEY), originalBytes);
+  assert.equal(destinationStorage.values.get(`${LOCAL_STORAGE_KEY}:restore-undo:v1`), priorSnapshot);
+  assert.deepEqual(await destination.exportForTests(), originalState);
 });
 
 test('export is ordered between queued writes and restore remains serialized with writes', async () => {
