@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 // @ts-ignore Node's built-in test modules are used only by the direct regression suite.
 import test from 'node:test';
-import { compareHydrationSummaries, estimateSessionSweatRate, hydrationReference, hydrationTotals, mergeHydrationSchedule, summarizeHydrationByWeekday, summarizeHydrationRecords } from './hydration';
+import { compareHydrationSummaries, estimateSessionSweatRate, hydrationReference, hydrationTotals, mergeHydrationSchedule, summarizeHydrationByActivity, summarizeHydrationByWeekday, summarizeHydrationRecords } from './hydration';
 import { buildReminders } from './meal-reminders';
 
 test('hydration daily references distinguish total water from beverage intake', () => {
@@ -127,6 +127,36 @@ test('weekday hydration summaries compare planned and actual intake without trea
   });
   assert.equal(summary[2].actualMl, 700);
   assert.equal(summary[2].plannedMl, 700);
+});
+
+test('activity hydration summaries separate saved active and rest days and keep paired amounts complete', () => {
+  const summary = summarizeHydrationByActivity([
+    { date: '2026-10-01', activityType: 'training_60', tennis: {
+      mode: 'training', sessions: [{ kind: 'practice', startTime: '09:00', durationMinutes: 60, intensity: 'moderate' }],
+      fuel: { before: '', during: '', between: '', after: '', hydration: '' },
+    }, hydration: { entries: [
+      { id: 'active-recorded', time: '09:00', plannedMl: 500, actualMl: 300, alertEnabled: false },
+      { id: 'active-missing', time: '12:00', plannedMl: 250, actualMl: null, alertEnabled: false },
+    ], sessions: [] } },
+    { date: '2026-10-02', activityType: 'rest', hydration: { entries: [
+      { id: 'rest-zero', time: '10:00', plannedMl: 400, actualMl: 0, alertEnabled: false },
+    ], sessions: [] } },
+    { date: '2026-10-03', activityType: 'strength', hydration: undefined },
+    { date: '2026-10-04', activityType: 'rest', hydration: undefined },
+    { date: '2026-10-05', activityType: 'training_120', tennis: {
+      mode: 'tournament', sessions: [{ kind: 'match', startTime: '09:00', durationMinutes: 60, intensity: 'hard' }],
+      fuel: { before: '', during: '', between: '', after: '', hydration: '' },
+    }, hydration: { entries: [
+      { id: 'future', time: '09:00', plannedMl: 900, actualMl: 900, alertEnabled: false },
+    ], sessions: [] } },
+  ], '2026-10-04');
+
+  assert.deepEqual(summary.map(({ group, elapsedDays, plannedDays, actualDays, plannedMl, plannedForRecordedMl, actualMl }) => ({
+    group, elapsedDays, plannedDays, actualDays, plannedMl, plannedForRecordedMl, actualMl,
+  })), [
+    { group: 'active', elapsedDays: 1, plannedDays: 1, actualDays: 1, plannedMl: 750, plannedForRecordedMl: 500, actualMl: 300 },
+    { group: 'rest', elapsedDays: 2, plannedDays: 1, actualDays: 1, plannedMl: 400, plannedForRecordedMl: 400, actualMl: 0 },
+  ]);
 });
 
 test('hydration alerts use their planned date/time and stop once actual intake is logged', () => {

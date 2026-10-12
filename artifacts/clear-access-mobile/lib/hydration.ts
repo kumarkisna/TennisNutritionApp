@@ -1,5 +1,5 @@
 import { getAgeOnDate } from './planning-targets';
-import type { HydrationEntry, HydrationLog, HydrationSession } from './local-models';
+import type { DayActivityType, HydrationEntry, HydrationLog, HydrationSession, TennisPlan } from './local-models';
 
 export const HYDRATION_REMINDER_PREFIX = 'clear-access-hydration:';
 export const MAX_HYDRATION_ENTRIES = 20;
@@ -87,6 +87,25 @@ export function summarizeHydrationByWeekday(
       record.date <= throughDate && new Date(`${record.date}T00:00:00Z`).getUTCDay() === weekday,
     ), throughDate),
   }));
+}
+
+export function summarizeHydrationByActivity(
+  records: readonly { date: string; activityType: DayActivityType; tennis?: TennisPlan; hydration: HydrationLog | undefined }[],
+  throughDate: string,
+) {
+  return (['active', 'rest'] as const).map(group => {
+    const groupedRecords = records.filter(record =>
+      record.date <= throughDate && (
+        group === 'active'
+          ? record.tennis?.sessions.some(session => session.kind === 'practice' || session.kind === 'match') === true
+          : record.activityType === 'rest' || record.tennis?.mode === 'rest'
+      ),
+    );
+    return {
+      group,
+      ...summarizeHydrationRecords(groupedRecords, throughDate),
+    };
+  });
 }
 
 export function mergeHydrationSchedule(current: HydrationEntry[], source: HydrationEntry[], createId: (index: number) => string) {

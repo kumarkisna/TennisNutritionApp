@@ -4,7 +4,7 @@ import { getAgeOnDate } from '@/lib/planning-targets';
 import { shiftDate, today } from '@/lib/format';
 import type { SleepInterval } from '@/lib/local-models';
 import { calculateTotalSleepMinutes, formatSleepDuration, reusableSleepTimes, shiftSleepMonth, sleepDurationMinutes, sleepMonthDates, sleepMonthWeekRanges, sleepMonthsBetween, sleepReferenceForDate, sleepWeekDates, summarizeSleepQualityByMonth, summarizeSleepQualityByWeekday, summarizeSleepRecords } from '@/lib/sleep-tracking';
-import { compareHydrationSummaries, summarizeHydrationByWeekday, summarizeHydrationRecords } from '@/lib/hydration';
+import { compareHydrationSummaries, summarizeHydrationByActivity, summarizeHydrationByWeekday, summarizeHydrationRecords } from '@/lib/hydration';
 import { useColors } from '@/hooks/useColors';
 import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, Muted, tap } from '@/components/ui';
 import TimeField from '@/components/TimeField';
@@ -141,7 +141,9 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
         reference.maxMinutes !== null && minutes > reference.maxMinutes ? `Above daily reference (${reference.label})` :
           `Within daily reference (${reference.label})`;
     return {
-      date: dayDate, sleep, hydration: query?.data?.hydration, minutes, reference, comparison, loading: query?.isLoading ?? true,
+      date: dayDate, sleep, hydration: query?.data?.hydration,
+      activityType: query?.data?.activityType ?? 'rest', tennis: query?.data?.tennis,
+      minutes, reference, comparison, loading: query?.isLoading ?? true,
       failed: query?.isError ?? false,
       napOnly: Boolean(sleep && sleep.bedtime === null && sleep.wakeTime === null && (sleep.naps?.length ?? 0) > 0),
       overnight: Boolean(sleep && sleep.bedtime !== null && sleep.wakeTime !== null),
@@ -159,6 +161,12 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
   const comparisonHydrationSummary = summarizeHydrationRecords(comparisonRecords.map(record => ({ date: record.date, hydration: record.hydration })), today());
   const weekdayHydration = summarizeHydrationByWeekday(records.map(record => ({ date: record.date, hydration: record.hydration })), today());
   const comparisonWeekdayHydration = summarizeHydrationByWeekday(comparisonRecords.map(record => ({ date: record.date, hydration: record.hydration })), today());
+  const activityHydration = summarizeHydrationByActivity(records.map(record => ({
+    date: record.date, activityType: record.activityType, tennis: record.tennis, hydration: record.hydration,
+  })), today());
+  const comparisonActivityHydration = summarizeHydrationByActivity(comparisonRecords.map(record => ({
+    date: record.date, activityType: record.activityType, tennis: record.tennis, hydration: record.hydration,
+  })), today());
   const hydrationComparison = compareHydrationSummaries(hydrationSummary, comparisonHydrationSummary);
   const periodLoading = records.some(record => record.loading);
   const periodFailed = records.some(record => record.failed);
@@ -205,6 +213,16 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
       ? `${(value.actualMl / value.plannedForRecordedMl * 100).toFixed(0)}% of paired plan`
       : 'no paired amounts';
     return `${plannedPerDay} · ${actualPerDay}\n${matchedPercent} · ${value.recordedEntryCount}/${value.plannedEntryCount} drinks recorded`;
+  };
+  const activityHydrationValue = (value: typeof activityHydration[number]) => {
+    const plannedPerDay = value.plannedDays ? `${liters(value.plannedMl / value.plannedDays)}/planned day` : '— plan';
+    const actualPerDay = value.actualMl !== null && value.actualDays
+      ? `${liters(value.actualMl / value.actualDays)}/logged day`
+      : '— actual';
+    const matchedPercent = value.actualMl !== null && value.plannedForRecordedMl > 0
+      ? `${(value.actualMl / value.plannedForRecordedMl * 100).toFixed(0)}% paired`
+      : 'no paired amounts';
+    return `${plannedPerDay} · ${actualPerDay}\n${matchedPercent} · n=${value.elapsedDays} days · ${value.plannedDays} planned / ${value.actualDays} recorded days`;
   };
   const hydrationMonthDetails = (value: typeof hydrationSummary) =>
     `${value.plannedEntryCount ? `${liters(value.plannedMl)} planned across ${value.plannedDays} days` : 'No drink entries planned'} · ` +
@@ -308,6 +326,17 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
               <Text style={{ flex: 1, textAlign: 'center', fontFamily: F.regular, fontSize: 9, color: c.foreground }}>{weekdayHydrationValue(comparisonWeekdayHydration[index])}</Text>
             </View>)}
             <Muted>Plan averages use days with a plan; actual averages use days with amounts entered. Recorded-to-plan excludes drinks without actuals. This is a log comparison, not a fluid target.</Muted>
+          </View>
+          <View testID="hydration-activity-comparison" style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 7, marginTop: 3, gap: 5 }}>
+            <Text style={{ fontFamily: F.semi, color: c.foreground }}>Hydration on activity vs rest days</Text>
+            {activityHydration.map((value, index) => <View key={value.group} testID={`hydration-activity-${value.group}`} style={{ gap: 2 }}>
+              <Text style={{ fontFamily: F.semi, fontSize: 11, color: c.foreground }}>
+                {value.group === 'active' ? 'Practice / match activity days' : 'Rest days'}
+              </Text>
+              <Muted>{monthTitle(month)}: {activityHydrationValue(value)}</Muted>
+              <Muted>{monthTitle(comparisonMonth)}: {activityHydrationValue(comparisonActivityHydration[index])}</Muted>
+            </View>)}
+            <Muted>Practice/match days use this person’s saved tennis sessions; rest days use the saved Rest activity. Other activity days without a tennis practice or match are excluded. Averages use days with plans or recorded amounts; paired percentages exclude drinks without actual amounts. These are log comparisons, not fluid targets.</Muted>
           </View>
           <Muted>Change: duration {durationDelta} · quality {qualityDelta} versus {monthTitle(comparisonMonth)}.</Muted>
           <Muted>Hydration change versus {monthTitle(comparisonMonth)}: planned per planned day {volumeDelta(hydrationComparison.plannedPerPlannedDayChangeMl)} · recorded per day with actual entries {volumeDelta(hydrationComparison.recordedPerRecordedDayChangeMl)} · recorded/planned for drinks with actuals {recordedVsPlanned(hydrationComparison.currentRecordedVsPlannedPercent)} vs {recordedVsPlanned(hydrationComparison.comparisonRecordedVsPlannedPercent)}. This is a log comparison, not a hydration target.</Muted>
