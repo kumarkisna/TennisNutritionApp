@@ -77,6 +77,18 @@ export function compareHydrationSummaries(
   };
 }
 
+export function summarizeHydrationByWeekday(
+  records: readonly { date: string; hydration: HydrationLog | undefined }[],
+  throughDate: string,
+) {
+  return Array.from({ length: 7 }, (_, weekday) => ({
+    weekday,
+    ...summarizeHydrationRecords(records.filter(record =>
+      record.date <= throughDate && new Date(`${record.date}T00:00:00Z`).getUTCDay() === weekday,
+    ), throughDate),
+  }));
+}
+
 export function mergeHydrationSchedule(current: HydrationEntry[], source: HydrationEntry[], createId: (index: number) => string) {
   const merged = [...current];
   source.forEach((entry, index) => {

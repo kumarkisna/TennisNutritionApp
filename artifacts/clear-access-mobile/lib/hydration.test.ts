@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 // @ts-ignore Node's built-in test modules are used only by the direct regression suite.
 import test from 'node:test';
-import { compareHydrationSummaries, estimateSessionSweatRate, hydrationReference, hydrationTotals, mergeHydrationSchedule, summarizeHydrationRecords } from './hydration';
+import { compareHydrationSummaries, estimateSessionSweatRate, hydrationReference, hydrationTotals, mergeHydrationSchedule, summarizeHydrationByWeekday, summarizeHydrationRecords } from './hydration';
 import { buildReminders } from './meal-reminders';
 
 test('hydration daily references distinguish total water from beverage intake', () => {
@@ -91,6 +91,42 @@ test('hydration comparison reports unavailable when a month has no planned or re
     currentRecordedVsPlannedPercent: null,
     comparisonRecordedVsPlannedPercent: null,
   });
+});
+
+test('weekday hydration summaries compare planned and actual intake without treating missing entries as zero', () => {
+  const summary = summarizeHydrationByWeekday([
+    { date: '2026-10-05', hydration: { entries: [
+      { id: 'a', time: '09:00', plannedMl: 500, actualMl: 400, alertEnabled: false },
+      { id: 'b', time: '12:00', plannedMl: 300, actualMl: null, alertEnabled: false },
+    ], sessions: [] } },
+    { date: '2026-10-12', hydration: { entries: [
+      { id: 'c', time: '09:00', plannedMl: 600, actualMl: 300, alertEnabled: false },
+    ], sessions: [] } },
+    { date: '2026-10-19', hydration: { entries: [
+      { id: 'd', time: '09:00', plannedMl: 250, actualMl: null, alertEnabled: false },
+    ], sessions: [] } },
+    { date: '2026-10-06', hydration: { entries: [
+      { id: 'e', time: '09:00', plannedMl: 700, actualMl: 700, alertEnabled: false },
+    ], sessions: [] } },
+    { date: '2026-10-20', hydration: { entries: [
+      { id: 'future', time: '09:00', plannedMl: 900, actualMl: 900, alertEnabled: false },
+    ], sessions: [] } },
+  ], '2026-10-19');
+  assert.equal(summary.length, 7);
+  assert.deepEqual(summary[1], {
+    weekday: 1,
+    elapsedDays: 3,
+    plannedDays: 3,
+    noEntryDays: 0,
+    actualDays: 2,
+    plannedEntryCount: 4,
+    recordedEntryCount: 2,
+    plannedMl: 1650,
+    plannedForRecordedMl: 1100,
+    actualMl: 700,
+  });
+  assert.equal(summary[2].actualMl, 700);
+  assert.equal(summary[2].plannedMl, 700);
 });
 
 test('hydration alerts use their planned date/time and stop once actual intake is logged', () => {
