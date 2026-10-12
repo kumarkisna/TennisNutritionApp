@@ -8,6 +8,7 @@ import {
   type UseQueryOptions,
 } from '@tanstack/react-query';
 import { createLocalStore } from './local-store';
+import { createSleepMonthPreferences } from './sleep-month-preferences';
 import type {
   DailySummary,
   DayActivity,
@@ -129,6 +130,7 @@ export type {
 } from './local-store';
 
 export const localStore = createLocalStore(AsyncStorage);
+export const sleepMonthPreferences = createSleepMonthPreferences(AsyncStorage);
 
 export const exportLocalBackup = () => localStore.exportBackup();
 export const exportLocalFoodLibrary = () => localStore.exportFoodLibrary();

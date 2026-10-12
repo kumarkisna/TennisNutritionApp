@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Linking, Pressable, Text, View } from 'react-native';
-import { useDayActivitiesForDates, useGetDayActivity, useSaveSleepRecord, useSearchSleepNotes } from '@/lib/local-api';
+import { sleepMonthPreferences, useDayActivitiesForDates, useGetDayActivity, useSaveSleepRecord, useSearchSleepNotes } from '@/lib/local-api';
 import { getAgeOnDate } from '@/lib/planning-targets';
 import { shiftDate, today } from '@/lib/format';
 import type { SleepInterval } from '@/lib/local-models';
@@ -67,15 +67,47 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
   const [weekStart, setWeekStart] = useState(() => sleepWeekDates(date)[0] ?? date);
   const [month, setMonth] = useState(date.slice(0, 7));
   const [comparisonMonth, setComparisonMonth] = useState(() => shiftSleepMonth(date.slice(0, 7), -1));
+  const [monthSelectionReadyFor, setMonthSelectionReadyFor] = useState<number | null>(null);
+  const [monthPreferenceError, setMonthPreferenceError] = useState<string | null>(null);
+  const latestDateMonth = useRef(date.slice(0, 7));
+  latestDateMonth.current = date.slice(0, 7);
   const [rangeMode, setRangeMode] = useState<'week' | 'month'>('week');
   const [expandedDate, setExpandedDate] = useState<string | null>(null);
   const [noteSearch, setNoteSearch] = useState('');
   const [settledNoteSearch, setSettledNoteSearch] = useState('');
   useEffect(() => {
     setWeekStart(sleepWeekDates(date)[0] ?? date);
-    setMonth(date.slice(0, 7));
-    setComparisonMonth(shiftSleepMonth(date.slice(0, 7), -1));
   }, [date]);
+  useEffect(() => {
+    let active = true;
+    setMonthSelectionReadyFor(null);
+    setMonthPreferenceError(null);
+    sleepMonthPreferences.load(personId).then(saved => {
+      if (!active) return;
+      const initialMonth = latestDateMonth.current;
+      setMonth(saved?.month ?? initialMonth);
+      setComparisonMonth(saved?.comparisonMonth ?? shiftSleepMonth(initialMonth, -1));
+      setMonthSelectionReadyFor(personId);
+    }).catch(problem => {
+      if (!active) return;
+      const initialMonth = latestDateMonth.current;
+      setMonth(initialMonth);
+      setComparisonMonth(shiftSleepMonth(initialMonth, -1));
+      setMonthPreferenceError(problem instanceof Error ? problem.message : 'Could not load saved sleep month selections.');
+      setMonthSelectionReadyFor(personId);
+    });
+    return () => { active = false; };
+  }, [personId]);
+  useEffect(() => {
+    if (monthSelectionReadyFor !== personId) return;
+    let active = true;
+    sleepMonthPreferences.save(personId, { month, comparisonMonth }).then(() => {
+      if (active) setMonthPreferenceError(null);
+    }).catch(problem => {
+      if (active) setMonthPreferenceError(problem instanceof Error ? problem.message : 'Could not save sleep month selections.');
+    });
+    return () => { active = false; };
+  }, [personId, monthSelectionReadyFor, month, comparisonMonth]);
   useEffect(() => {
     const timer = setTimeout(() => setSettledNoteSearch(noteSearch.trim()), 250);
     return () => clearTimeout(timer);
@@ -116,6 +148,7 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
   const periodFailed = records.some(record => record.failed);
   const comparisonPeriodLoading = comparisonRecords.some(record => record.loading);
   const comparisonPeriodFailed = comparisonRecords.some(record => record.failed);
+  const monthSelectionReady = monthSelectionReadyFor === personId;
   const weeklySummaries = rangeMode === 'month' ? sleepMonthWeekRanges(month).map(range => {
     const weekRecords = records.filter(record => record.date >= range.startDate && record.date <= range.endDate);
     return {
@@ -161,16 +194,18 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
     <Text style={{ fontFamily: F.bold, color: c.foreground }}>Sleep patterns</Text>
     <Chips testPrefix="select-sleep-summary-range" value={rangeMode} onChange={value => setRangeMode(value as 'week' | 'month')}
       options={[{ value: 'week', label: 'Week' }, { value: 'month', label: 'Month' }]} />
-    {rangeMode === 'month' ? <View style={{ flexDirection: 'row', gap: 8 }}>
+    {rangeMode === 'month' ? monthSelectionReady ? <View style={{ flexDirection: 'row', gap: 8 }}>
       <MonthField label="Month to review" value={month} onChangeText={setMonth} testID="select-sleep-month" />
       <MonthField label="Compare with" value={comparisonMonth} onChangeText={setComparisonMonth} testID="select-sleep-comparison-month" />
-    </View> : null}
-    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+    </View> : <Muted>Loading this person’s saved month selections…</Muted> : null}
+    {rangeMode === 'week' || monthSelectionReady ? <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
       <Btn small variant="ghost" label={`Previous ${rangeMode}`} testID={`button-sleep-previous-${rangeMode}`} onPress={() => movePeriod(-1)} />
       <Text style={{ fontFamily: F.semi, fontSize: 12, color: c.foreground, textAlign: 'center', flex: 1 }}>{periodTitle}</Text>
       <Btn small variant="ghost" label={`Next ${rangeMode}`} testID={`button-sleep-next-${rangeMode}`} onPress={() => movePeriod(1)} />
-    </View>
-    {periodLoading ? <Muted>Loading sleep records…</Muted> : periodFailed ? <Muted>Some dates could not be loaded. Try reopening this range.</Muted> :
+    </View> : null}
+    {rangeMode === 'month' && monthPreferenceError ? <Muted>{monthPreferenceError}</Muted> : null}
+    {rangeMode === 'month' && !monthSelectionReady ? <Muted>Loading the selected month comparison…</Muted> :
+      periodLoading ? <Muted>Loading sleep records…</Muted> : periodFailed ? <Muted>Some dates could not be loaded. Try reopening this range.</Muted> :
       rangeMode === 'month' ? <View testID="sleep-month-comparison" style={{ borderWidth: 1, borderColor: c.border, borderRadius: 12, padding: 10, gap: 5 }}>
         <Text style={{ fontFamily: F.semi, color: c.foreground }}>Month comparison</Text>
         {comparisonMonth === month ? <Muted>Choose a different month to compare against.</Muted> :
@@ -219,7 +254,7 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
               <Muted>{result.sleep.note}</Muted>
             </Pressable>) : <Muted>No saved sleep notes match “{noteSearch.trim()}”.</Muted>}
     </View>
-    {rangeMode === 'month' ? <View testID="sleep-month-weekly-breakdown" style={{ gap: 7 }}>
+    {rangeMode === 'month' ? !monthSelectionReady ? <Muted>Loading the selected month breakdown…</Muted> : <View testID="sleep-month-weekly-breakdown" style={{ gap: 7 }}>
       <Text style={{ fontFamily: F.semi, color: c.foreground }}>Week-by-week sleep & hydration</Text>
       {periodLoading || periodFailed ? <Muted>{periodLoading ? 'Loading weekly records…' : 'Weekly summaries unavailable because some dates could not be loaded.'}</Muted> :
         weeklySummaries.map((week, index) => <View key={week.startDate} testID={`sleep-month-week-${week.startDate}`} style={{
