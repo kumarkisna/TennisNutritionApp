@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 // @ts-ignore Node's built-in test modules are used only by the direct regression suite.
 import test from 'node:test';
-import { estimateSessionSweatRate, hydrationReference, hydrationTotals, mergeHydrationSchedule, summarizeHydrationRecords } from './hydration';
+import { compareHydrationSummaries, estimateSessionSweatRate, hydrationReference, hydrationTotals, mergeHydrationSchedule, summarizeHydrationRecords } from './hydration';
 import { buildReminders } from './meal-reminders';
 
 test('hydration daily references distinguish total water from beverage intake', () => {
@@ -58,6 +58,38 @@ test('weekly hydration summaries separate missing actuals from recorded zero amo
     plannedMl: 950,
     plannedForRecordedMl: 650,
     actualMl: 200,
+  });
+});
+
+test('monthly hydration comparison normalizes planned and recorded totals by observed days', () => {
+  const current = summarizeHydrationRecords([{
+    date: '2026-10-01',
+    hydration: { entries: [
+      { id: 'a', time: '09:00', plannedMl: 500, actualMl: 500, alertEnabled: false },
+      { id: 'b', time: '12:00', plannedMl: 300, actualMl: null, alertEnabled: false },
+    ], sessions: [] },
+  }], '2026-10-01');
+  const comparison = summarizeHydrationRecords([{
+    date: '2026-09-01',
+    hydration: { entries: [
+      { id: 'c', time: '09:00', plannedMl: 400, actualMl: 200, alertEnabled: false },
+    ], sessions: [] },
+  }], '2026-09-01');
+  assert.deepEqual(compareHydrationSummaries(current, comparison), {
+    plannedPerPlannedDayChangeMl: 400,
+    recordedPerRecordedDayChangeMl: 300,
+    currentRecordedVsPlannedPercent: 100,
+    comparisonRecordedVsPlannedPercent: 50,
+  });
+});
+
+test('hydration comparison reports unavailable when a month has no planned or recorded days', () => {
+  const empty = summarizeHydrationRecords([{ date: '2026-10-01', hydration: undefined }], '2026-10-01');
+  assert.deepEqual(compareHydrationSummaries(empty, empty), {
+    plannedPerPlannedDayChangeMl: null,
+    recordedPerRecordedDayChangeMl: null,
+    currentRecordedVsPlannedPercent: null,
+    comparisonRecordedVsPlannedPercent: null,
   });
 });
 

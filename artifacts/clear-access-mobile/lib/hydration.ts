@@ -56,6 +56,27 @@ export function summarizeHydrationRecords(records: readonly { date: string; hydr
   };
 }
 
+export function compareHydrationSummaries(
+  current: ReturnType<typeof summarizeHydrationRecords>,
+  comparison: ReturnType<typeof summarizeHydrationRecords>,
+) {
+  const perDay = (total: number | null, days: number) => total === null || days === 0 ? null : total / days;
+  const attainment = (actual: number | null, planned: number) =>
+    actual === null || planned <= 0 ? null : actual / planned * 100;
+  const currentPlannedPerDay = perDay(current.plannedMl, current.plannedDays);
+  const comparisonPlannedPerDay = perDay(comparison.plannedMl, comparison.plannedDays);
+  const currentRecordedPerDay = perDay(current.actualMl, current.actualDays);
+  const comparisonRecordedPerDay = perDay(comparison.actualMl, comparison.actualDays);
+  return {
+    plannedPerPlannedDayChangeMl: currentPlannedPerDay === null || comparisonPlannedPerDay === null
+      ? null : currentPlannedPerDay - comparisonPlannedPerDay,
+    recordedPerRecordedDayChangeMl: currentRecordedPerDay === null || comparisonRecordedPerDay === null
+      ? null : currentRecordedPerDay - comparisonRecordedPerDay,
+    currentRecordedVsPlannedPercent: attainment(current.actualMl, current.plannedForRecordedMl),
+    comparisonRecordedVsPlannedPercent: attainment(comparison.actualMl, comparison.plannedForRecordedMl),
+  };
+}
+
 export function mergeHydrationSchedule(current: HydrationEntry[], source: HydrationEntry[], createId: (index: number) => string) {
   const merged = [...current];
   source.forEach((entry, index) => {

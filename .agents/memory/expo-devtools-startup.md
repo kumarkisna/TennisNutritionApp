@@ -20,3 +20,9 @@ When tunnel mode is needed, keep `EXPO_TUNNEL_SUBDOMAIN` short enough to stay wi
 **Why:** The generated tunnel hostname can exceed the DNS 63-character label limit in this workspace; a short workspace-derived label made the QR host resolvable.
 
 **How to apply:** Verify the tunnel status endpoint and Android bundle request, then check the app at the Expo root route. A web-only `/web/` path is not the same route as Expo Go.
+
+An Expo workflow restart can leave an older child process holding the injected app port; a new process may then wait at a prompt to switch ports.
+
+**Why:** In this workspace, the first process survived the workflow restart and caused a blank preview even though its HTTP route still answered.
+
+**How to apply:** If restart logs report the port is already in use, inspect the exact Expo process tree and port owner, stop only the stale app process, then restart on the configured port.

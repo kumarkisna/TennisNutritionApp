@@ -5,7 +5,7 @@ import { getAgeOnDate } from '@/lib/planning-targets';
 import { shiftDate, today } from '@/lib/format';
 import type { SleepInterval } from '@/lib/local-models';
 import { calculateTotalSleepMinutes, formatSleepDuration, reusableSleepTimes, shiftSleepMonth, sleepDurationMinutes, sleepMonthDates, sleepMonthWeekRanges, sleepReferenceForDate, sleepWeekDates, summarizeSleepRecords } from '@/lib/sleep-tracking';
-import { summarizeHydrationRecords } from '@/lib/hydration';
+import { compareHydrationSummaries, summarizeHydrationRecords } from '@/lib/hydration';
 import { useColors } from '@/hooks/useColors';
 import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, Muted, tap } from '@/components/ui';
 import TimeField from '@/components/TimeField';
@@ -144,6 +144,7 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
   const comparisonSummary = summarizeSleepRecords(comparisonRecords, today());
   const hydrationSummary = summarizeHydrationRecords(records.map(record => ({ date: record.date, hydration: record.hydration })), today());
   const comparisonHydrationSummary = summarizeHydrationRecords(comparisonRecords.map(record => ({ date: record.date, hydration: record.hydration })), today());
+  const hydrationComparison = compareHydrationSummaries(hydrationSummary, comparisonHydrationSummary);
   const periodLoading = records.some(record => record.loading);
   const periodFailed = records.some(record => record.failed);
   const comparisonPeriodLoading = comparisonRecords.some(record => record.loading);
@@ -180,6 +181,10 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
     `${value.plannedEntryCount ? `${liters(value.plannedMl)} planned across ${value.plannedDays} days` : 'No drink entries planned'} · ` +
     `${value.actualMl === null ? 'no actual amounts recorded' : `${liters(value.actualMl)} recorded of ${liters(value.plannedForRecordedMl)} planned for recorded drinks`} · ` +
     `${value.recordedEntryCount}/${value.plannedEntryCount} drinks recorded · no entries saved on ${value.noEntryDays}/${value.elapsedDays} days`;
+  const volumeDelta = (milliliters: number | null) => milliliters === null
+    ? 'unavailable'
+    : Math.abs(milliliters) < 1 ? 'no change' : `${milliliters > 0 ? '+' : '−'}${liters(Math.abs(milliliters))}/day`;
+  const recordedVsPlanned = (percent: number | null) => percent === null ? 'unavailable' : `${percent.toFixed(0)}%`;
   const durationDelta = summary.averageMinutes === null || comparisonSummary.averageMinutes === null
     ? 'unavailable'
     : summary.averageMinutes === comparisonSummary.averageMinutes ? 'no change'
@@ -218,13 +223,16 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
           <Muted>{summary.elapsedDays ? monthCounts(summary) : 'No past dates in this month yet.'}</Muted>
           <Muted>{monthAverages(summary)}</Muted>
           <Muted>{qualityDistribution(summary)}</Muted>
-          <Muted>Hydration · {hydrationMonthDetails(hydrationSummary)}</Muted>
+          <Text style={{ fontFamily: F.semi, color: c.foreground }}>Hydration</Text>
+          <Muted>{hydrationMonthDetails(hydrationSummary)}</Muted>
           <Text style={{ fontFamily: F.semi, color: c.foreground }}>{monthTitle(comparisonMonth)}</Text>
           <Muted>{comparisonSummary.elapsedDays ? monthCounts(comparisonSummary) : 'No past dates in this month yet.'}</Muted>
           <Muted>{monthAverages(comparisonSummary)}</Muted>
           <Muted>{qualityDistribution(comparisonSummary)}</Muted>
-          <Muted>Hydration · {hydrationMonthDetails(comparisonHydrationSummary)}</Muted>
+          <Text style={{ fontFamily: F.semi, color: c.foreground }}>Hydration</Text>
+          <Muted>{hydrationMonthDetails(comparisonHydrationSummary)}</Muted>
           <Muted>Change: duration {durationDelta} · quality {qualityDelta} versus {monthTitle(comparisonMonth)}.</Muted>
+          <Muted>Hydration change versus {monthTitle(comparisonMonth)}: planned per planned day {volumeDelta(hydrationComparison.plannedPerPlannedDayChangeMl)} · recorded per day with actual entries {volumeDelta(hydrationComparison.recordedPerRecordedDayChangeMl)} · recorded/planned for drinks with actuals {recordedVsPlanned(hydrationComparison.currentRecordedVsPlannedPercent)} vs {recordedVsPlanned(hydrationComparison.comparisonRecordedVsPlannedPercent)}. This is a log comparison, not a hydration target.</Muted>
           <Muted>Missing dates are shown separately and excluded from averages.</Muted>
         </>}
       </View> : summary.elapsedDays === 0 ? <Muted>No past dates in this range yet.</Muted> : <>
