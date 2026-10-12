@@ -153,7 +153,7 @@ test('weekday hydration summaries compare planned and actual intake without trea
   assert.equal(summary[2].plannedMl, 700);
 });
 
-test('activity hydration summaries separate saved active and rest days and keep paired amounts complete', () => {
+test('activity comparison includes practice and match days, separates rest, and excludes missing or future amounts', () => {
   const summary = summarizeHydrationByActivity([
     { date: '2026-10-01', activityType: 'training_60', tennis: {
       mode: 'training', sessions: [{ kind: 'practice', startTime: '09:00', durationMinutes: 60, intensity: 'moderate' }],
@@ -166,21 +166,29 @@ test('activity hydration summaries separate saved active and rest days and keep 
       { id: 'rest-zero', time: '10:00', plannedMl: 400, actualMl: 0, alertEnabled: false },
     ], sessions: [] } },
     { date: '2026-10-03', activityType: 'strength', hydration: undefined },
-    { date: '2026-10-04', activityType: 'rest', hydration: undefined },
-    { date: '2026-10-05', activityType: 'training_120', tennis: {
+    { date: '2026-10-04', activityType: 'training_120', tennis: {
       mode: 'tournament', sessions: [{ kind: 'match', startTime: '09:00', durationMinutes: 60, intensity: 'hard' }],
+      fuel: { before: '', during: '', between: '', after: '', hydration: '' },
+    }, hydration: { entries: [
+      { id: 'match-unrecorded', time: '09:00', plannedMl: 600, actualMl: null, alertEnabled: false },
+    ], sessions: [] } },
+    { date: '2026-10-05', activityType: 'rest', hydration: undefined },
+    { date: '2026-10-06', activityType: 'training_60', tennis: {
+      mode: 'training', sessions: [{ kind: 'practice', startTime: '09:00', durationMinutes: 60, intensity: 'moderate' }],
       fuel: { before: '', during: '', between: '', after: '', hydration: '' },
     }, hydration: { entries: [
       { id: 'future', time: '09:00', plannedMl: 900, actualMl: 900, alertEnabled: false },
     ], sessions: [] } },
-  ], '2026-10-04');
+  ], '2026-10-05');
 
-  assert.deepEqual(summary.map(({ group, elapsedDays, plannedDays, actualDays, plannedMl, plannedForRecordedMl, actualMl }) => ({
-    group, elapsedDays, plannedDays, actualDays, plannedMl, plannedForRecordedMl, actualMl,
+  assert.deepEqual(summary.map(({ group, elapsedDays, plannedDays, noEntryDays, actualDays, plannedEntryCount, recordedEntryCount, plannedMl, plannedForRecordedMl, actualMl }) => ({
+    group, elapsedDays, plannedDays, noEntryDays, actualDays, plannedEntryCount, recordedEntryCount, plannedMl, plannedForRecordedMl, actualMl,
   })), [
-    { group: 'active', elapsedDays: 1, plannedDays: 1, actualDays: 1, plannedMl: 750, plannedForRecordedMl: 500, actualMl: 300 },
-    { group: 'rest', elapsedDays: 2, plannedDays: 1, actualDays: 1, plannedMl: 400, plannedForRecordedMl: 400, actualMl: 0 },
+    { group: 'active', elapsedDays: 2, plannedDays: 2, noEntryDays: 0, actualDays: 1, plannedEntryCount: 3, recordedEntryCount: 1, plannedMl: 1350, plannedForRecordedMl: 500, actualMl: 300 },
+    { group: 'rest', elapsedDays: 2, plannedDays: 1, noEntryDays: 1, actualDays: 1, plannedEntryCount: 1, recordedEntryCount: 1, plannedMl: 400, plannedForRecordedMl: 400, actualMl: 0 },
   ]);
+  assert.equal(summary[0].actualMl! / summary[0].plannedForRecordedMl * 100, 60);
+  assert.equal(summary[1].actualMl! / summary[1].plannedForRecordedMl * 100, 0);
 });
 
 test('activity drilldown dates use the same saved group rules and exclude dates after the selected cutoff', () => {
