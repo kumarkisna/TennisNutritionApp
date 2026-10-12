@@ -1823,6 +1823,35 @@ export function createLocalStore(storage: AsyncKeyValueStorage, storageKey = LOC
           .sort((left, right) => left.date.localeCompare(right.date));
       });
     },
+    async listHydrationActivityForDateRange(personId: number, startDate: string, endDate: string): Promise<Array<
+      Pick<DayActivity, 'date' | 'activityType' | 'tennis' | 'hydration'>
+    >> {
+      if (!isValidCalendarDate(startDate) || !isValidCalendarDate(endDate) || endDate < startDate) {
+        fail('Choose a valid hydration activity date range.');
+      }
+      const startTime = new Date(`${startDate}T00:00:00.000Z`).getTime();
+      const endTime = new Date(`${endDate}T00:00:00.000Z`).getTime();
+      const dayCount = Math.floor((endTime - startTime) / 86_400_000) + 1;
+      if (dayCount > 3660) fail('Choose a hydration activity date range of 10 years or less.');
+      return read(current => {
+        findPerson(current, personId);
+        const savedByDate = new Map(current.activities
+          .filter(activity => activity.personId === personId && activity.date >= startDate && activity.date <= endDate)
+          .map(activity => [activity.date, activity] as const));
+        const records: Array<Pick<DayActivity, 'date' | 'activityType' | 'tennis' | 'hydration'>> = [];
+        for (let dayTime = startTime; dayTime <= endTime; dayTime += 86_400_000) {
+          const date = new Date(dayTime).toISOString().slice(0, 10);
+          const saved = savedByDate.get(date);
+          records.push({
+            date,
+            activityType: saved?.activityType ?? 'rest',
+            ...(saved?.tennis ? { tennis: saved.tennis } : {}),
+            ...(saved?.hydration ? { hydration: saved.hydration } : {}),
+          });
+        }
+        return records;
+      });
+    },
     async searchSleepNotes(personId: number, query: string, qualityRatings: number[] = []): Promise<Array<{ date: string; sleep: NonNullable<DayActivity['sleep']> }>> {
       const normalizedQuery = query.trim().toLowerCase();
       const selectedQualities = new Set(qualityRatings.filter(rating => Number.isInteger(rating) && rating >= 1 && rating <= 5));

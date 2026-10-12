@@ -4,7 +4,7 @@ import { getAgeOnDate } from '@/lib/planning-targets';
 import { shiftDate, today } from '@/lib/format';
 import type { SleepInterval } from '@/lib/local-models';
 import { calculateTotalSleepMinutes, formatSleepDuration, isValidSleepQuality, reusableSleepTimes, shiftSleepMonth, sleepDurationMinutes, sleepMonthDates, sleepMonthWeekRanges, sleepMonthsBetween, sleepQualityRecordsForMonth, sleepReferenceForDate, sleepWeekDates, summarizeSleepDurationByWeekday, summarizeSleepQualityByMonth, summarizeSleepQualityByWeekday, summarizeSleepRecords } from '@/lib/sleep-tracking';
-import { compareHydrationSummaries, hydrationActivityRecords, summarizeHydrationByActivity, summarizeHydrationByDate, summarizeHydrationByWeekday, summarizeHydrationRecords } from '@/lib/hydration';
+import { compareHydrationSummaries, hydrationActivityRecords, summarizeHydrationByActivity, summarizeHydrationByActivityByMonth, summarizeHydrationByDate, summarizeHydrationByWeekday, summarizeHydrationRecords } from '@/lib/hydration';
 import type { HydrationActivityRecord } from '@/lib/hydration';
 import { useColors } from '@/hooks/useColors';
 import { Btn, Card, Chips, ErrorBox, Eyebrow, F, Field, Muted, tap } from '@/components/ui';
@@ -12,7 +12,7 @@ import { sleepMonthSelectionForPlannerDate } from '@/lib/sleep-month-preferences
 import DateField from '@/components/DateField';
 import TimeField from '@/components/TimeField';
 import MonthField from '@/components/MonthField';
-import { sleepMonthPreferences, sleepRoutinePreferences, useDayActivitiesForDates, useGetDayActivity, useSaveSleepRecord, useSearchSleepNotes, useSleepRecordsForDateRange } from '@/lib/local-api';
+import { sleepMonthPreferences, sleepRoutinePreferences, useDayActivitiesForDates, useGetDayActivity, useHydrationActivityRecordsForDateRange, useSaveSleepRecord, useSearchSleepNotes, useSleepRecordsForDateRange } from '@/lib/local-api';
 
 const qualityChoices = [
   { value: 'unrated', label: 'Choose rating' },
@@ -140,9 +140,17 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
   const qualityRangeEndDate = `${qualityRangeEnd}-${String(new Date(Date.UTC(Number(qualityRangeEnd.slice(0, 4)), Number(qualityRangeEnd.slice(5, 7)), 0)).getUTCDate()).padStart(2, '0')}`;
   const qualityRangeRecords = useSleepRecordsForDateRange(personId, qualityRangeStartDate, qualityRangeEndDate,
     rangeMode === 'quality-range' && qualityRangeValid);
+  const hydrationActivityRangeRecords = useHydrationActivityRecordsForDateRange(personId, qualityRangeStartDate, qualityRangeEndDate,
+    rangeMode === 'quality-range' && qualityRangeValid);
   const qualitySummaries = useMemo(() => summarizeSleepQualityByMonth(
     qualityRangeRecords.data ?? [], qualityRangeStart, qualityRangeEnd, today(),
   ), [qualityRangeRecords.data, qualityRangeStart, qualityRangeEnd]);
+  const hydrationActivityRangeSummary = useMemo(() => summarizeHydrationByActivity(
+    hydrationActivityRangeRecords.data ?? [], today(),
+  ), [hydrationActivityRangeRecords.data]);
+  const hydrationActivityMonthSummaries = useMemo(() => summarizeHydrationByActivityByMonth(
+    hydrationActivityRangeRecords.data ?? [], qualityMonths, today(),
+  ), [hydrationActivityRangeRecords.data, qualityMonths]);
   const qualityDetailRecords = useMemo(() => new Map(qualitySummaries.map(item => [
     item.month,
     sleepQualityRecordsForMonth(qualityRangeRecords.data ?? [], item.month, today()),
@@ -290,7 +298,7 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
   return <View style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 10, gap: 8 }}>
     <Text style={{ fontFamily: F.bold, color: c.foreground }}>Sleep patterns</Text>
     <Chips testPrefix="select-sleep-summary-range" value={rangeMode} onChange={selectRangeMode}
-      options={[{ value: 'week', label: 'Week' }, { value: 'month', label: 'Month' }, { value: 'quality-range', label: 'Quality range' }]} />
+      options={[{ value: 'week', label: 'Week' }, { value: 'month', label: 'Month' }, { value: 'quality-range', label: 'Multi-month' }]} />
     {rangeMode === 'month' ? monthSelectionReady ? <>
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <MonthField label="Month to review" value={month} onChangeText={setMonth} testID="select-sleep-month" />
@@ -305,6 +313,7 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
       <MonthField label="Start month" value={qualityRangeStart} onChangeText={setQualityRangeStart} testID="select-sleep-quality-start-month" />
       <MonthField label="End month" value={qualityRangeEnd} onChangeText={setQualityRangeEnd} testID="select-sleep-quality-end-month" />
     </View> : null}
+    {rangeMode === 'quality-range' ? <Muted>Monthly sleep and hydration comparisons · up to 10 years</Muted> : null}
     {rangeMode === 'week' || (rangeMode === 'month' && monthSelectionReady) ? <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
       <Btn small variant="ghost" label={`Previous ${rangeMode}`} testID={`button-sleep-previous-${rangeMode}`} onPress={() => movePeriod(-1)} />
       <Text style={{ fontFamily: F.semi, fontSize: 12, color: c.foreground, textAlign: 'center', flex: 1 }}>{periodTitle}</Text>
@@ -312,8 +321,9 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
     </View> : null}
     {rangeMode !== 'quality-range' && monthPreferenceError ? <Muted>{monthPreferenceError}</Muted> : null}
     {rangeMode === 'quality-range' ? !qualityRangeValid ? <Muted>Choose a valid range of up to 10 years, with the start month on or before the end month.</Muted> :
-      qualityRangeRecords.isLoading ? <Muted>Loading sleep-quality history…</Muted> :
-        qualityRangeRecords.isError ? <Muted>Sleep-quality history could not be loaded.</Muted> :
+      <View style={{ gap: 8 }}>
+        {qualityRangeRecords.isLoading ? <Muted>Loading sleep-quality history…</Muted> :
+          qualityRangeRecords.isError ? <Muted>Sleep-quality history could not be loaded.</Muted> :
           <View testID="sleep-quality-trend" style={{ borderWidth: 1, borderColor: c.border, borderRadius: 12, padding: 10, gap: 7 }}>
             <Text style={{ fontFamily: F.semi, color: c.foreground }}>Month-by-month sleep quality</Text>
             <Muted>Average self-reported rating and counts include only saved ratings from 1–5. Missing dates and unrated records are excluded.</Muted>
@@ -387,7 +397,33 @@ function SleepWeekSummary({ personId, date, dateOfBirth, onSelectDate }: {
                 </View> : null}
               </View>;
             })}
-          </View> :
+          </View>}
+        {hydrationActivityRangeRecords.isLoading ? <Muted>Loading hydration activity history…</Muted> :
+          hydrationActivityRangeRecords.isError ? <Muted>Hydration activity history could not be loaded.</Muted> :
+            <View testID="hydration-activity-range" style={{ borderWidth: 1, borderColor: c.border, borderRadius: 12, padding: 10, gap: 7 }}>
+              <Text style={{ fontFamily: F.semi, color: c.foreground }}>Hydration on practice/match vs rest days</Text>
+              <Muted>Compare each month and the whole selected range. Planned amounts average over planned days; actual amounts average over days with entries recorded. Paired percentages use only drinks with an actual amount. This summarizes logs, not fluid targets.</Muted>
+              <Text style={{ fontFamily: F.semi, color: c.foreground }}>Whole selected range</Text>
+              {hydrationActivityRangeSummary.map(value => <View key={value.group} testID={`hydration-activity-range-group-${value.group}`} style={{ gap: 2 }}>
+                <Text style={{ fontFamily: F.semi, fontSize: 11, color: c.foreground }}>
+                  {value.group === 'active' ? 'Practice / match activity days' : 'Rest days'}
+                </Text>
+                <Muted>{value.elapsedDays ? activityHydrationValue(value) : 'No past dates in the selected range yet.'}</Muted>
+              </View>)}
+              <Text style={{ fontFamily: F.semi, color: c.foreground }}>Month by month</Text>
+              {hydrationActivityMonthSummaries.map(({ month: summaryMonth, summaries }) => <View key={summaryMonth}
+                testID={`hydration-activity-range-month-${summaryMonth}`}
+                style={{ borderTopWidth: 1, borderTopColor: c.border, paddingTop: 6, gap: 4 }}>
+                <Text style={{ fontFamily: F.semi, color: c.foreground }}>{monthTitle(summaryMonth)}</Text>
+                {summaries.map(value => <View key={value.group} testID={`hydration-activity-range-month-${summaryMonth}-${value.group}`} style={{ gap: 2 }}>
+                  <Text style={{ fontFamily: F.semi, fontSize: 11, color: c.foreground }}>
+                    {value.group === 'active' ? 'Practice / match activity days' : 'Rest days'}
+                  </Text>
+                  <Muted>{value.elapsedDays ? activityHydrationValue(value) : 'No past dates in this month yet.'}</Muted>
+                </View>)}
+              </View>)}
+            </View>}
+      </View> :
     rangeMode === 'month' && !monthSelectionReady ? <Muted>Loading the selected month comparison…</Muted> :
       periodLoading ? <Muted>Loading sleep records…</Muted> : periodFailed ? <Muted>Some dates could not be loaded. Try reopening this range.</Muted> :
       rangeMode === 'month' ? <View testID="sleep-month-comparison" style={{ borderWidth: 1, borderColor: c.border, borderRadius: 12, padding: 10, gap: 5 }}>

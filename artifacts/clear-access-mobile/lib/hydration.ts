@@ -37,7 +37,7 @@ export function hydrationTotals(log?: HydrationLog) {
   }), { plannedMl: 0, actualMl: 0 });
 }
 
-export function summarizeHydrationRecords(records: readonly { date: string; hydration: HydrationLog | undefined }[], throughDate: string) {
+export function summarizeHydrationRecords(records: readonly { date: string; hydration?: HydrationLog | undefined }[], throughDate: string) {
   const elapsed = records.filter(record => record.date <= throughDate);
   const entries = elapsed.flatMap(record => record.hydration?.entries ?? []);
   const recordedEntries = entries.filter(entry => entry.actualMl !== null);
@@ -110,7 +110,7 @@ export function summarizeHydrationByWeekday(
 }
 
 export type HydrationActivityGroup = 'active' | 'rest';
-export type HydrationActivityRecord = { date: string; activityType: DayActivityType; tennis?: TennisPlan; hydration: HydrationLog | undefined };
+export type HydrationActivityRecord = { date: string; activityType: DayActivityType; tennis?: TennisPlan; hydration?: HydrationLog };
 
 export function hydrationActivityRecords(records: readonly HydrationActivityRecord[], group: HydrationActivityGroup, throughDate: string) {
   return records.filter(record => record.date <= throughDate && (
@@ -128,6 +128,20 @@ export function summarizeHydrationByActivity(records: readonly HydrationActivity
       ...summarizeHydrationRecords(groupedRecords, throughDate),
     };
   });
+}
+
+export function summarizeHydrationByActivityByMonth(
+  records: readonly HydrationActivityRecord[],
+  months: readonly string[],
+  throughDate: string,
+) {
+  return months.map(month => ({
+    month,
+    summaries: summarizeHydrationByActivity(
+      records.filter(record => record.date.slice(0, 7) === month),
+      throughDate,
+    ),
+  }));
 }
 
 export function mergeHydrationSchedule(current: HydrationEntry[], source: HydrationEntry[], createId: (index: number) => string) {

@@ -262,6 +262,55 @@ test('sleep quality range records are date-bounded and scoped to one person', as
   await assert.rejects(store.listSleepRecordsForDateRange(999999, '2026-10-01', '2026-10-31'), /person/i);
 });
 
+test('hydration activity ranges include default days, retain linked logs, and stay person-scoped', async () => {
+  const store = createLocalStore(new MemoryStorage());
+  const firstPerson = await store.createPerson(baselinePerson('Hydration range one'));
+  const secondPerson = await store.createPerson(baselinePerson('Hydration range two'));
+  const practicePlan = {
+    mode: 'training' as const,
+    sessions: [{ kind: 'practice' as const, startTime: '09:00', durationMinutes: 60, intensity: 'moderate' as const }],
+    fuel: { before: '', during: '', between: '', after: '', hydration: '' },
+  };
+  const matchPlan = {
+    mode: 'tournament' as const,
+    sessions: [{ kind: 'match' as const, startTime: '10:00', durationMinutes: 90, intensity: 'hard' as const }],
+    fuel: { before: '', during: '', between: '', after: '', hydration: '' },
+  };
+  await store.saveDayActivity({ personId: firstPerson.id, date: '2026-10-01', activityType: 'training_60' });
+  await store.saveTennisPlan({ personId: firstPerson.id, date: '2026-10-01', plan: practicePlan });
+  await store.saveHydrationLog({ personId: firstPerson.id, date: '2026-10-01', hydration: {
+    entries: [{ id: 'hydration-first-person', time: '09:00', plannedMl: 500, actualMl: 250, alertEnabled: false }],
+    sessions: [],
+  } });
+  await store.saveHydrationLog({ personId: firstPerson.id, date: '2026-10-02', hydration: {
+    entries: [{ id: 'hydration-rest-entry', time: '12:00', plannedMl: 400, actualMl: null, alertEnabled: false }],
+    sessions: [],
+  } });
+  await store.saveDayActivity({ personId: secondPerson.id, date: '2026-10-01', activityType: 'training_120' });
+  await store.saveTennisPlan({ personId: secondPerson.id, date: '2026-10-01', plan: matchPlan });
+  await store.saveHydrationLog({ personId: secondPerson.id, date: '2026-10-02', hydration: {
+    entries: [{ id: 'hydration-second-person', time: '15:00', plannedMl: 900, actualMl: 800, alertEnabled: false }],
+    sessions: [],
+  } });
+
+  const firstRange = await store.listHydrationActivityForDateRange(firstPerson.id, '2026-10-01', '2026-10-03');
+  assert.deepEqual(firstRange.map(record => [record.date, record.activityType, record.tennis?.sessions[0]?.kind, record.hydration?.entries[0]?.id]), [
+    ['2026-10-01', 'training_60', 'practice', 'hydration-first-person'],
+    ['2026-10-02', 'rest', undefined, 'hydration-rest-entry'],
+    ['2026-10-03', 'rest', undefined, undefined],
+  ]);
+  const secondRange = await store.listHydrationActivityForDateRange(secondPerson.id, '2026-10-01', '2026-10-03');
+  assert.deepEqual(secondRange.map(record => [record.date, record.activityType, record.tennis?.sessions[0]?.kind, record.hydration?.entries[0]?.id]), [
+    ['2026-10-01', 'training_120', 'match', undefined],
+    ['2026-10-02', 'rest', undefined, 'hydration-second-person'],
+    ['2026-10-03', 'rest', undefined, undefined],
+  ]);
+  await assert.rejects(store.listHydrationActivityForDateRange(firstPerson.id, '2026-10-03', '2026-10-01'), /valid hydration activity date range/i);
+  await assert.rejects(store.listHydrationActivityForDateRange(firstPerson.id, '2026-13-01', '2026-10-03'), /valid hydration activity date range/i);
+  await assert.rejects(store.listHydrationActivityForDateRange(firstPerson.id, '2014-01-01', '2026-01-01'), /10 years/i);
+  await assert.rejects(store.listHydrationActivityForDateRange(999999, '2026-10-01', '2026-10-03'), /person/i);
+});
+
 test('hydrates from the versioned seed and preserves changes across store restarts', async () => {
   const storage = new MemoryStorage();
   const firstStore = createLocalStore(storage);

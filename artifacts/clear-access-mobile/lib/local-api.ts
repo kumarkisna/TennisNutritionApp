@@ -321,6 +321,13 @@ export function useSleepRecordsForDateRange(personId: number, startDate: string,
     { query: { enabled } },
   );
 }
+export function useHydrationActivityRecordsForDateRange(personId: number, startDate: string, endDate: string, enabled = true) {
+  return useLocalQuery(
+    ['listHydrationActivityForDateRange', personId, startDate, endDate],
+    () => localStore.listHydrationActivityForDateRange(personId, startDate, endDate),
+    { query: { enabled } },
+  );
+}
 export function useSearchSleepNotes(personId: number, searchTerm: string, qualityRatings: number[] = []) {
   const normalized = searchTerm.trim();
   const qualities = [...new Set(qualityRatings.filter(rating => Number.isInteger(rating) && rating >= 1 && rating <= 5))].sort((a, b) => a - b);
@@ -341,7 +348,7 @@ export function useDayActivitiesForDates(personId: number, dates: string[]) {
 }
 export function useSaveDayActivity() {
   return useLocalMutation(({ data }: { data: DayActivityInput }) =>
-    localStore.saveDayActivity(data), [['getDayActivity'], ['getDailySummary']]);
+    localStore.saveDayActivity(data), [['getDayActivity'], ['getDailySummary'], ['listHydrationActivityForDateRange']]);
 }
 export function useSaveMealTime() {
   return useLocalMutation(({ data }: { data: MealTimeInput }) =>
@@ -360,11 +367,11 @@ export function useSaveSleepRecord() {
 }
 export function useSaveHydrationLog() {
   return useLocalMutation(({ data }: { data: HydrationLogInput }) =>
-    localStore.saveHydrationLog(data), [['getDayActivity'], ['getMealReminderSource']]);
+    localStore.saveHydrationLog(data), [['getDayActivity'], ['getMealReminderSource'], ['listHydrationActivityForDateRange']]);
 }
 export function useSaveTennisPlan() {
   return useLocalMutation(({ data }: { data: TennisPlanInput }) =>
-    localStore.saveTennisPlan(data), [['getDayActivity'], ...ENTRIES_REFRESH]);
+    localStore.saveTennisPlan(data), [['getDayActivity'], ['listHydrationActivityForDateRange'], ...ENTRIES_REFRESH]);
 }
 export function useSaveTennisPlanRating() {
   return useLocalMutation(({ data }: { data: TennisPlanRatingInput }) =>
@@ -386,7 +393,7 @@ export function useTennisPlanHistory(personId: number, options?: LocalQueryOptio
 }
 export function useCopyTennisFoodPlan() {
   return useLocalMutation(({ data }: { data: CopyTennisFoodPlanInput }) =>
-    localStore.copyTennisFoodPlan(data), [['getDayActivity'], ...ENTRIES_REFRESH]);
+    localStore.copyTennisFoodPlan(data), [['getDayActivity'], ['listHydrationActivityForDateRange'], ...ENTRIES_REFRESH]);
 }
 export function useMealPlanReviews(personId: number) {
   return useLocalQuery(['listMealPlanReviews', personId], () => localStore.listMealPlanReviews(personId));
@@ -419,7 +426,7 @@ export function useImportFood() {
 
 export const LOCAL_PLANNER_QUERY_PREFIXES = [
   'listPeople', 'listFoods', 'listHeightRecords', 'listWeightRecords', 'listMealEntries', 'getDailySummary', 'getDayActivity',
-  'listTennisFoodPlanDates', 'getMealReminderSource', 'searchSleepNotes',
+  'listTennisFoodPlanDates', 'getMealReminderSource', 'searchSleepNotes', 'listHydrationActivityForDateRange',
 ] as const;
 
 export const previewLocalBackup = (serialized: string) => localStore.previewBackup(serialized);

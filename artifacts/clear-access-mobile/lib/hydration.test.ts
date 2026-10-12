@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 // @ts-ignore Node's built-in test modules are used only by the direct regression suite.
 import test from 'node:test';
-import { compareHydrationSummaries, estimateSessionSweatRate, hydrationActivityRecords, hydrationReference, hydrationTotals, mergeHydrationSchedule, summarizeHydrationByActivity, summarizeHydrationByDate, summarizeHydrationByWeekday, summarizeHydrationRecords } from './hydration';
+import { compareHydrationSummaries, estimateSessionSweatRate, hydrationActivityRecords, hydrationReference, hydrationTotals, mergeHydrationSchedule, summarizeHydrationByActivity, summarizeHydrationByActivityByMonth, summarizeHydrationByDate, summarizeHydrationByWeekday, summarizeHydrationRecords } from './hydration';
 import { buildReminders } from './meal-reminders';
 
 test('hydration daily references distinguish total water from beverage intake', () => {
@@ -189,6 +189,57 @@ test('activity comparison includes practice and match days, separates rest, and 
   ]);
   assert.equal(summary[0].actualMl! / summary[0].plannedForRecordedMl * 100, 60);
   assert.equal(summary[1].actualMl! / summary[1].plannedForRecordedMl * 100, 0);
+});
+
+test('multi-month activity summaries keep monthly averages, paired percentages, and sample counts separate', () => {
+  const summaries = summarizeHydrationByActivityByMonth([
+    { date: '2026-10-02', activityType: 'training_60', tennis: {
+      mode: 'training', sessions: [{ kind: 'practice', startTime: '09:00', durationMinutes: 60, intensity: 'moderate' }],
+      fuel: { before: '', during: '', between: '', after: '', hydration: '' },
+    }, hydration: { entries: [
+      { id: 'oct-practice', time: '09:00', plannedMl: 500, actualMl: 250, alertEnabled: false },
+    ], sessions: [] } },
+    { date: '2026-10-03', activityType: 'rest', hydration: { entries: [
+      { id: 'oct-rest', time: '10:00', plannedMl: 400, actualMl: null, alertEnabled: false },
+    ], sessions: [] } },
+    { date: '2026-11-04', activityType: 'training_120', tennis: {
+      mode: 'tournament', sessions: [{ kind: 'match', startTime: '09:00', durationMinutes: 60, intensity: 'hard' }],
+      fuel: { before: '', during: '', between: '', after: '', hydration: '' },
+    }, hydration: { entries: [
+      { id: 'nov-match', time: '09:00', plannedMl: 600, actualMl: 300, alertEnabled: false },
+    ], sessions: [] } },
+    { date: '2026-11-05', activityType: 'rest', hydration: { entries: [
+      { id: 'nov-rest', time: '10:00', plannedMl: 200, actualMl: 0, alertEnabled: false },
+    ], sessions: [] } },
+    { date: '2026-12-01', activityType: 'training_60', tennis: {
+      mode: 'training', sessions: [{ kind: 'practice', startTime: '09:00', durationMinutes: 60, intensity: 'moderate' }],
+      fuel: { before: '', during: '', between: '', after: '', hydration: '' },
+    }, hydration: { entries: [
+      { id: 'future', time: '09:00', plannedMl: 900, actualMl: 900, alertEnabled: false },
+    ], sessions: [] } },
+  ], ['2026-10', '2026-11'], '2026-11-30');
+
+  assert.deepEqual(summaries.map(({ month, summaries: groups }) => ({
+    month,
+    groups: groups.map(({ group, elapsedDays, plannedDays, actualDays, plannedMl, plannedForRecordedMl, actualMl }) => ({
+      group, elapsedDays, plannedDays, actualDays, plannedMl, plannedForRecordedMl, actualMl,
+    })),
+  })), [
+    {
+      month: '2026-10',
+      groups: [
+        { group: 'active', elapsedDays: 1, plannedDays: 1, actualDays: 1, plannedMl: 500, plannedForRecordedMl: 500, actualMl: 250 },
+        { group: 'rest', elapsedDays: 1, plannedDays: 1, actualDays: 0, plannedMl: 400, plannedForRecordedMl: 0, actualMl: null },
+      ],
+    },
+    {
+      month: '2026-11',
+      groups: [
+        { group: 'active', elapsedDays: 1, plannedDays: 1, actualDays: 1, plannedMl: 600, plannedForRecordedMl: 600, actualMl: 300 },
+        { group: 'rest', elapsedDays: 1, plannedDays: 1, actualDays: 1, plannedMl: 200, plannedForRecordedMl: 200, actualMl: 0 },
+      ],
+    },
+  ]);
 });
 
 test('activity drilldown dates use the same saved group rules and exclude dates after the selected cutoff', () => {
