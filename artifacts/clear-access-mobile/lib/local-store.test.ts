@@ -13,6 +13,7 @@ import {
   foodIngredientToDraft,
   parseFoodIngredientDrafts,
 } from './food-nutrition';
+import { filterWeightRecordsByRange, weightChartRangeStart } from './weight-chart-ranges';
 import { getAgeOnDate } from './planning-targets';
 import { today } from './format';
 
@@ -702,6 +703,36 @@ test('weight history presents a timed Undo action and scopes it to the currently
   assert.match(source, /label="Undo delete"/);
   assert.match(source, /You can undo this for \{WEIGHT_RECORD_UNDO_WINDOW_MS \/ 1000\} seconds/);
   assert.match(source, /undoDelete\.mutateAsync\(\{ token: receipt\.token, personId \}\)/);
+});
+
+test('weight chart date ranges use inclusive calendar boundaries and preserve all-history access', () => {
+  const records = [
+    { id: 1, personId: 1, date: '2025-12-31', weightKg: 71 },
+    { id: 2, personId: 1, date: '2026-01-09', weightKg: 70 },
+    { id: 3, personId: 1, date: '2026-01-10', weightKg: 69 },
+    { id: 4, personId: 1, date: '2026-03-13', weightKg: 68 },
+    { id: 5, personId: 1, date: '2026-03-14', weightKg: 67 },
+    { id: 6, personId: 1, date: '2026-04-10', weightKg: 66 },
+    { id: 7, personId: 1, date: '2026-04-11', weightKg: 65 },
+  ];
+  assert.equal(weightChartRangeStart('4-weeks', '2026-04-10'), '2026-03-14');
+  assert.equal(weightChartRangeStart('3-months', '2026-04-10'), '2026-01-10');
+  assert.equal(weightChartRangeStart('6-months', '2026-04-10'), '2025-10-10');
+  assert.deepEqual(
+    filterWeightRecordsByRange(records, '4-weeks', '2026-04-10').map(record => record.id),
+    [5, 6],
+    'the 4-week cutoff is inclusive and future dates are excluded',
+  );
+  assert.deepEqual(
+    filterWeightRecordsByRange(records, '3-months', '2026-04-10').map(record => record.id),
+    [3, 4, 5, 6],
+  );
+  assert.deepEqual(filterWeightRecordsByRange(records, 'all', '2026-04-10'), records);
+});
+
+test('month-based weight chart ranges clamp to the final valid day of shorter months', () => {
+  assert.equal(weightChartRangeStart('3-months', '2026-05-31'), '2026-02-28');
+  assert.equal(weightChartRangeStart('3-months', '2024-05-31'), '2024-02-29');
 });
 
 test('a failed measurement persistence leaves committed and durable records unchanged', async () => {
