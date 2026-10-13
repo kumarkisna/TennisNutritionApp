@@ -15,6 +15,7 @@ import { TennisPlanPanel } from '@/components/TennisPlanPanel';
 import { PlanningTargets } from '@/components/PlanningTargets';
 import { SleepLogCard } from '@/components/SleepLogCard';
 import { HydrationCard } from '@/components/HydrationCard';
+import { ExpandableGroup } from '@/components/ExpandableGroup';
 import type { PlannerSection } from '@/lib/planner-layout-preferences';
 import { Btn, CaloriesMacros, Card, DISCLAIMER, ErrorBox, Eyebrow, F, FiberNote, IconBtn, LoadingBlock, Muted, NutritionGrid, Screen, SectionTitle, Title, tap, warn } from '@/components/ui';
 import { cap, dateLabel, isIsoDate, n, shiftDate, today } from '@/lib/format';
@@ -131,9 +132,16 @@ export default function Planner() {
           <Btn small variant="ghost" icon="chevron-down" label="Down" testID={`button-move-section-${section}-down`} disabled={index === settings.sectionOrder.length - 1} onPress={() => void moveSection(section, 1)} />
         </View>
       </View> : null}
-      {sectionNodes[section]}
+      <ExpandableGroup
+        preferenceKey={`planner:${section}`}
+        title={section === 'meals' ? 'Meals' : section === 'tennis' ? 'Court and fuel timing' : section === 'hydration' ? 'Hydration timing' : sectionLabels[section]}
+      >
+        {sectionNodes[section]}
+      </ExpandableGroup>
     </View>)}
-    {summary.data ? <Card><Eyebrow>Day totals</Eyebrow><NutritionGrid nutrition={summary.data.totals} /><FiberNote /></Card> : null}
+    {summary.data ? <ExpandableGroup preferenceKey="planner:nutrition-details" title="Detailed nutrition">
+      <Card><Eyebrow>Day totals</Eyebrow><NutritionGrid nutrition={summary.data.totals} /><FiberNote /></Card>
+    </ExpandableGroup> : null}
     <Muted>{DISCLAIMER}</Muted>
   </Screen>;
 }

@@ -6,6 +6,7 @@ import { useDeleteFood, useListFoods, type Food } from '@/lib/local-api';
 import { useColors } from '@/hooks/useColors';
 import { Btn, CaloriesMacros, Card, Chips, DISCLAIMER, EmptyState, ErrorBox, Eyebrow, F, LoadingBlock, Muted, Screen, Title, success, warn } from '@/components/ui';
 import { FoodLibraryTransfer } from '@/components/FoodLibraryTransfer';
+import { ExpandableGroup } from '@/components/ExpandableGroup';
 import { cap, n } from '@/lib/format';
 
 type Filter = 'all' | 'custom' | 'open_food_facts' | 'reference';
@@ -49,8 +50,11 @@ export default function Foods() {
   return <Screen tabs onRefresh={() => foods.refetch()} refreshing={foods.isRefetching}>
     <Eyebrow>03 / Food library</Eyebrow>
     <Title sub="Search the food library stored on this device or create a custom food. Values per 100 g.">Know what goes in.</Title>
-    <FoodLibraryTransfer />
+    <ExpandableGroup preferenceKey="foods:transfer" title="Import and export foods">
+      <FoodLibraryTransfer />
+    </ExpandableGroup>
 
+    <ExpandableGroup preferenceKey="foods:search" title="Search and filter foods">
       <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: c.card, borderColor: c.input, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12 }}>
           <Feather name="search" size={16} color={c.mutedForeground} />
@@ -59,6 +63,8 @@ export default function Foods() {
         <Btn icon="plus" label="New" disabled={remove.isPending} testID="button-new-food" onPress={() => router.push('/food-form')} />
       </View>
       <Chips testPrefix="filter-foods" value={filter} onChange={value => { setFilter(value); setConfirmingDeleteId(null); remove.reset(); }} disabled={remove.isPending} options={[{ value: 'all', label: 'All' }, { value: 'custom', label: 'Custom' }, { value: 'open_food_facts', label: 'Saved' }, { value: 'reference', label: 'Reference' }]} />
+    </ExpandableGroup>
+    <ExpandableGroup preferenceKey="foods:library" title="Food library" summary={`${shown.length} ${shown.length === 1 ? 'food' : 'foods'}`}>
       {foods.isLoading ? <LoadingBlock rows={5} height={68} /> : foods.isError ? <ErrorBox error={foods.error} onRetry={() => foods.refetch()} /> : shown.length === 0 ? <EmptyState icon="book-open" title={q ? 'No foods match that search' : 'No foods here yet'} description="Create a custom food to add it to your local library." actionLabel="Add custom food" onAction={() => router.push('/food-form')} /> :
         shown.map(f => <Card key={f.id} style={{ gap: 6 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
@@ -83,6 +89,7 @@ export default function Foods() {
             </View> : null}
           </> : null}
         </Card>)}
+    </ExpandableGroup>
     <Muted>{DISCLAIMER}</Muted>
   </Screen>;
 }

@@ -13,6 +13,7 @@ import { dietPhaseLabels, fuelLabels } from '@/lib/tennis-planning';
 import type { MealPlanReview, MealReuseUndoReceipt, TennisPlan } from '@/lib/local-models';
 import { filterMealReviews, mealReviewDateRangeError, sortMealReviews, type MealReviewSort } from '@/lib/meal-review-sort';
 import { HydrationWeekCard } from '@/components/HydrationWeekCard';
+import { ExpandableGroup } from '@/components/ExpandableGroup';
 
 const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const planModeLabels = { training: 'Training day', tournament: 'Tournament day', rest: 'Rest day' } as const;
@@ -247,7 +248,10 @@ export default function MealHistory() {
   return <Screen title="Meal history">
     <Eyebrow>Meal history · {person.name}</Eyebrow>
     <Title sub="Review the meals you tried, find the combinations that worked, and reuse them on another day.">Your meal combinations.</Title>
-    <HydrationWeekCard personId={person.id} personName={person.name} />
+    <ExpandableGroup preferenceKey="history:hydration" title="Hydration trends">
+      <HydrationWeekCard personId={person.id} personName={person.name} />
+    </ExpandableGroup>
+    <ExpandableGroup preferenceKey="history:calendar" title="Meal history calendar" summary={monthTitle}>
     <Card>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <Btn small variant="ghost" label="Previous month" testID="button-meal-calendar-previous" onPress={() => setMonth(monthShift(month, -1))} />
@@ -272,6 +276,8 @@ export default function MealHistory() {
       </View>
       <Muted>Rated days show their score. Select any date to review its planned meals.</Muted>
     </Card>
+    </ExpandableGroup>
+    <ExpandableGroup preferenceKey="history:meals" title="Planned meals" summary={date}>
     <Card>
       <Eyebrow>{date} · {person.name}</Eyebrow>
       <Text style={{ fontFamily: F.bold, fontSize: 19, color: c.foreground }}>Meals for this date</Text>
@@ -281,6 +287,8 @@ export default function MealHistory() {
           <Text style={{ fontFamily: F.medium, color: c.mutedForeground }}>{item.grams} g</Text>
         </View>) : <Muted>No meals are planned for this date yet.</Muted>}
     </Card>
+    </ExpandableGroup>
+    <ExpandableGroup preferenceKey="history:tennis" title="Tennis day details">
     <Card>
       <Eyebrow>Tennis plan</Eyebrow>
       <Text style={{ fontFamily: F.bold, fontSize: 19, color: c.foreground }}>Court time and fuel timing</Text>
@@ -304,6 +312,8 @@ export default function MealHistory() {
             </View> : null}
         </> : <Muted>No tennis plan was saved for this date.</Muted>}
     </Card>
+    </ExpandableGroup>
+    <ExpandableGroup preferenceKey="history:review" title="Rating and notes">
     <Card>
       <Eyebrow>Remember what worked</Eyebrow>
       <Text style={{ fontFamily: F.bold, fontSize: 19, color: c.foreground }}>Rate this meal combination</Text>
@@ -315,7 +325,9 @@ export default function MealHistory() {
       {notice ? <Muted>{notice}</Muted> : null}
       {error ? <ErrorBox error={error} /> : null}
     </Card>
+    </ExpandableGroup>
     {renderReuseUndos('main')}
+    <ExpandableGroup preferenceKey="history:reuse" title="Reuse this combination">
     <Card>
       <Eyebrow>Reuse</Eyebrow>
       <Text style={{ fontFamily: F.bold, fontSize: 19, color: c.foreground }}>Use these meals again</Text>
@@ -345,6 +357,8 @@ export default function MealHistory() {
       {notice ? <Muted>{notice}</Muted> : null}
       {error ? <ErrorBox error={error} /> : null}
     </Card>
+    </ExpandableGroup>
+    <ExpandableGroup preferenceKey="history:saved-history" title="Find past meals">
     <Card>
       <Eyebrow>Saved meal history</Eyebrow>
       <Field label="Find by keyword or note" value={search} onChangeText={setSearch} placeholder="e.g. match day, felt energized" testID="input-meal-history-search" />
@@ -390,7 +404,9 @@ export default function MealHistory() {
       </View>) : <Muted>No rated meal combinations match these filters yet.</Muted>}
       {comparisonReviews.length === 1 ? <Muted>Select one more saved date to compare meal portions, notes, and tennis details.</Muted> : null}
     </Card>
+    </ExpandableGroup>
     {comparisonReviews.length >= 2 ? <>
+      <ExpandableGroup preferenceKey="history:compare" title="Comparison details" summary={`${comparisonReviews.length} dates`}>
       <Text style={{ fontFamily: F.bold, fontSize: 20, color: c.foreground }}>Compare saved combinations</Text>
       <Muted>Use the destination person and date in Reuse above. Reuse copies from a comparison card without changing the date open in the calendar.</Muted>
       {comparisonReviews.map(item => <ComparedMealReview key={item.date} review={item} personId={person.id}
@@ -399,6 +415,7 @@ export default function MealHistory() {
         onReuse={sourceDate => void reuseCompared(sourceDate)} />)}
       {comparisonNotice ? <Muted>{comparisonNotice}</Muted> : null}
       {comparisonError ? <ErrorBox error={comparisonError} /> : null}
+      </ExpandableGroup>
     </> : null}
     {renderReuseUndos('compare')}
     {notice ? <Muted>{notice}</Muted> : null}

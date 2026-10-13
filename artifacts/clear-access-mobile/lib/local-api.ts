@@ -10,6 +10,7 @@ import {
 import { createLocalStore } from './local-store';
 import { createSleepMonthPreferences } from './sleep-month-preferences';
 import { createSleepRoutinePreferences } from './sleep-routine-preferences';
+import { createSectionDisclosurePreferences } from './section-disclosure-preferences';
 import type {
   DailySummary,
   DayActivity,
@@ -136,6 +137,7 @@ export type {
 export const localStore = createLocalStore(AsyncStorage);
 export const sleepMonthPreferences = createSleepMonthPreferences(AsyncStorage);
 export const sleepRoutinePreferences = createSleepRoutinePreferences(AsyncStorage);
+export const sectionDisclosurePreferences = createSectionDisclosurePreferences(AsyncStorage);
 
 export const exportLocalBackup = () => localStore.exportBackup();
 export const exportLocalFoodLibrary = () => localStore.exportFoodLibrary();
