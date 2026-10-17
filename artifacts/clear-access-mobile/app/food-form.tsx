@@ -74,6 +74,7 @@ function Inner({ existing, done }: { existing?: Food; done: () => void }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [showCameraSettings, setShowCameraSettings] = useState(false);
   const [barcodeLoading, setBarcodeLoading] = useState(false);
   const [barcodeStatus, setBarcodeStatus] = useState<string | null>(null);
   const [barcodeAttribution, setBarcodeAttribution] = useState<{ brand: string; sourceUrl: string } | null>(null);
@@ -127,15 +128,26 @@ function Inner({ existing, done }: { existing?: Food; done: () => void }) {
   async function startBarcodeScan() {
     barcodeHandled.current = false;
     setBarcodeStatus(null);
+    setShowCameraSettings(false);
     if (!cameraPermission?.granted) {
       try {
         const permission = await requestCameraPermission();
         if (!permission.granted) {
-          setBarcodeStatus('Camera access is needed to scan. You can still enter the food details manually below.');
+          setShowCameraSettings(Platform.OS !== 'web');
+          if (Platform.OS === 'web') {
+            setBarcodeStatus('Your browser did not grant camera access. Allow camera for this site in browser settings, then try again. If you are viewing this inside an app preview, open it in a browser tab. You can still enter the food details manually below.');
+          } else if (permission.status === 'denied' && !permission.canAskAgain) {
+            setBarcodeStatus('Camera access is blocked for this app. Open camera settings below and allow access. You can still enter the food details manually below.');
+          } else {
+            setBarcodeStatus('Camera permission was not granted. Tap Scan food barcode to retry, or open camera settings below. You can still enter the food details manually below.');
+          }
           return;
         }
       } catch {
-        setBarcodeStatus('Could not open the camera. Enter the food details manually below.');
+        setShowCameraSettings(Platform.OS !== 'web');
+        setBarcodeStatus(Platform.OS === 'web'
+          ? 'Your browser could not open the camera. Allow camera for this site in browser settings and try again. If this page is embedded in an app preview, open it in a browser tab. You can still enter the food details manually below.'
+          : 'Could not request camera access. Check this app’s camera permission in device settings. You can still enter the food details manually below.');
         return;
       }
     }
@@ -265,7 +277,7 @@ function Inner({ existing, done }: { existing?: Food; done: () => void }) {
         />
         <Btn small variant="ghost" label="Close scanner" icon="x" testID="button-close-food-scanner" onPress={() => setScannerOpen(false)} />
       </View> : null}
-      {!scannerOpen && cameraPermission?.status === 'denied' && !cameraPermission.canAskAgain && Platform.OS !== 'web' ?
+      {!scannerOpen && Platform.OS !== 'web' && (showCameraSettings || cameraPermission?.status === 'denied') ?
         <Btn small variant="ghost" label="Open camera settings" icon="settings" testID="button-food-camera-settings" onPress={() => { void Linking.openSettings().catch(() => setBarcodeStatus('Open your device settings to allow camera access.')); }} /> : null}
     </Card> : null}
     <Field label="Name" value={name} onChangeText={setName} maxLength={120} testID="input-food-name" />
