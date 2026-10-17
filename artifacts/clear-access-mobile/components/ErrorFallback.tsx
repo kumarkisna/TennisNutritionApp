@@ -76,27 +76,6 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
           Please reload the app to continue.
         </Text>
 
-        {__DEV__ ? (
-          <Text
-            testID="error-fallback-details"
-            selectable
-            style={[
-              styles.message,
-              {
-                width: '100%',
-                padding: 12,
-                borderRadius: 8,
-                backgroundColor: colors.card,
-                color: colors.foreground,
-                fontSize: 13,
-                textAlign: 'left',
-              },
-            ]}
-          >
-            {`${error.name}: ${error.message || 'No error message was provided.'}`}
-          </Text>
-        ) : null}
-
         <Pressable
           onPress={handleRestart}
           style={({ pressed }) => [
