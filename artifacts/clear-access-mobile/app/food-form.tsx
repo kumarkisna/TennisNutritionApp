@@ -76,6 +76,7 @@ function Inner({ existing, done }: { existing?: Food; done: () => void }) {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [showCameraSettings, setShowCameraSettings] = useState(false);
   const [showStandaloneBrowser, setShowStandaloneBrowser] = useState(false);
+  const [showBrowserCameraHelp, setShowBrowserCameraHelp] = useState(false);
   const [barcodeLoading, setBarcodeLoading] = useState(false);
   const [barcodeStatus, setBarcodeStatus] = useState<string | null>(null);
   const [barcodeAttribution, setBarcodeAttribution] = useState<{ brand: string; sourceUrl: string } | null>(null);
@@ -143,6 +144,7 @@ function Inner({ existing, done }: { existing?: Food; done: () => void }) {
     setBarcodeStatus(null);
     setShowCameraSettings(false);
     setShowStandaloneBrowser(false);
+    setShowBrowserCameraHelp(false);
     if (Platform.OS === 'web' && typeof window !== 'undefined' && window.self !== window.top) {
       const opened = openStandaloneBarcodePage();
       setShowStandaloneBrowser(!opened);
@@ -156,7 +158,8 @@ function Inner({ existing, done }: { existing?: Food; done: () => void }) {
         const permission = await requestCameraPermission();
         if (!permission.granted) {
           if (Platform.OS === 'web') {
-            setBarcodeStatus('Your browser blocked camera access for this site. Change this site’s camera permission to Allow in your browser’s site controls, then reload this page. Manual food entry is still available.');
+            setShowBrowserCameraHelp(true);
+            setBarcodeStatus('This browser is blocking camera access for this site. The app cannot change the browser’s permission setting.');
           } else if (permission.status === 'denied' && !permission.canAskAgain) {
             setShowCameraSettings(true);
             setBarcodeStatus('Camera access is blocked for this app. Open camera settings below and allow access. You can still enter the food details manually below.');
@@ -168,8 +171,9 @@ function Inner({ existing, done }: { existing?: Food; done: () => void }) {
         }
       } catch {
         setShowCameraSettings(Platform.OS !== 'web');
+        setShowBrowserCameraHelp(Platform.OS === 'web');
         setBarcodeStatus(Platform.OS === 'web'
-          ? 'Your browser could not open the camera. Allow camera for this site in browser settings, then reload and try again. Manual food entry is still available.'
+          ? 'The browser could not open the camera. Check this site’s camera permission, then reload and try again.'
           : 'Could not request camera access. Check this app’s camera permission in device settings. You can still enter the food details manually below.');
         return;
       }
@@ -281,6 +285,13 @@ function Inner({ existing, done }: { existing?: Food; done: () => void }) {
       <Muted>We’ll look up the product and fill in any nutrition details available. If no record is found, enter the details manually below.</Muted>
       <Btn label={barcodeLoading ? 'Looking up food…' : 'Scan food barcode'} icon="camera" disabled={barcodeLoading} testID="button-scan-food-barcode" onPress={() => void startBarcodeScan()} />
       {barcodeStatus ? <Muted>{barcodeStatus}</Muted> : null}
+      {showBrowserCameraHelp && Platform.OS === 'web' ? <View style={{ gap: 8 }}>
+        <Muted>On Android Chrome: open the site controls beside the address bar, choose Permissions → Camera → Allow, then reload this page and tap Scan food barcode again. In other browsers, set this site’s Camera permission to Allow before reloading.</Muted>
+        <Btn small variant="ghost" label="Reload page" testID="button-reload-after-camera-permission" onPress={() => {
+          if (typeof window !== 'undefined') window.location.reload();
+        }} />
+        <Muted>You can still enter the food details manually below.</Muted>
+      </View> : null}
       {barcodeLoading ? <Muted>Checking Open Food Facts…</Muted> : null}
       {scannerOpen ? <View style={{ gap: 10 }}>
         <Muted>Point the camera at the package’s EAN or UPC barcode.</Muted>
@@ -294,7 +305,8 @@ function Inner({ existing, done }: { existing?: Food; done: () => void }) {
               setShowStandaloneBrowser(true);
               setBarcodeStatus('The embedded preview blocked camera access. Open this page in a browser tab to scan. Manual food entry is still available.');
             } else if (Platform.OS === 'web') {
-              setBarcodeStatus('The browser could not start the camera. Check this site’s camera permission and make sure no other app is using the camera. Manual food entry is still available.');
+              setShowBrowserCameraHelp(true);
+              setBarcodeStatus('The browser could not start the camera. Check this site’s camera permission and make sure no other app is using the camera.');
             } else {
               setShowCameraSettings(true);
               setBarcodeStatus(`The camera could not start${event.message ? `: ${event.message}` : ''}. Check this app’s camera permission in device settings.`);
