@@ -75,6 +75,7 @@ function Inner({ existing, done }: { existing?: Food; done: () => void }) {
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [scannerOpen, setScannerOpen] = useState(false);
   const [showCameraSettings, setShowCameraSettings] = useState(false);
+  const [showStandaloneBrowser, setShowStandaloneBrowser] = useState(false);
   const [barcodeLoading, setBarcodeLoading] = useState(false);
   const [barcodeStatus, setBarcodeStatus] = useState<string | null>(null);
   const [barcodeAttribution, setBarcodeAttribution] = useState<{ brand: string; sourceUrl: string } | null>(null);
@@ -160,7 +161,7 @@ function Inner({ existing, done }: { existing?: Food; done: () => void }) {
             setShowCameraSettings(true);
             setBarcodeStatus('Camera access is blocked for this app. Open camera settings below and allow access. You can still enter the food details manually below.');
           } else {
-            setShowCameraSettings(Platform.OS !== 'web');
+            setShowCameraSettings(true);
             setBarcodeStatus('Camera permission was not granted. Tap Scan food barcode to retry, or open camera settings below. You can still enter the food details manually below.');
           }
           return;
