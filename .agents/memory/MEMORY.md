@@ -9,6 +9,7 @@
 - [Native appearance overrides](native-appearance-overrides.md) — native reset contracts differ from older SDK examples; explicit app themes must also update native controls.
 - [Expo startup readiness](expo-devtools-startup.md) — verify meaningful rendering; keep Expo tunnel subdomain labels short enough for DNS limits.
 - [Expo SDK release age gate](expo-sdk-release-maturity.md) — same-day Expo patch releases can be blocked by the package registry's minimum-age policy; don't bypass it.
+- [Expo Go Android SDK 57 loading](expo-go-android-sdk57.md) — private-project download IOExceptions can come from the native Expo Go client, before app code runs.
 - [Median WebView entry route](median-webview-entry.md) — open Median's browser build directly to Planner without changing Expo Go's Overview landing.
 - [Expo web printing](expo-web-printing.md) — Expo Print's web methods print the current page; write generated HTML into a separate print window.
 - [Tennis nutrition boundary](tennis-nutrition-boundary.md) — schedules guide meal timing, not automatic personalised intake prescriptions or changes to daily references.
