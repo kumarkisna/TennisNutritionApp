@@ -55,7 +55,8 @@ for (const variant of variants) {
   const pngPath = path.join(projectRoot, 'assets', 'images', `splash-${variant.name}.png`);
   fs.writeFileSync(svgPath, createArtwork(variant.colors));
   const rendered = spawnSync('magick', [
-    '-background', 'none', svgPath, '-depth', '8', `PNG32:${pngPath}`,
+    '-background', 'none', svgPath, '-depth', '8', '-strip',
+    '-define', 'png:exclude-chunk=tIME', `PNG32:${pngPath}`,
   ], { encoding: 'utf8' });
   if (rendered.error || rendered.status !== 0) {
     const detail = rendered.error?.message ?? rendered.stderr ?? `exit code ${rendered.status}`;
