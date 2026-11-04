@@ -8,7 +8,7 @@ import { Btn, CaloriesMacros, Card, DISCLAIMER, ErrorBox, Eyebrow, F, FiberNote,
 import { cap, dateLabel, n } from '@/lib/format';
 import { PlanningTargets } from '@/components/PlanningTargets';
 import { ExpandableGroup } from '@/components/ExpandableGroup';
-import { APP_NAME, COPYRIGHT_NOTICE } from '@/constants/branding';
+import { APP_NAME } from '@/constants/branding';
 
 const meals: Meal[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 
@@ -24,7 +24,6 @@ export default function Overview() {
   return <Screen tabs onRefresh={() => summary.refetch()} refreshing={summary.isRefetching}>
     <View accessibilityLabel="App branding" style={{ gap: 3 }}>
       <Text style={{ fontFamily: F.bold, fontSize: 16, letterSpacing: -0.3, color: c.foreground }}>{APP_NAME}</Text>
-      <Muted style={{ fontSize: 10.5, lineHeight: 14 }}>{COPYRIGHT_NOTICE}</Muted>
     </View>
     <Eyebrow>01 / Daily overview</Eyebrow>
     <Title sub={`${dateLabel(date)} · ${person.name}'s own meals and daily target.`}>{`A clear day ahead, ${person.name}.`}</Title>
