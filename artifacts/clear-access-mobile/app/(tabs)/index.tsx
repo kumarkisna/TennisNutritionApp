@@ -21,6 +21,10 @@ export default function Overview() {
   const pct = targetCalories === null ? 0 : Math.min(100, Math.max(0, (total / targetCalories) * 100));
 
   return <Screen tabs onRefresh={() => summary.refetch()} refreshing={summary.isRefetching}>
+    <View accessibilityLabel="App branding" style={{ gap: 3 }}>
+      <Text style={{ fontFamily: F.bold, fontSize: 16, letterSpacing: -0.3, color: c.foreground }}>Clear Access — Mobile Food Planner</Text>
+      <Muted style={{ fontSize: 10.5, lineHeight: 14 }}>Copyright Shreshth Bharat Tennis Trust - 2026 - Present</Muted>
+    </View>
     <Eyebrow>01 / Daily overview</Eyebrow>
     <Title sub={`${dateLabel(date)} · ${person.name}'s own meals and daily target.`}>{`A clear day ahead, ${person.name}.`}</Title>
     <ExpandableGroup preferenceKey="overview:person" title="Person" summary={person.name}>
