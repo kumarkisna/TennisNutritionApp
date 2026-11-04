@@ -3,6 +3,9 @@
     "name": "Clear Access — Mobile Food Planner",
     "slug": "clear-access-mobile",
     "version": "1.0.0",
+    "extra": {
+      "copyrightNotice": "Copyright Shreshth Bharat Tennis Trust - 2026 - Present"
+    },
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "clear-access-mobile",
