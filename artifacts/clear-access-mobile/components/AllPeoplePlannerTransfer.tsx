@@ -202,7 +202,7 @@ export function AllPeoplePlannerTransfer() {
           placeholderTextColor={c.mutedForeground}
           autoCapitalize="words"
           maxLength={80}
-          style={{ minHeight: 44, paddingHorizontal: 12, borderWidth: 1, borderRadius: 12, borderColor: c.input, backgroundColor: c.card, fontFamily: F.medium, fontSize: 15, color: c.foreground }}
+          style={{ minHeight: 44, paddingHorizontal: 12, borderWidth: 1, borderRadius: 12, borderColor: c.input, backgroundColor: c.inputSurface, fontFamily: F.medium, fontSize: 15, color: c.foreground }}
         /> : null}
       </View>)}
       {hasInvalidNames ? <Muted>Each new profile needs a unique name.</Muted> : null}

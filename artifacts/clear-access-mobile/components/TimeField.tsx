@@ -46,7 +46,7 @@ export default function TimeField({ label, value, onChangeText, testID, editable
     minHeight: 48,
     borderRadius: 12,
     border: `1px solid ${c.input}`,
-    backgroundColor: c.card,
+    backgroundColor: c.inputSurface,
     padding: '10px 12px',
     fontFamily: F.medium,
     fontSize: 15,

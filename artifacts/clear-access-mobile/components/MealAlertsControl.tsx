@@ -104,7 +104,7 @@ function MinutesEditor({ meal, value, onChange, off, onSave, onCancel }: { meal:
   return <View style={{ gap: 8 }}>
     <TextInput testID={`input-alert-minutes-${meal}`} value={value} editable={!off} onChangeText={onChange} keyboardType="number-pad" maxLength={3}
       accessibilityLabel={`${meal} alert minutes before, 0 to 180`} selectionColor={c.primary} keyboardAppearance={c.isDark ? 'dark' : 'light'}
-      style={{ minHeight: 44, borderRadius: 12, borderWidth: 1, borderColor: valid(value) ? c.input : c.destructiveBorder, backgroundColor: c.card, paddingHorizontal: 14, fontFamily: F.bold, fontSize: 15, color: c.foreground }} />
+      style={{ minHeight: 44, borderRadius: 12, borderWidth: 1, borderColor: valid(value) ? c.input : c.destructiveBorder, backgroundColor: c.inputSurface, paddingHorizontal: 14, fontFamily: F.bold, fontSize: 15, color: c.foreground }} />
     <Muted>Minutes before the meal, 0 to 180 (0 is at mealtime).</Muted>
     <View style={{ flexDirection: 'row', gap: 8 }}>
       <Btn small icon="check" label="Save" testID={`button-save-alert-${meal}`} disabled={off} loading={off} onPress={onSave} />

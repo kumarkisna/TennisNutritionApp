@@ -166,7 +166,7 @@ export function PersonPlannerImport() {
           placeholderTextColor={c.mutedForeground}
           autoCapitalize="words"
           maxLength={80}
-          style={{ minHeight: 46, paddingHorizontal: 12, borderWidth: 1, borderRadius: 12, borderColor: c.input, backgroundColor: c.card, fontFamily: F.medium, fontSize: 15, color: c.foreground }}
+          style={{ minHeight: 46, paddingHorizontal: 12, borderWidth: 1, borderRadius: 12, borderColor: c.input, backgroundColor: c.inputSurface, fontFamily: F.medium, fontSize: 15, color: c.foreground }}
         />
       </> : null}
       <Muted>Matching foods are reused. New foods are added to the shared library. Existing settings and records are preserved.</Muted>

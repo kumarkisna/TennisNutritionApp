@@ -55,7 +55,7 @@ test('all themes meet normal-text contrast on their actual semantic surfaces', (
   for (const theme of themes) {
     const p = theme.palette;
     const pairs: [string, string][] = [
-      [p.foreground, p.background], [p.foreground, p.card], [p.foreground, p.secondary],
+      [p.foreground, p.background], [p.foreground, p.card], [p.foreground, p.secondary], [p.foreground, p.inputSurface],
       [p.mutedForeground, p.background], [p.mutedForeground, p.card], [p.mutedForeground, p.secondary],
       [p.primary, p.background], [p.primary, p.card], [p.primary, p.secondary], [p.primary, p.accent],
       [p.primaryForeground, p.primary], [p.destructive, p.destructiveSoft],
@@ -66,6 +66,7 @@ test('all themes meet normal-text contrast on their actual semantic surfaces', (
       assert.ok(contrast(foreground, background) >= 4.5,
         `${theme.name}: ${foreground} on ${background} contrast ${contrast(foreground, background).toFixed(2)}`);
     }
+    assert.notEqual(p.inputSurface, p.background, `${theme.name}: input areas should be visually distinct`);
     assert.ok(contrast(p.chartMeasurement, p.card) >= 3, `${theme.name}: height points`);
   }
 });

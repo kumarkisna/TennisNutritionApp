@@ -56,7 +56,7 @@ export default function Foods() {
 
     <ExpandableGroup preferenceKey="foods:search" title="Search and filter foods">
       <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: c.card, borderColor: c.input, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12 }}>
+        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: c.inputSurface, borderColor: c.input, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12 }}>
           <Feather name="search" size={16} color={c.mutedForeground} />
           <TextInput testID="input-food-search" value={search} editable={!remove.isPending} onChangeText={value => { setSearch(value); setConfirmingDeleteId(null); remove.reset(); }} placeholder="Search this device's food library" placeholderTextColor={c.mutedForeground} autoCapitalize="none" style={{ flex: 1, minHeight: 46, fontFamily: F.medium, fontSize: 15, color: c.foreground }} />
         </View>

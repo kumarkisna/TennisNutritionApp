@@ -6,6 +6,7 @@ const classic = {
     background: '#f7f4ed',
     foreground: '#183542',
     card: '#fbfaf6',
+    inputSurface: '#fffefa',
     cardForeground: '#183542',
     primary: '#176d61',
     primaryForeground: '#fbfaf6',
@@ -42,9 +43,12 @@ type PaletteOptions = {
 function palette(mode: AppTheme['mode'], p: PaletteOptions): ThemePalette {
   const dark = mode === 'dark';
   const primaryForeground = dark ? '#071016' : '#ffffff';
+  const inputSurface = dark
+    ? liftColor(p.card, 0.18)
+    : '#ffffff';
   return {
     text: p.foreground, tint: p.primary, background: p.background,
-    foreground: p.foreground, card: p.card, cardForeground: p.foreground,
+    foreground: p.foreground, card: p.card, inputSurface, cardForeground: p.foreground,
     primary: p.primary, primaryForeground, secondary: p.secondary,
     secondaryForeground: p.foreground, muted: p.secondary,
     mutedForeground: p.muted, accent: p.accent, accentForeground: p.primary,
@@ -58,6 +62,12 @@ function palette(mode: AppTheme['mode'], p: PaletteOptions): ThemePalette {
     mint: '#9ce5ce', coral: '#ffbca4',
     chartMeasurement: dark ? '#ffbca4' : '#b24c2d',
   };
+}
+
+function liftColor(hex: string, amount: number) {
+  const value = hex.replace('#', '');
+  const channels = [0, 2, 4].map(index => parseInt(value.slice(index, index + 2), 16));
+  return `#${channels.map(channel => Math.round(channel + (255 - channel) * amount).toString(16).padStart(2, '0')).join('')}`;
 }
 
 function light(id: string, name: string, background: string, primary: string, accent: string, ink: string): AppTheme {
@@ -95,12 +105,12 @@ export const themes: readonly AppTheme[] = [
   { id: 'high-contrast-light', name: 'High Contrast Light', mode: 'light', palette: {
     ...palette('light', { background: '#ffffff', card: '#ffffff', foreground: '#000000',
       primary: '#0047a8', secondary: '#eeeeee', accent: '#e1edff', muted: '#333333', border: '#000000', ink: '#000000' }),
-    input: '#000000', accentBorder: '#000000',
+    input: '#000000', inputSurface: '#f0f6ff', accentBorder: '#000000',
   } },
   { id: 'high-contrast-dark', name: 'High Contrast Dark', mode: 'dark', palette: {
     ...palette('dark', { background: '#000000', card: '#090909', foreground: '#ffffff',
       primary: '#ffe76a', secondary: '#1b1b1b', accent: '#202000', muted: '#e0e0e0', border: '#ffffff', ink: '#101010' }),
-    input: '#ffffff', accentBorder: '#ffffff',
+    input: '#ffffff', inputSurface: '#333333', accentBorder: '#ffffff',
   } },
   ...extraLightThemes.map(spec => light(...spec)),
   ...extraDarkThemes.map(spec => dark(...spec)),

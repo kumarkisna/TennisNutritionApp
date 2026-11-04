@@ -99,7 +99,7 @@ export function Field({ label, hint, ...props }: TextInputProps & { label: strin
   return <View style={{ gap: 6 }}>
     <Text style={{ fontFamily: F.bold, fontSize: 11.5, color: c.foreground }}>{label}</Text>
     <TextInput keyboardAppearance={c.isDark ? 'dark' : 'light'} selectionColor={c.primary} placeholderTextColor={c.mutedForeground} {...props}
-      style={[{ minHeight: 48, borderRadius: 12, borderWidth: 1, borderColor: c.input, backgroundColor: c.card, paddingHorizontal: 14, paddingVertical: 10, fontFamily: F.medium, fontSize: 15, color: c.foreground }, props.multiline ? { minHeight: 80, textAlignVertical: 'top' } : null]} />
+      style={[{ minHeight: 48, borderRadius: 12, borderWidth: 1, borderColor: c.input, backgroundColor: c.inputSurface, paddingHorizontal: 14, paddingVertical: 10, fontFamily: F.medium, fontSize: 15, color: c.foreground }, props.multiline ? { minHeight: 80, textAlignVertical: 'top' } : null]} />
     {hint ? <Muted>{hint}</Muted> : null}
   </View>;
 }

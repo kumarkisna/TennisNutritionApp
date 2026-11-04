@@ -29,7 +29,7 @@ export default function MonthField({ label, value, onChangeText, testID }: Month
         minHeight: 48,
         borderRadius: 12,
         border: `1px solid ${c.input}`,
-        backgroundColor: c.card,
+        backgroundColor: c.inputSurface,
         padding: '10px 14px',
         fontFamily: F.medium,
         fontSize: 15,
