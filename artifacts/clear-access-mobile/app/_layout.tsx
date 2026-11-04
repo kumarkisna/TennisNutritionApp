@@ -28,6 +28,8 @@ import * as SplashScreen from 'expo-splash-screen';
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
+const STARTUP_BRANDING_HOLD_MS = 800;
+const STARTUP_BRANDING_FADE_MS = 220;
 
 function RootLayoutNav() {
   const c = useColors();
@@ -85,12 +87,12 @@ function ThemeReadyApp() {
     const timer = setTimeout(() => {
       Animated.timing(startupOpacity, {
         toValue: 0,
-        duration: 180,
+        duration: STARTUP_BRANDING_FADE_MS,
         useNativeDriver: Platform.OS !== 'web',
       }).start(({ finished }) => {
         if (finished) setStartupStage('done');
       });
-    }, 80);
+    }, STARTUP_BRANDING_HOLD_MS);
     return () => {
       clearTimeout(timer);
       startupOpacity.stopAnimation();
@@ -127,10 +129,10 @@ function ThemeReadyApp() {
         },
       ]}
     >
-      <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, textAlign: 'center', color: c.foreground }}>{APP_NAME}</Text>
+      <Text style={{ maxWidth: 340, fontFamily: 'Inter_700Bold', fontSize: 18, lineHeight: 24, textAlign: 'center', color: c.foreground }}>{APP_NAME}</Text>
       <ActivityIndicator accessibilityLabel="Loading theme" color={c.primary} />
       <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, textAlign: 'center', color: c.mutedForeground }}>Applying your saved theme…</Text>
-      <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 10.5, lineHeight: 14, textAlign: 'center', color: c.mutedForeground }}>{COPYRIGHT_NOTICE}</Text>
+      <Text style={{ maxWidth: 340, fontFamily: 'Inter_400Regular', fontSize: 11.5, lineHeight: 16, textAlign: 'center', color: c.mutedForeground }}>{COPYRIGHT_NOTICE}</Text>
     </Animated.View> : null}
   </View>;
 }

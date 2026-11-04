@@ -63,6 +63,8 @@ A daily food planner with a standalone, device-local mobile app. The existing we
 
 The mobile app opens directly into the overview, with a day-by-day meal planner, local per-100 g food catalog, people profiles, nutrition preferences, and dated height tracking with CDC references. Everything is saved per device. The existing web app separately retains its Google sign-in and per-account data.
 
+- The mobile About tab is the in-app user guide. Whenever a feature is added, changed, or removed, update the relevant guide chapter and its jump link in the same change, and include both in the GitHub check-in.
+
 ## User preferences
 
 The original web app uses Google's official OAuth sign-in rather than collecting Gmail passwords. This does not apply to the local-only mobile app.
