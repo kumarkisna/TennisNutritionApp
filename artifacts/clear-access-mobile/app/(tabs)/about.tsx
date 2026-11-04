@@ -1,10 +1,13 @@
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Platform, Pressable, Text, View } from 'react-native';
 import { useRouter, type Href } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
+import * as Print from 'expo-print';
 import { useColors } from '@/hooks/useColors';
 import { APP_NAME, COPYRIGHT_NOTICE } from '@/constants/branding';
-import { Btn, Card, Eyebrow, F, Muted, Screen, SectionTitle, Title, tap } from '@/components/ui';
+import { Btn, Card, ErrorBox, Eyebrow, F, Muted, Screen, SectionTitle, Title, tap, warn } from '@/components/ui';
+import { buildAboutInstructionsHtml } from '@/lib/print-about';
+import { printHtmlInBrowserWindow } from '@/lib/print-browser';
 
 type IconName = keyof typeof Feather.glyphMap;
 type GuideStep = { title: string; body: string };
@@ -30,6 +33,7 @@ const guides: Guide[] = [
       { title: 'Select a person', body: 'On Overview, use Manage people to add, edit, or select a person. Each person has separate plans, history, and progress records.' },
       { title: 'Choose the day', body: 'Open Planner and select the date you want to plan or review. Nutrition summaries and activity details use that person and date.' },
       { title: 'Know where data lives', body: 'Mobile records are stored on this device. Use Settings → Backup and restore to export a file before changing devices or reinstalling.' },
+      { title: 'Print these instructions', body: 'Open About and tap Print all instructions to print or save every guide chapter together.' },
     ],
   },
   {
@@ -98,6 +102,7 @@ export default function About() {
   const selectedGuide = guides.find(guide => guide.id === selectedGuideId);
 
   return <Screen key={selectedGuideId ?? 'guide-index'} tabs>
+    <View style={{ userSelect: 'none' }}>
     {selectedGuide ? <>
       <Btn small variant="ghost" icon="arrow-left" label="All guide topics" testID="button-about-guide-index"
         onPress={() => setSelectedGuideId(null)} />
@@ -110,6 +115,7 @@ export default function About() {
       </Card>)}
       <Btn label={selectedGuide.action} icon="arrow-right" testID={`button-about-open-${selectedGuide.id}`}
         onPress={() => router.push(selectedGuide.route)} />
+      <PrintAllInstructionsButton />
       <Muted>App help is included in this build. When app features change, their guide chapter and jump link should be updated with them.</Muted>
     </> : <>
       <Eyebrow>06 / About</Eyebrow>
@@ -120,6 +126,7 @@ export default function About() {
         <Text style={{ fontFamily: F.bold, fontSize: 16, lineHeight: 23, color: c.inkForeground }}>{COPYRIGHT_NOTICE}</Text>
         </View>
       </Card>
+      <PrintAllInstructionsButton />
 
       <View style={{ gap: 4 }}>
         <SectionTitle>How to use the app</SectionTitle>
@@ -148,5 +155,38 @@ export default function About() {
         <Muted>Your mobile planner data stays on this device unless you choose to export a backup file.</Muted>
       </Card>
     </>}
+    </View>
   </Screen>;
+}
+
+function PrintAllInstructionsButton() {
+  const [printing, setPrinting] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+
+  async function printAll() {
+    if (printing) return;
+    setError(null);
+    setPrinting(true);
+    try {
+      const html = buildAboutInstructionsHtml({ appName: APP_NAME, copyrightNotice: COPYRIGHT_NOTICE, guides });
+      if (Platform.OS === 'web') printHtmlInBrowserWindow(html);
+      else await Print.printAsync({ html });
+    } catch (caught) {
+      warn();
+      setError(caught);
+    } finally {
+      setPrinting(false);
+    }
+  }
+
+  return <>
+    <Btn
+      icon="printer"
+      label="Print all instructions"
+      loading={printing}
+      onPress={() => void printAll()}
+      testID="button-print-all-about"
+    />
+    {error ? <ErrorBox error={error} /> : null}
+  </>;
 }
